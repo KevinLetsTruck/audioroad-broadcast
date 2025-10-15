@@ -21,7 +21,6 @@ export default function LiveCallScreener({ episodeId, onCallQueued }: LiveCallSc
     isConnected,
     isMuted,
     formattedDuration,
-    answerCall,
     hangUp,
     toggleMute
   } = useTwilioCall({

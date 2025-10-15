@@ -5,7 +5,6 @@ import LiveCallScreener from '../components/LiveCallScreener';
 export default function ScreeningRoom() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [activeEpisode, setActiveEpisode] = useState<any>(null);
-  const [hasActiveCall, setHasActiveCall] = useState(false);
 
   useEffect(() => {
     // Fetch active episode
@@ -32,11 +31,11 @@ export default function ScreeningRoom() {
     socket.emit('join:episode', activeEpisode.id);
 
     socket.on('call:incoming', () => {
-      setHasActiveCall(true);
+      // Call incoming
     });
 
     socket.on('call:completed', () => {
-      setHasActiveCall(false);
+      // Call completed
     });
 
     return () => {

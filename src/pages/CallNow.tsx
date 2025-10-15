@@ -10,8 +10,6 @@ export default function CallNow() {
 
   const {
     isReady,
-    isConnecting,
-    isConnected,
     isMuted,
     formattedDuration,
     makeCall,

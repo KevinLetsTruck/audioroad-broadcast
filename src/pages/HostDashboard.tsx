@@ -4,7 +4,6 @@ import AudioMixer from '../components/AudioMixer';
 import Soundboard from '../components/Soundboard';
 import CallerInfo from '../components/CallerInfo';
 import ChatPanel from '../components/ChatPanel';
-import DocumentViewer from '../components/DocumentViewer';
 
 export default function HostDashboard() {
   const [activeEpisode, setActiveEpisode] = useState<any>({

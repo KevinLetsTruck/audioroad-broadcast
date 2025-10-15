@@ -8,7 +8,7 @@ interface CallQueueProps {
 
 export default function CallQueue({ episodeId, onSelectCaller }: CallQueueProps) {
   const [calls, setCalls] = useState<any[]>([]);
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const [, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
     fetchCalls();

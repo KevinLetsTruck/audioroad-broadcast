@@ -20,7 +20,6 @@ export default function CallerPortal() {
 
     try {
       // Upload document if provided
-      let documentUrl = null;
       if (formData.document) {
         const formDataUpload = new FormData();
         formDataUpload.append('file', formData.document);
