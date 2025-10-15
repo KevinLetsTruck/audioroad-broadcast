@@ -1,0 +1,344 @@
+import express, { Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+import { generateCallerSummary } from '../services/aiService.js';
+import { emitToEpisode } from '../services/socketService.js';
+
+const router = express.Router();
+const prisma = new PrismaClient();
+
+/**
+ * GET /api/calls - Get all calls for an episode
+ */
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const { episodeId, status } = req.query;
+
+    const where: any = {};
+    if (episodeId) where.episodeId = episodeId as string;
+    if (status) where.status = status as string;
+
+    const calls = await prisma.call.findMany({
+      where,
+      include: {
+        caller: true,
+        episode: {
+          include: {
+            show: true
+          }
+        }
+      },
+      orderBy: {
+        incomingAt: 'desc'
+      }
+    });
+
+    res.json(calls);
+  } catch (error) {
+    console.error('Error fetching calls:', error);
+    res.status(500).json({ error: 'Failed to fetch calls' });
+  }
+});
+
+/**
+ * GET /api/calls/:id - Get single call details
+ */
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const call = await prisma.call.findUnique({
+      where: { id: req.params.id },
+      include: {
+        caller: {
+          include: {
+            calls: {
+              orderBy: { incomingAt: 'desc' },
+              take: 10
+            }
+          }
+        },
+        episode: {
+          include: {
+            show: true
+          }
+        }
+      }
+    });
+
+    if (!call) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    res.json(call);
+  } catch (error) {
+    console.error('Error fetching call:', error);
+    res.status(500).json({ error: 'Failed to fetch call' });
+  }
+});
+
+/**
+ * POST /api/calls - Create new call (incoming call)
+ */
+router.post('/', async (req: Request, res: Response) => {
+  try {
+    const { episodeId, callerId, twilioCallSid, topic } = req.body;
+
+    const call = await prisma.call.create({
+      data: {
+        episodeId,
+        callerId,
+        twilioCallSid,
+        topic,
+        status: 'incoming',
+        incomingAt: new Date()
+      },
+      include: {
+        caller: true
+      }
+    });
+
+    // Emit socket event
+    const io = req.app.get('io');
+    emitToEpisode(io, episodeId, 'call:incoming', call);
+
+    res.status(201).json(call);
+  } catch (error) {
+    console.error('Error creating call:', error);
+    res.status(500).json({ error: 'Failed to create call' });
+  }
+});
+
+/**
+ * PATCH /api/calls/:id/queue - Move call to queue
+ */
+router.patch('/:id/queue', async (req: Request, res: Response) => {
+  try {
+    const call = await prisma.call.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'queued',
+        queuedAt: new Date()
+      },
+      include: {
+        caller: true
+      }
+    });
+
+    const io = req.app.get('io');
+    emitToEpisode(io, call.episodeId, 'call:queued', call);
+
+    res.json(call);
+  } catch (error) {
+    console.error('Error queueing call:', error);
+    res.status(500).json({ error: 'Failed to queue call' });
+  }
+});
+
+/**
+ * PATCH /api/calls/:id/screen - Move call to screening
+ */
+router.patch('/:id/screen', async (req: Request, res: Response) => {
+  try {
+    const { screenerUserId } = req.body;
+
+    const call = await prisma.call.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'screening',
+        screenedAt: new Date(),
+        screenerUserId
+      },
+      include: {
+        caller: true
+      }
+    });
+
+    const io = req.app.get('io');
+    emitToEpisode(io, call.episodeId, 'call:screening', call);
+
+    res.json(call);
+  } catch (error) {
+    console.error('Error screening call:', error);
+    res.status(500).json({ error: 'Failed to screen call' });
+  }
+});
+
+/**
+ * PATCH /api/calls/:id/approve - Approve call for on-air
+ */
+router.patch('/:id/approve', async (req: Request, res: Response) => {
+  try {
+    const { screenerNotes, topic, priority } = req.body;
+
+    const call = await prisma.call.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'approved',
+        approvedAt: new Date(),
+        screenerNotes,
+        topic,
+        priority: priority || 'normal'
+      },
+      include: {
+        caller: true
+      }
+    });
+
+    const io = req.app.get('io');
+    emitToEpisode(io, call.episodeId, 'call:approved', call);
+
+    res.json(call);
+  } catch (error) {
+    console.error('Error approving call:', error);
+    res.status(500).json({ error: 'Failed to approve call' });
+  }
+});
+
+/**
+ * PATCH /api/calls/:id/reject - Reject call
+ */
+router.patch('/:id/reject', async (req: Request, res: Response) => {
+  try {
+    const { reason } = req.body;
+
+    const call = await prisma.call.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'rejected',
+        endedAt: new Date(),
+        screenerNotes: reason
+      },
+      include: {
+        caller: true
+      }
+    });
+
+    const io = req.app.get('io');
+    emitToEpisode(io, call.episodeId, 'call:rejected', call);
+
+    res.json(call);
+  } catch (error) {
+    console.error('Error rejecting call:', error);
+    res.status(500).json({ error: 'Failed to reject call' });
+  }
+});
+
+/**
+ * PATCH /api/calls/:id/onair - Put call on-air
+ */
+router.patch('/:id/onair', async (req: Request, res: Response) => {
+  try {
+    const call = await prisma.call.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'on-air',
+        onAirAt: new Date()
+      },
+      include: {
+        caller: true
+      }
+    });
+
+    const io = req.app.get('io');
+    emitToEpisode(io, call.episodeId, 'call:onair', call);
+
+    res.json(call);
+  } catch (error) {
+    console.error('Error putting call on-air:', error);
+    res.status(500).json({ error: 'Failed to put call on-air' });
+  }
+});
+
+/**
+ * PATCH /api/calls/:id/complete - Complete call
+ */
+router.patch('/:id/complete', async (req: Request, res: Response) => {
+  try {
+    const { recordingUrl, recordingSid, duration } = req.body;
+
+    const call = await prisma.call.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!call) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    // Calculate durations
+    const queueDuration = call.queuedAt && call.onAirAt 
+      ? Math.floor((call.onAirAt.getTime() - call.queuedAt.getTime()) / 1000)
+      : null;
+
+    const airDuration = call.onAirAt
+      ? Math.floor((Date.now() - call.onAirAt.getTime()) / 1000)
+      : null;
+
+    const updatedCall = await prisma.call.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'completed',
+        endedAt: new Date(),
+        recordingUrl,
+        recordingSid,
+        airDuration: airDuration || duration,
+        queueDuration,
+        totalDuration: duration
+      },
+      include: {
+        caller: true
+      }
+    });
+
+    // Update caller stats
+    await prisma.caller.update({
+      where: { id: updatedCall.callerId },
+      data: {
+        lastCallDate: new Date(),
+        totalCalls: {
+          increment: 1
+        }
+      }
+    });
+
+    const io = req.app.get('io');
+    emitToEpisode(io, updatedCall.episodeId, 'call:completed', updatedCall);
+
+    res.json(updatedCall);
+  } catch (error) {
+    console.error('Error completing call:', error);
+    res.status(500).json({ error: 'Failed to complete call' });
+  }
+});
+
+/**
+ * POST /api/calls/:id/feature - Mark call as featured
+ */
+router.post('/:id/feature', async (req: Request, res: Response) => {
+  try {
+    const call = await prisma.call.update({
+      where: { id: req.params.id },
+      data: {
+        featured: true
+      },
+      include: {
+        caller: true
+      }
+    });
+
+    // Update caller featured calls count
+    await prisma.caller.update({
+      where: { id: call.callerId },
+      data: {
+        featuredCalls: {
+          increment: 1
+        }
+      }
+    });
+
+    res.json(call);
+  } catch (error) {
+    console.error('Error featuring call:', error);
+    res.status(500).json({ error: 'Failed to feature call' });
+  }
+});
+
+export default router;
+

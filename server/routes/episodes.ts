@@ -1,0 +1,200 @@
+import express, { Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
+
+const router = express.Router();
+const prisma = new PrismaClient();
+
+/**
+ * GET /api/episodes - Get all episodes
+ */
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const { showId, status } = req.query;
+
+    const where: any = {};
+    if (showId) where.showId = showId as string;
+    if (status) where.status = status as string;
+
+    const episodes = await prisma.episode.findMany({
+      where,
+      include: {
+        show: true,
+        _count: {
+          select: { calls: true, clips: true }
+        }
+      },
+      orderBy: {
+        scheduledStart: 'desc'
+      }
+    });
+
+    res.json(episodes);
+  } catch (error) {
+    console.error('Error fetching episodes:', error);
+    res.status(500).json({ error: 'Failed to fetch episodes' });
+  }
+});
+
+/**
+ * GET /api/episodes/:id - Get episode details
+ */
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const episode = await prisma.episode.findUnique({
+      where: { id: req.params.id },
+      include: {
+        show: true,
+        calls: {
+          include: {
+            caller: true
+          },
+          orderBy: {
+            incomingAt: 'asc'
+          }
+        },
+        clips: true,
+        chatMessages: {
+          orderBy: {
+            createdAt: 'asc'
+          }
+        }
+      }
+    });
+
+    if (!episode) {
+      return res.status(404).json({ error: 'Episode not found' });
+    }
+
+    res.json(episode);
+  } catch (error) {
+    console.error('Error fetching episode:', error);
+    res.status(500).json({ error: 'Failed to fetch episode' });
+  }
+});
+
+/**
+ * POST /api/episodes - Create new episode
+ */
+router.post('/', async (req: Request, res: Response) => {
+  try {
+    const { showId, title, date, scheduledStart, scheduledEnd, description } = req.body;
+
+    // Get next episode number for this show
+    const lastEpisode = await prisma.episode.findFirst({
+      where: { showId },
+      orderBy: { episodeNumber: 'desc' }
+    });
+
+    const episodeNumber = (lastEpisode?.episodeNumber || 0) + 1;
+
+    const episode = await prisma.episode.create({
+      data: {
+        showId,
+        episodeNumber,
+        title,
+        date: new Date(date),
+        scheduledStart: new Date(scheduledStart),
+        scheduledEnd: new Date(scheduledEnd),
+        description,
+        status: 'scheduled'
+      },
+      include: {
+        show: true
+      }
+    });
+
+    res.status(201).json(episode);
+  } catch (error) {
+    console.error('Error creating episode:', error);
+    res.status(500).json({ error: 'Failed to create episode' });
+  }
+});
+
+/**
+ * PATCH /api/episodes/:id - Update episode
+ */
+router.patch('/:id', async (req: Request, res: Response) => {
+  try {
+    const { title, description, notes, tags, status } = req.body;
+
+    const episode = await prisma.episode.update({
+      where: { id: req.params.id },
+      data: {
+        title,
+        description,
+        notes,
+        tags,
+        status
+      }
+    });
+
+    res.json(episode);
+  } catch (error) {
+    console.error('Error updating episode:', error);
+    res.status(500).json({ error: 'Failed to update episode' });
+  }
+});
+
+/**
+ * PATCH /api/episodes/:id/start - Start episode (go live)
+ */
+router.patch('/:id/start', async (req: Request, res: Response) => {
+  try {
+    const episode = await prisma.episode.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'live',
+        actualStart: new Date()
+      }
+    });
+
+    const io = req.app.get('io');
+    io.to(`episode:${episode.id}`).emit('episode:start', episode);
+
+    res.json(episode);
+  } catch (error) {
+    console.error('Error starting episode:', error);
+    res.status(500).json({ error: 'Failed to start episode' });
+  }
+});
+
+/**
+ * PATCH /api/episodes/:id/end - End episode
+ */
+router.patch('/:id/end', async (req: Request, res: Response) => {
+  try {
+    const { recordingUrl, transcriptUrl } = req.body;
+
+    const episode = await prisma.episode.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!episode || !episode.actualStart) {
+      return res.status(400).json({ error: 'Episode not started' });
+    }
+
+    const duration = Math.floor((Date.now() - episode.actualStart.getTime()) / (1000 * 60));
+
+    const updatedEpisode = await prisma.episode.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'completed',
+        actualEnd: new Date(),
+        duration,
+        recordingUrl,
+        transcriptUrl
+      }
+    });
+
+    const io = req.app.get('io');
+    io.to(`episode:${updatedEpisode.id}`).emit('episode:end', updatedEpisode);
+
+    res.json(updatedEpisode);
+  } catch (error) {
+    console.error('Error ending episode:', error);
+    res.status(500).json({ error: 'Failed to end episode' });
+  }
+});
+
+export default router;
+

@@ -1,0 +1,273 @@
+import { GoogleGenAI } from '@google/genai';
+
+const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY || 'not-configured');
+const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+
+interface Caller {
+  id: string;
+  name?: string;
+  phoneNumber: string;
+  location?: string;
+  truckerType?: string;
+  totalCalls: number;
+  firstCallDate: Date;
+  lastCallDate: Date;
+}
+
+interface Call {
+  id: string;
+  topic?: string;
+  screenerNotes?: string;
+  transcriptText?: string;
+  onAirAt?: Date;
+  duration?: number;
+}
+
+/**
+ * Generate AI summary of caller history
+ */
+export async function generateCallerSummary(caller: Caller, recentCalls: Call[]): Promise<{
+  summary: string;
+  commonTopics: string[];
+  sentiment: string;
+}> {
+  try {
+    const callHistory = recentCalls.map((call, index) => 
+      `Call ${index + 1} (${call.onAirAt ? new Date(call.onAirAt).toLocaleDateString() : 'Unknown date'}):
+       Topic: ${call.topic || 'Not specified'}
+       Notes: ${call.screenerNotes || 'None'}
+       Duration: ${call.duration ? `${Math.floor(call.duration / 60)} minutes` : 'Unknown'}`
+    ).join('\n\n');
+
+    const prompt = `
+You are analyzing a caller's history for a live radio show host. The show is for the trucking industry (OTR, regional, local drivers).
+
+Caller Information:
+- Name: ${caller.name || 'Unknown'}
+- Phone: ${caller.phoneNumber}
+- Location: ${caller.location || 'Unknown'}
+- Trucker Type: ${caller.truckerType || 'Unknown'}
+- Total Calls: ${caller.totalCalls}
+- First Call: ${new Date(caller.firstCallDate).toLocaleDateString()}
+- Last Call: ${new Date(caller.lastCallDate).toLocaleDateString()}
+
+Recent Call History:
+${callHistory || 'No previous calls'}
+
+Please provide:
+1. A brief 2-3 sentence summary of this caller for the host to see during screening
+2. List of common topics they discuss (comma-separated)
+3. Overall sentiment (positive, neutral, negative, or mixed)
+
+Format your response as JSON:
+{
+  "summary": "Brief summary here",
+  "commonTopics": ["topic1", "topic2", "topic3"],
+  "sentiment": "positive/neutral/negative/mixed"
+}
+`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+
+    // Parse JSON response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Could not parse JSON from AI response');
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    return parsed;
+
+  } catch (error) {
+    console.error('Error generating caller summary:', error);
+    
+    // Return fallback summary
+    return {
+      summary: `${caller.name || 'Caller'} has called ${caller.totalCalls} time(s). ${caller.truckerType ? `Works as ${caller.truckerType}.` : ''} ${caller.location ? `Located in ${caller.location}.` : ''}`,
+      commonTopics: [],
+      sentiment: 'neutral'
+    };
+  }
+}
+
+/**
+ * Analyze document (medical labs, oil analysis, etc.)
+ */
+export async function analyzeDocument(
+  documentUrl: string,
+  documentType: 'medical_lab' | 'blood_work' | 'cgm_data' | 'oil_analysis' | 'other',
+  documentContent: string
+): Promise<{
+  summary: string;
+  keyFindings: string[];
+  recommendations: string[];
+  confidence: number;
+}> {
+  try {
+    const systemPrompts: Record<string, string> = {
+      medical_lab: 'You are a medical lab analyst helping a radio host understand lab results for on-air discussion. Focus on explaining findings in layman\'s terms and highlighting anything notable.',
+      blood_work: 'You are analyzing blood work results for a radio discussion. Identify key markers, explain what they mean, and suggest talking points for the host.',
+      cgm_data: 'You are analyzing continuous glucose monitor (CGM) data. Identify patterns, spikes, and trends that would be interesting to discuss on-air.',
+      oil_analysis: 'You are analyzing heavy truck oil analysis results. Identify wear patterns, contamination, and maintenance recommendations in terms a trucker would understand.',
+      other: 'You are analyzing a document for a radio host. Provide a clear summary and key talking points.'
+    };
+
+    const prompt = `
+Analyze this ${documentType.replace('_', ' ')} document for a live radio show discussion.
+
+Document content:
+${documentContent.substring(0, 8000)} ${documentContent.length > 8000 ? '... (truncated)' : ''}
+
+Please provide:
+1. A concise summary (2-3 sentences) the host can quickly read on-air
+2. 3-5 key findings or notable points
+3. 2-3 talking points or recommendations for discussion
+4. Your confidence level in this analysis (0-100%)
+
+Format as JSON:
+{
+  "summary": "Brief summary here",
+  "keyFindings": ["finding1", "finding2", "finding3"],
+  "recommendations": ["recommendation1", "recommendation2"],
+  "confidence": 85
+}
+`;
+
+    const fullPrompt = `${systemPrompts[documentType]}\n\n${prompt}`;
+    const result = await model.generateContent(fullPrompt);
+    const text = result.response.text();
+
+    // Parse JSON response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Could not parse JSON from AI response');
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    return {
+      summary: parsed.summary || 'Document analysis completed.',
+      keyFindings: parsed.keyFindings || [],
+      recommendations: parsed.recommendations || [],
+      confidence: parsed.confidence || 75
+    };
+
+  } catch (error) {
+    console.error('Error analyzing document:', error);
+    throw error;
+  }
+}
+
+/**
+ * Generate call transcript summary
+ */
+export async function summarizeCallTranscript(transcript: string): Promise<{
+  summary: string;
+  keyPoints: string[];
+  topics: string[];
+  sentiment: string;
+}> {
+  try {
+    const prompt = `
+Analyze this radio call transcript and provide:
+1. A brief summary (2-3 sentences)
+2. Key points discussed (3-5 bullet points)
+3. Main topics covered
+4. Overall sentiment
+
+Transcript:
+${transcript.substring(0, 10000)} ${transcript.length > 10000 ? '... (truncated)' : ''}
+
+Format as JSON:
+{
+  "summary": "Brief summary",
+  "keyPoints": ["point1", "point2", "point3"],
+  "topics": ["topic1", "topic2"],
+  "sentiment": "positive/neutral/negative/mixed"
+}
+`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Could not parse JSON from AI response');
+    }
+
+    return JSON.parse(jsonMatch[0]);
+
+  } catch (error) {
+    console.error('Error summarizing transcript:', error);
+    throw error;
+  }
+}
+
+/**
+ * Generate social media content from call/clip
+ */
+export async function generateSocialContent(
+  callTranscript: string,
+  clipDuration: number
+): Promise<{
+  caption: string;
+  hashtags: string[];
+  suggestions: string[];
+}> {
+  try {
+    const prompt = `
+Create engaging social media content for this radio call clip.
+
+Clip Duration: ${clipDuration} seconds
+Transcript:
+${callTranscript.substring(0, 5000)}
+
+Generate:
+1. An engaging caption (2-3 sentences, include call-to-action)
+2. Relevant hashtags (5-8)
+3. Content suggestions (titles, thumbnail ideas)
+
+Format as JSON:
+{
+  "caption": "Engaging caption here",
+  "hashtags": ["#trucking", "#podcast", "#health"],
+  "suggestions": ["Title idea", "Thumbnail idea"]
+}
+`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('Could not parse JSON from AI response');
+    }
+
+    return JSON.parse(jsonMatch[0]);
+
+  } catch (error) {
+    console.error('Error generating social content:', error);
+    throw error;
+  }
+}
+
+/**
+ * Extract text from various document formats (helper for document analysis)
+ */
+export async function extractDocumentText(fileBuffer: Buffer, mimeType: string): Promise<string> {
+  // For MVP, we'll handle simple text extraction
+  // In production, you'd want to use libraries like pdf-parse, mammoth, etc.
+  
+  if (mimeType.includes('text/plain')) {
+    return fileBuffer.toString('utf-8');
+  }
+  
+  if (mimeType.includes('application/json')) {
+    return fileBuffer.toString('utf-8');
+  }
+  
+  // For PDFs, images, etc., you'd need additional processing
+  // For now, return a placeholder
+  return `[Document of type ${mimeType} - text extraction not yet implemented in MVP]`;
+}
+

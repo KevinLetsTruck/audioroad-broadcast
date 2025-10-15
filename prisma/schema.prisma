@@ -1,0 +1,439 @@
+// AudioRoad Network Broadcast Platform Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USERS & AUTHENTICATION
+// ============================================
+
+model BroadcastUser {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String
+  role        String   // 'host', 'co-host', 'producer', 'screener', 'admin'
+  showId      String?  // Primary show assignment
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([email])
+  @@index([role])
+  @@index([showId])
+}
+
+// ============================================
+// SHOWS & EPISODES
+// ============================================
+
+model Show {
+  id          String    @id @default(cuid())
+  name        String    // "The AudioRoad Show"
+  slug        String    @unique // "audioroad-show"
+  hostId      String    // References BroadcastUser
+  hostName    String    // Cache for display
+  description String?   @db.Text
+  
+  // Schedule configuration
+  schedule    Json      // { days: ['mon','tue','wed','thu'], time: '15:00', duration: 180, timezone: 'America/New_York' }
+  
+  // Branding
+  logoUrl     String?
+  color       String?   // Hex color for UI theming
+  
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  episodes    Episode[]
+  audioAssets AudioAsset[]
+  
+  @@index([slug])
+  @@index([isActive])
+}
+
+model Episode {
+  id              String    @id @default(cuid())
+  showId          String
+  show            Show      @relation(fields: [showId], references: [id], onDelete: Cascade)
+  
+  episodeNumber   Int
+  title           String
+  date            DateTime
+  scheduledStart  DateTime
+  scheduledEnd    DateTime
+  
+  actualStart     DateTime?
+  actualEnd       DateTime?
+  
+  status          String    // 'scheduled', 'live', 'completed', 'cancelled', 'archived'
+  
+  // Recordings
+  recordingUrl    String?   // Full show recording (S3 URL)
+  transcriptUrl   String?   // Full transcript
+  duration        Int?      // Actual duration in minutes
+  
+  // Metadata
+  description     String?   @db.Text
+  notes           String?   @db.Text
+  tags            Json?     // Array of tags
+  
+  // Relations
+  calls           Call[]
+  clips           Clip[]
+  chatMessages    ChatMessage[]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@unique([showId, episodeNumber])
+  @@index([showId, date])
+  @@index([status])
+  @@index([scheduledStart])
+}
+
+// ============================================
+// CALLERS & CALLS
+// ============================================
+
+model Caller {
+  id              String    @id @default(cuid())
+  phoneNumber     String    @unique
+  
+  // Basic info
+  name            String?
+  email           String?
+  location        String?   // City, State
+  timezone        String?   // IANA timezone
+  
+  // Trucker-specific
+  truckerType     String?   // 'OTR', 'Regional', 'Local', 'Owner-Operator', 'Fleet', 'Other'
+  company         String?
+  yearsExperience Int?
+  
+  // Call history
+  firstCallDate   DateTime
+  lastCallDate    DateTime
+  totalCalls      Int       @default(0)
+  featuredCalls   Int       @default(0) // Number of "Call of the Day" features
+  
+  // AI-generated insights
+  aiSummary       String?   @db.Text // AI summary of caller history
+  commonTopics    Json?     // Array of common topics discussed
+  sentiment       String?   // 'positive', 'neutral', 'negative', 'mixed'
+  
+  // Flags
+  isBlocked       Boolean   @default(false)
+  isFavorite      Boolean   @default(false) // Mark VIP callers
+  
+  // Notes
+  notes           String?   @db.Text
+  
+  // Relations
+  calls           Call[]
+  documents       CallerDocument[]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([phoneNumber])
+  @@index([name])
+  @@index([lastCallDate])
+}
+
+model Call {
+  id              String    @id @default(cuid())
+  episodeId       String
+  episode         Episode   @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  callerId        String
+  caller          Caller    @relation(fields: [callerId], references: [id])
+  
+  // Twilio data
+  twilioCallSid   String    @unique
+  twilioConferenceSid String?
+  
+  // Call status flow
+  status          String    // 'incoming', 'queued', 'screening', 'approved', 'on-air', 'completed', 'rejected', 'missed'
+  
+  // Timestamps
+  incomingAt      DateTime  @default(now())
+  queuedAt        DateTime?
+  screenedAt      DateTime?
+  approvedAt      DateTime?
+  onAirAt         DateTime?
+  endedAt         DateTime?
+  
+  // Duration tracking (seconds)
+  queueDuration   Int?      // Time in queue
+  screenDuration  Int?      // Time in screening
+  airDuration     Int?      // Time on air
+  totalDuration   Int?      // Total call time
+  
+  // Call metadata
+  topic           String?   // What caller wants to discuss
+  priority        String    @default("normal") // 'low', 'normal', 'high', 'urgent'
+  
+  // Screening
+  screenerUserId  String?   // Who screened this call
+  screenerNotes   String?   @db.Text
+  
+  // Recording & Transcription
+  recordingUrl    String?   // Individual call recording (S3 URL)
+  recordingSid    String?   // Twilio recording SID
+  transcriptText  String?   @db.Text
+  transcriptUrl   String?   // Link to transcript file
+  
+  // AI analysis
+  aiSummary       String?   @db.Text
+  aiKeyPoints     Json?     // Array of key discussion points
+  aiSentiment     String?   // Overall sentiment
+  aiTopics        Json?     // Extracted topics
+  
+  // Quality & ratings
+  audioQuality    Int?      // 1-5 rating (auto-detected or manual)
+  contentRating   Int?      // 1-5 stars (for content value)
+  hostRating      Int?      // Host's rating of the call
+  
+  // Content creation flags
+  featured        Boolean   @default(false) // "Call of the Day" candidate
+  hasClips        Boolean   @default(false) // Has clips created from it
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([episodeId, status])
+  @@index([callerId])
+  @@index([status])
+  @@index([incomingAt])
+  @@index([featured])
+}
+
+// ============================================
+// DOCUMENT MANAGEMENT
+// ============================================
+
+model CallerDocument {
+  id              String    @id @default(cuid())
+  callerId        String
+  caller          Caller    @relation(fields: [callerId], references: [id], onDelete: Cascade)
+  callId          String?   // If submitted during a specific call
+  
+  // Document info
+  documentType    String    // 'medical_lab', 'blood_work', 'cgm_data', 'oil_analysis', 'other'
+  fileName        String
+  fileUrl         String    // S3 URL
+  fileSize        Int       // bytes
+  mimeType        String
+  
+  uploadedAt      DateTime  @default(now())
+  uploadMethod    String    @default("portal") // 'portal', 'email', 'chat'
+  
+  // AI Analysis (Claude)
+  analyzed        Boolean   @default(false)
+  analyzedAt      DateTime?
+  
+  aiAnalysis      Json?     // Full structured analysis
+  aiSummary       String?   @db.Text // Quick summary for host
+  aiKeyFindings   Json?     // Array of critical findings
+  aiRecommendations Json?   // Array of talking points/recommendations
+  aiConfidence    Float?    // 0-1 confidence score
+  
+  // Manual override/notes
+  manualNotes     String?   @db.Text
+  reviewedBy      String?   // User ID who reviewed
+  reviewedAt      DateTime?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([callerId])
+  @@index([documentType])
+  @@index([analyzed])
+  @@index([uploadedAt])
+}
+
+// ============================================
+// AUDIO ASSETS (Soundboard)
+// ============================================
+
+model AudioAsset {
+  id          String    @id @default(cuid())
+  showId      String?   // Null = available to all shows
+  show        Show?     @relation(fields: [showId], references: [id], onDelete: Cascade)
+  
+  name        String
+  type        String    // 'opener', 'closer', 'bumper', 'commercial', 'jingle', 'transition', 'sfx'
+  
+  fileUrl     String    // S3 URL
+  duration    Int       // seconds
+  fileSize    Int       // bytes
+  
+  // Organization
+  category    String?   // Custom category
+  tags        Json?     // Array of tags for quick filtering
+  color       String?   // Hex color for button
+  
+  // Hotkey
+  hotkey      String?   // Keyboard shortcut (e.g., 'F1', 'Ctrl+1')
+  
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([showId, type])
+  @@index([type, isActive])
+}
+
+// ============================================
+// CONTENT CREATION & SOCIAL MEDIA
+// ============================================
+
+model Clip {
+  id              String    @id @default(cuid())
+  episodeId       String
+  episode         Episode   @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  callId          String?   // If clip is from a specific call
+  
+  title           String
+  description     String?   @db.Text
+  type            String    // 'call_of_day', 'teaser', 'health_tip', 'business_tip', 'financial_tip', 'highlight', 'promo'
+  
+  // Timing (in the original recording)
+  startTime       Int?      // Seconds from episode start
+  endTime         Int?      // Seconds from episode start
+  duration        Int       // Clip duration in seconds
+  
+  // Media files
+  audioUrl        String?   // Processed audio clip
+  videoUrl        String?   // Video version (if applicable)
+  thumbnailUrl    String?   // Thumbnail image
+  waveformUrl     String?   // Waveform visualization
+  
+  // AI-generated content
+  aiCaption       String?   @db.Text
+  aiHashtags      Json?     // Array of suggested hashtags
+  aiTranscript    String?   @db.Text
+  aiSuggestions   Json?     // AI suggestions for improvement
+  
+  // Publishing
+  status          String    @default("draft") // 'draft', 'review', 'approved', 'published', 'archived'
+  platforms       Json?     // Array: platforms published to
+  scheduledFor    DateTime? // Scheduled publish time
+  publishedAt     DateTime?
+  
+  // Engagement (if tracking)
+  views           Int       @default(0)
+  likes           Int       @default(0)
+  shares          Int       @default(0)
+  comments        Int       @default(0)
+  
+  createdBy       String?   // User ID who created
+  approvedBy      String?   // User ID who approved
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([episodeId])
+  @@index([type, status])
+  @@index([status])
+  @@index([scheduledFor])
+}
+
+// ============================================
+// REAL-TIME CHAT
+// ============================================
+
+model ChatMessage {
+  id              String    @id @default(cuid())
+  episodeId       String
+  episode         Episode   @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  
+  senderId        String    // User ID or Caller ID
+  senderName      String    // Display name
+  senderRole      String    // 'host', 'co-host', 'screener', 'producer', 'caller'
+  
+  recipientId     String?   // For DMs (null = group chat)
+  recipientRole   String?   // Role of recipient
+  
+  messageType     String    @default("text") // 'text', 'system', 'file', 'call_update'
+  message         String    @db.Text
+  
+  // Twilio Conversations integration
+  twilioSid       String?   // Twilio message SID
+  twilioChannelSid String?  // Twilio channel SID
+  
+  // File attachment (if any)
+  attachmentUrl   String?
+  attachmentType  String?   // 'image', 'pdf', 'audio', etc.
+  
+  isRead          Boolean   @default(false)
+  readAt          DateTime?
+  
+  createdAt       DateTime  @default(now())
+  
+  @@index([episodeId, createdAt])
+  @@index([senderId])
+  @@index([recipientId, isRead])
+}
+
+// ============================================
+// ANALYTICS & METRICS
+// ============================================
+
+model ShowMetrics {
+  id              String    @id @default(cuid())
+  episodeId       String    @unique
+  
+  // Call metrics
+  totalCalls      Int       @default(0)
+  answeredCalls   Int       @default(0)
+  missedCalls     Int       @default(0)
+  avgWaitTime     Int?      // Average queue time in seconds
+  avgCallDuration Int?      // Average on-air time in seconds
+  
+  // Unique callers
+  uniqueCallers   Int       @default(0)
+  newCallers      Int       @default(0)
+  returningCallers Int      @default(0)
+  
+  // Content created
+  clipsCreated    Int       @default(0)
+  featuredCalls   Int       @default(0)
+  
+  // Show performance
+  actualDuration  Int?      // Actual show duration in minutes
+  scheduledDuration Int?    // Scheduled duration
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([episodeId])
+}
+
+// ============================================
+// SYSTEM LOGS & DEBUGGING
+// ============================================
+
+model SystemLog {
+  id          String    @id @default(cuid())
+  level       String    // 'info', 'warning', 'error', 'critical'
+  category    String    // 'twilio', 'ai', 'audio', 'database', 'general'
+  message     String    @db.Text
+  metadata    Json?     // Additional structured data
+  userId      String?   // User involved (if applicable)
+  episodeId   String?   // Episode involved (if applicable)
+  createdAt   DateTime  @default(now())
+  
+  @@index([level, createdAt])
+  @@index([category])
+  @@index([episodeId])
+}
+
