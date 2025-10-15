@@ -60,7 +60,7 @@ export async function addCallerToHoldConference(
         to: callSid,
         earlyMedia: true,
         endConferenceOnExit: false,
-        beep: false,
+        beep: 'false' as any,
         // Coach mode: can hear but not speak
         coaching: 'true' as any,
         statusCallback: `${process.env.APP_URL}/api/twilio/participant-status`,
@@ -110,8 +110,8 @@ export async function promoteCallerToLive(
       .participants(callSid)
       .update({
         coaching: 'false' as any, // Can now speak
-        hold: false,
-        muted: false
+        hold: 'false' as any,
+        muted: 'false' as any
       });
 
     console.log(`Caller ${callSid} promoted to live`);
@@ -136,6 +136,7 @@ export async function promoteCallerToLive(
  * Play "you're now live" tone to caller
  */
 async function playLiveTone(callSid: string) {
+  if (!client) return;
   try {
     // Play a simple beep tone (you can replace with custom audio file)
     await client.calls(callSid).update({

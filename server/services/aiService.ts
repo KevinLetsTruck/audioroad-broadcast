@@ -180,15 +180,8 @@ Format as JSON:
 }
 `;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Could not parse JSON from AI response');
-    }
-
-    return JSON.parse(jsonMatch[0]);
+    const text = await generateAIResponse(prompt);
+    return JSON.parse(text);
 
   } catch (error) {
     console.error('Error summarizing transcript:', error);
@@ -228,15 +221,8 @@ Format as JSON:
 }
 `;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Could not parse JSON from AI response');
-    }
-
-    return JSON.parse(jsonMatch[0]);
+    const text = await generateAIResponse(prompt);
+    return JSON.parse(text);
 
   } catch (error) {
     console.error('Error generating social content:', error);
