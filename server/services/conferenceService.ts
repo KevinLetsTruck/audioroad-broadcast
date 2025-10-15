@@ -200,9 +200,9 @@ export async function addHostToConference(
         from: process.env.TWILIO_PHONE_NUMBER!,
         to: hostCallSid,
         earlyMedia: true,
-        startConferenceOnEnter: true,
-        endConferenceOnExit: true, // Host ending ends conference
-        beep: false
+        startConferenceOnEnter: 'true' as any,
+        endConferenceOnExit: 'true' as any, // Host ending ends conference
+        beep: 'false' as any
       });
 
     console.log(`Host added to conference ${conferenceName}`);
