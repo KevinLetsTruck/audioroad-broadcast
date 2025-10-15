@@ -100,7 +100,10 @@ app.get('/api/health', (req: Request, res: Response) => {
 
 // Serve static files from the React app in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../../'), {
+  const distPath = path.join(__dirname, '../..');
+  console.log('📂 Serving static files from:', distPath);
+  
+  app.use(express.static(distPath, {
     setHeaders: (res, filepath) => {
       if (filepath.endsWith('.js')) {
         res.setHeader('Content-Type', 'application/javascript');
@@ -112,7 +115,9 @@ if (process.env.NODE_ENV === 'production') {
 
   // Handle React routing in production
   app.get('*', (req: Request, res: Response) => {
-    res.sendFile(path.join(__dirname, '../../index.html'));
+    const indexPath = path.join(distPath, 'index.html');
+    console.log('📄 Serving index.html from:', indexPath);
+    res.sendFile(indexPath);
   });
 }
 
