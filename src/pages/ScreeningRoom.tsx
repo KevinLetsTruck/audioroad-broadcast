@@ -45,7 +45,6 @@ export default function ScreeningRoom() {
   }, [socket, activeEpisode]);
 
   const handleCallQueued = (callData: any) => {
-    setHasActiveCall(false);
     console.log('Call queued:', callData);
   };
 

@@ -41,12 +41,10 @@ export default function CallerPortal() {
         
         formDataUpload.append('callerId', caller.id);
 
-        const uploadResponse = await fetch('/api/analysis/document', {
+        await fetch('/api/analysis/document', {
           method: 'POST',
           body: formDataUpload
         });
-        const document = await uploadResponse.json();
-        documentUrl = document.fileUrl;
       }
 
       // Show success message
