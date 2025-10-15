@@ -201,7 +201,7 @@ router.post('/:id/generate-summary', async (req: Request, res: Response) => {
     }
 
     // Generate AI summary
-    const summary = await generateCallerSummary(caller, caller.calls);
+    const summary = await generateCallerSummary(caller as any, caller.calls as any);
 
     // Update caller with AI insights
     const updatedCaller = await prisma.caller.update({

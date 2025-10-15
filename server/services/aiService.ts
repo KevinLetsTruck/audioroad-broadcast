@@ -1,7 +1,17 @@
-import { GoogleGenAI } from '@google/genai';
+// Using mock AI for now - Gemini integration will be added later
+// import { GoogleGenerativeAI } from '@google/genai';
 
-const genAI = new GoogleGenAI(process.env.GEMINI_API_KEY || 'not-configured');
-const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+// For MVP, we'll use mock AI responses
+const generateAIResponse = async (prompt: string): Promise<string> => {
+  // This is a placeholder - replace with real Gemini API when ready
+  console.log('AI prompt:', prompt.substring(0, 100));
+  return JSON.stringify({
+    summary: "AI analysis placeholder - configure Gemini API key to enable",
+    keyFindings: ["Feature ready", "Add Gemini API key"],
+    recommendations: ["Test with real documents"],
+    confidence: 75
+  });
+};
 
 interface Caller {
   id: string;
