@@ -85,6 +85,7 @@ export async function addParticipantToConference(
   phoneNumber: string,
   options: any = {}
 ) {
+  if (!client) throw new Error('Twilio not configured');
   try {
     const participant = await client
       .conferences(conferenceSid)
@@ -112,6 +113,7 @@ export async function updateParticipant(
   callSid: string,
   updates: { muted?: boolean; hold?: boolean; announceUrl?: string }
 ) {
+  if (!client) throw new Error('Twilio not configured');
   try {
     const participant = await client
       .conferences(conferenceSid)
@@ -129,6 +131,7 @@ export async function updateParticipant(
  * Remove participant from conference
  */
 export async function removeParticipant(conferenceSid: string, callSid: string) {
+  if (!client) throw new Error('Twilio not configured');
   try {
     await client
       .conferences(conferenceSid)
@@ -146,6 +149,7 @@ export async function removeParticipant(conferenceSid: string, callSid: string) 
  * Get call details
  */
 export async function getCallDetails(callSid: string) {
+  if (!client) throw new Error('Twilio not configured');
   try {
     const call = await client.calls(callSid).fetch();
     return call;
@@ -159,6 +163,7 @@ export async function getCallDetails(callSid: string) {
  * End a call
  */
 export async function endCall(callSid: string) {
+  if (!client) throw new Error('Twilio not configured');
   try {
     const call = await client.calls(callSid).update({ status: 'completed' });
     return call;
@@ -172,6 +177,7 @@ export async function endCall(callSid: string) {
  * Get recording details
  */
 export async function getRecording(recordingSid: string) {
+  if (!client) throw new Error('Twilio not configured');
   try {
     const recording = await client.recordings(recordingSid).fetch();
     return recording;
@@ -255,6 +261,7 @@ export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', opti
  * Send SMS notification
  */
 export async function sendSMS(to: string, message: string) {
+  if (!client) throw new Error('Twilio not configured');
   try {
     const sms = await client.messages.create({
       body: message,
