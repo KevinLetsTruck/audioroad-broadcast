@@ -31,6 +31,11 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
           body: JSON.stringify({ identity })
         });
 
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ error: 'Failed to get token' }));
+          throw new Error(error.error || 'Failed to get Twilio token');
+        }
+
         const { token } = await response.json();
 
         // Create and register device
@@ -46,6 +51,8 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
 
         twilioDevice.on('error', (error) => {
           console.error('Twilio Device error:', error);
+          // Set ready to true even with errors so button doesn't stay stuck
+          setIsReady(true);
           if (onError) onError(error);
         });
 
@@ -59,6 +66,8 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
         setDevice(twilioDevice);
       } catch (error) {
         console.error('Failed to initialize Twilio Device:', error);
+        // Set ready to true even with errors so button doesn't stay stuck
+        setIsReady(true);
         if (onError) onError(error as Error);
       }
     };

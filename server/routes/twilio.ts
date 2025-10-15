@@ -21,7 +21,8 @@ router.post('/token', (req: Request, res: Response) => {
     res.json({ token, identity });
   } catch (error) {
     console.error('Error generating token:', error);
-    res.status(500).json({ error: 'Failed to generate token' });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to generate token';
+    res.status(500).json({ error: errorMessage });
   }
 });
 

@@ -24,14 +24,28 @@ router.post('/document', upload.single('file'), async (req: Request, res: Respon
 
     const { callerId, callId, documentType } = req.body;
 
-    // Upload to S3
-    const s3Key = `documents/${callerId}/${Date.now()}-${req.file.originalname}`;
-    const fileUrl = await uploadToS3(req.file.buffer, s3Key, req.file.mimetype);
+    // Check if AWS is configured
+    const awsConfigured = process.env.AWS_ACCESS_KEY_ID && 
+                          process.env.AWS_ACCESS_KEY_ID !== 'not_configured_yet' &&
+                          process.env.AWS_SECRET_ACCESS_KEY && 
+                          process.env.AWS_SECRET_ACCESS_KEY !== 'not_configured_yet';
+
+    let fileUrl = '';
+    
+    if (awsConfigured) {
+      // Upload to S3 if configured
+      const s3Key = `documents/${callerId}/${Date.now()}-${req.file.originalname}`;
+      fileUrl = await uploadToS3(req.file.buffer, s3Key, req.file.mimetype);
+    } else {
+      // Use placeholder URL for MVP without S3
+      console.log('⚠️  S3 not configured, using placeholder URL for file:', req.file.originalname);
+      fileUrl = `file://local/${req.file.originalname}`;
+    }
 
     // Extract text from document
     const documentContent = await extractDocumentText(req.file.buffer, req.file.mimetype);
 
-    // Analyze with AI
+    // Analyze with AI (uses mock AI for MVP)
     const analysis = await analyzeDocument(fileUrl, documentType, documentContent);
 
     // Save to database
@@ -57,7 +71,8 @@ router.post('/document', upload.single('file'), async (req: Request, res: Respon
     res.status(201).json(document);
   } catch (error) {
     console.error('Error analyzing document:', error);
-    res.status(500).json({ error: 'Failed to analyze document' });
+    const errorMessage = error instanceof Error ? error.message : 'Failed to analyze document';
+    res.status(500).json({ error: errorMessage, details: error instanceof Error ? error.stack : undefined });
   }
 });
 
