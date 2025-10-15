@@ -69,8 +69,8 @@ export async function createConference(conferenceName: string, options: any = {}
       recordingChannels: 'dual',
       ...options
     });
-
     return conference;
+    */
   } catch (error) {
     console.error('Error creating conference:', error);
     throw error;
