@@ -77,17 +77,8 @@ Format your response as JSON:
 }
 `;
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
-
-    // Parse JSON response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Could not parse JSON from AI response');
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    return parsed;
+    const text = await generateAIResponse(prompt);
+    return JSON.parse(text);
 
   } catch (error) {
     console.error('Error generating caller summary:', error);
@@ -145,16 +136,8 @@ Format as JSON:
 `;
 
     const fullPrompt = `${systemPrompts[documentType]}\n\n${prompt}`;
-    const result = await model.generateContent(fullPrompt);
-    const text = result.response.text();
-
-    // Parse JSON response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Could not parse JSON from AI response');
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
+    const text = await generateAIResponse(fullPrompt);
+    const parsed = JSON.parse(text);
     return {
       summary: parsed.summary || 'Document analysis completed.',
       keyFindings: parsed.keyFindings || [],
