@@ -100,7 +100,8 @@ app.get('/api/health', (req: Request, res: Response) => {
 
 // Serve static files from the React app in production
 if (process.env.NODE_ENV === 'production') {
-  const distPath = path.join(__dirname, '../..');
+  // In Railway, dist folder is at /app/dist (one level up from dist/server)
+  const distPath = path.join(__dirname, '..');
   console.log('📂 Serving static files from:', distPath);
   
   app.use(express.static(distPath, {
