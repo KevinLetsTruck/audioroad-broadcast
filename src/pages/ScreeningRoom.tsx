@@ -7,21 +7,37 @@ export default function ScreeningRoom() {
   const [incomingCalls, setIncomingCalls] = useState<any[]>([]);
 
   useEffect(() => {
+    console.log('🚀 ScreeningRoom mounted - initializing...');
+    
     // Fetch active episode
     fetch('/api/episodes?status=live')
       .then(res => res.json())
       .then(episodes => {
+        console.log('📺 Episodes response:', episodes);
         if (episodes.length > 0) {
           setActiveEpisode(episodes[0]);
-          console.log('✅ Active episode loaded:', episodes[0].title);
+          console.log('✅ Active episode loaded:', episodes[0].title, 'ID:', episodes[0].id);
+        } else {
+          console.log('⚠️ No live episodes found');
         }
-      });
+      })
+      .catch(err => console.error('❌ Error fetching episodes:', err));
 
     // Setup socket connection
+    console.log('🔌 Creating Socket.IO connection...');
     const newSocket = io();
     setSocket(newSocket);
+    
+    newSocket.on('connect', () => {
+      console.log('✅ Socket connected, ID:', newSocket.id);
+    });
+    
+    newSocket.on('disconnect', () => {
+      console.log('📴 Socket disconnected');
+    });
 
     return () => {
+      console.log('🧹 ScreeningRoom unmounting, closing socket');
       newSocket.close();
     };
   }, []);
@@ -89,20 +105,31 @@ export default function ScreeningRoom() {
     <div className="min-h-[calc(100vh-73px)] p-8">
       <div className="max-w-6xl mx-auto">
         <div className="mb-8 flex items-center justify-between">
-          <div>
+          <div className="flex-1">
             <h1 className="text-3xl font-bold mb-2">Call Screening Room</h1>
             {activeEpisode && (
               <p className="text-gray-400">
-                {activeEpisode.title} • Live Now
+                {activeEpisode.title} • Live Now • Episode ID: {activeEpisode.id}
               </p>
             )}
             {!activeEpisode && (
               <p className="text-yellow-400">No live episode - start a show to receive calls</p>
             )}
           </div>
-          <div className="text-right">
-            <p className="text-sm text-gray-400">Calls in Queue</p>
-            <p className="text-4xl font-bold text-green-400">{incomingCalls.length}</p>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => {
+                console.log('🔄 Manual refresh clicked');
+                fetchQueuedCalls();
+              }}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold"
+            >
+              🔄 Refresh Queue
+            </button>
+            <div className="text-right">
+              <p className="text-sm text-gray-400">Calls in Queue</p>
+              <p className="text-4xl font-bold text-green-400">{incomingCalls.length}</p>
+            </div>
           </div>
         </div>
 
