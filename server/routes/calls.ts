@@ -102,17 +102,21 @@ router.post('/', async (req: Request, res: Response) => {
         callerId,
         twilioCallSid,
         topic,
-        status: 'incoming',
-        incomingAt: new Date()
+        status: status || 'incoming', // Use provided status or default to 'incoming'
+        incomingAt: new Date(),
+        queuedAt: status === 'queued' ? new Date() : undefined
       },
       include: {
         caller: true
       }
     });
 
+    console.log('✅ Call record created:', call.id, 'Status:', call.status);
+
     // Emit socket event
     const io = req.app.get('io');
     emitToEpisode(io, episodeId, 'call:incoming', call);
+    console.log('📡 WebSocket event emitted to episode:', episodeId);
 
     res.status(201).json(call);
   } catch (error) {
