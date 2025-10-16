@@ -79,7 +79,22 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { episodeId, callerId, twilioCallSid, topic } = req.body;
+    let { episodeId, callerId, twilioCallSid, topic, status } = req.body;
+    
+    // If episodeId is 'current', find the active live episode
+    if (episodeId === 'current') {
+      const activeEpisode = await prisma.episode.findFirst({
+        where: { status: 'live' },
+        orderBy: { scheduledStart: 'desc' }
+      });
+      
+      if (!activeEpisode) {
+        return res.status(400).json({ error: 'No live episode found' });
+      }
+      
+      episodeId = activeEpisode.id;
+      console.log('📞 Creating call for active episode:', activeEpisode.title);
+    }
 
     const call = await prisma.call.create({
       data: {
