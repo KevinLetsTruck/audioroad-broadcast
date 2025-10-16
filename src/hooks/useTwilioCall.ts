@@ -86,7 +86,7 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
 
   const setupCallHandlers = (activeCall: Call) => {
     activeCall.on('accept', () => {
-      console.log('Call accepted');
+      console.log('✅ Call accepted - connected!');
       setIsConnected(true);
       setIsConnecting(false);
       
@@ -99,11 +99,16 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
       if (onCallConnected) onCallConnected();
     });
 
+    activeCall.on('ringing', () => {
+      console.log('📞 Call is ringing...');
+    });
+
     activeCall.on('disconnect', () => {
-      console.log('Call disconnected');
+      console.log('📴 Call disconnected');
       setIsConnected(false);
       setCall(null);
       setCallDuration(0);
+      setIsConnecting(false);
       
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
@@ -113,7 +118,8 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
     });
 
     activeCall.on('error', (error) => {
-      console.error('Call error:', error);
+      console.error('❌ Call error:', error);
+      setIsConnecting(false);
       if (onError) onError(error);
     });
   };
@@ -125,13 +131,15 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
     }
 
     setIsConnecting(true);
+    console.log('🔌 Initiating web call with params:', params);
 
     try {
       const outgoingCall = await device.connect({ params });
+      console.log('📞 Call connection initiated');
       setCall(outgoingCall);
       setupCallHandlers(outgoingCall);
     } catch (error) {
-      console.error('Failed to make call:', error);
+      console.error('❌ Failed to make call:', error);
       setIsConnecting(false);
       if (onError) onError(error as Error);
     }
