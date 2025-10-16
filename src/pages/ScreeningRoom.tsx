@@ -126,6 +126,20 @@ export default function ScreeningRoom() {
             >
               🔄 Refresh Queue
             </button>
+            {incomingCalls.length > 0 && (
+              <button
+                onClick={async () => {
+                  if (confirm(`Clear all ${incomingCalls.length} test calls from queue?`)) {
+                    for (const call of incomingCalls) {
+                      await handleReject(call);
+                    }
+                  }
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold"
+              >
+                🗑️ Clear All ({incomingCalls.length})
+              </button>
+            )}
             <div className="text-right">
               <p className="text-sm text-gray-400">Calls in Queue</p>
               <p className="text-4xl font-bold text-green-400">{incomingCalls.length}</p>
