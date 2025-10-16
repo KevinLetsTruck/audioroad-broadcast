@@ -72,26 +72,40 @@ export default function HostDashboard() {
       } else {
         // If episode doesn't exist, create it first
         console.log('📝 Creating new episode in database...');
+        const now = new Date();
         const createResponse = await fetch('/api/episodes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             showId: activeEpisode.showId || 'default-show',
             title: activeEpisode.title,
-            episodeNumber: activeEpisode.episodeNumber,
-            scheduledStart: new Date(),
-            scheduledEnd: new Date(Date.now() + 3 * 60 * 60 * 1000), // 3 hours from now
-            status: 'live'
+            date: now.toISOString(),
+            scheduledStart: now.toISOString(),
+            scheduledEnd: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(), // 3 hours from now
+            description: 'Live show created from Host Dashboard'
           })
         });
         
         if (createResponse.ok) {
           const newEpisode = await createResponse.json();
-          setActiveEpisode(newEpisode);
-          setIsLive(true);
-          console.log('✅ New episode created and started:', newEpisode.title);
+          
+          // Now start the episode to make it live
+          const startResponse = await fetch(`/api/episodes/${newEpisode.id}/start`, {
+            method: 'PATCH'
+          });
+          
+          if (startResponse.ok) {
+            const liveEpisode = await startResponse.json();
+            setActiveEpisode(liveEpisode);
+            setIsLive(true);
+            console.log('✅ Episode created and started:', liveEpisode.title);
+          } else {
+            throw new Error('Failed to start episode');
+          }
         } else {
-          throw new Error('Failed to create episode');
+          const error = await createResponse.json().catch(() => ({}));
+          console.error('Create episode error:', error);
+          throw new Error(error.error || 'Failed to create episode');
         }
       }
     } catch (error) {
