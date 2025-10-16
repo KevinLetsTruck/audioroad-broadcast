@@ -36,13 +36,17 @@ export default function HostDashboard() {
   };
 
   useEffect(() => {
-    // Try to fetch active episode from API, fallback to mock
+    // Try to fetch active episode from API, create mock if needed
     fetch('/api/episodes?status=live')
       .then(res => res.json())
       .then(episodes => {
         if (episodes.length > 0) {
           setActiveEpisode(episodes[0]);
           setIsLive(true);
+          console.log('✅ Found live episode:', episodes[0].title);
+        } else {
+          console.log('⚠️  No live episodes found - using mock (click GO LIVE to sync)');
+          setIsLive(false); // Mark as not live since no database episode exists
         }
       })
       .catch(error => {
@@ -55,14 +59,44 @@ export default function HostDashboard() {
     if (!activeEpisode) return;
     
     try {
+      // Try to start the episode in the database
       const response = await fetch(`/api/episodes/${activeEpisode.id}/start`, {
         method: 'PATCH'
       });
-      const episode = await response.json();
-      setActiveEpisode(episode);
-      setIsLive(true);
+      
+      if (response.ok) {
+        const episode = await response.json();
+        setActiveEpisode(episode);
+        setIsLive(true);
+        console.log('✅ Episode started in database:', episode.title);
+      } else {
+        // If episode doesn't exist, create it first
+        console.log('📝 Creating new episode in database...');
+        const createResponse = await fetch('/api/episodes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            showId: activeEpisode.showId || 'default-show',
+            title: activeEpisode.title,
+            episodeNumber: activeEpisode.episodeNumber,
+            scheduledStart: new Date(),
+            scheduledEnd: new Date(Date.now() + 3 * 60 * 60 * 1000), // 3 hours from now
+            status: 'live'
+          })
+        });
+        
+        if (createResponse.ok) {
+          const newEpisode = await createResponse.json();
+          setActiveEpisode(newEpisode);
+          setIsLive(true);
+          console.log('✅ New episode created and started:', newEpisode.title);
+        } else {
+          throw new Error('Failed to create episode');
+        }
+      }
     } catch (error) {
       console.error('Error starting episode:', error);
+      alert('Failed to start episode. Check console for details.');
     }
   };
 
