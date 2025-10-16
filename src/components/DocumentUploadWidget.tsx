@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 interface DocumentUploadWidgetProps {
   callerId?: string;
@@ -20,6 +20,28 @@ export default function DocumentUploadWidget({
   const [dragActive, setDragActive] = useState(false);
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load existing documents from database on mount
+  useEffect(() => {
+    if (callerId) {
+      fetchExistingDocuments();
+    }
+  }, [callerId]);
+
+  const fetchExistingDocuments = async () => {
+    if (!callerId) return;
+    
+    try {
+      const response = await fetch(`/api/analysis/documents?callerId=${callerId}`);
+      if (response.ok) {
+        const docs = await response.json();
+        console.log('📄 Loaded existing documents:', docs.length);
+        setUploadedDocs(docs);
+      }
+    } catch (error) {
+      console.error('Error loading existing documents:', error);
+    }
+  };
 
   const documentTypeOptions = [
     { value: 'medical_lab', label: 'Medical Labs' },
