@@ -47,10 +47,10 @@ app.set('io', io);
 // Trust proxy - for Railway deployment
 app.set('trust proxy', 1);
 
-// Rate limiting configuration
+// Rate limiting configuration - increased for development
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 500,
+  max: 5000, // Increased from 500 to handle WebRTC/Socket connections
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -58,7 +58,7 @@ const generalLimiter = rateLimit({
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 1000, // Increased from 100 for development
   message: 'Too many API requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
