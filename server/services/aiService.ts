@@ -16,7 +16,7 @@ const generateAIResponse = async (prompt: string): Promise<string> => {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' }); // Fixed: use gemini-1.5-flash instead of deprecated gemini-pro
     const result = await model.generateContent(prompt);
     const response = await result.response;
     let text = response.text();
