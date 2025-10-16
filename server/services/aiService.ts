@@ -1,16 +1,38 @@
-// Using mock AI for now - Gemini integration will be added later
-// import { GoogleGenerativeAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// For MVP, we'll use mock AI responses
+const geminiApiKey = process.env.GEMINI_API_KEY;
+const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
+
+// Generate AI response using Gemini
 const generateAIResponse = async (prompt: string): Promise<string> => {
-  // This is a placeholder - replace with real Gemini API when ready
-  console.log('AI prompt:', prompt.substring(0, 100));
-  return JSON.stringify({
-    summary: "AI analysis placeholder - configure Gemini API key to enable",
-    keyFindings: ["Feature ready", "Add Gemini API key"],
-    recommendations: ["Test with real documents"],
-    confidence: 75
-  });
+  if (!genAI || !geminiApiKey) {
+    console.log('⚠️  Gemini API not configured, using mock response');
+    return JSON.stringify({
+      summary: "AI analysis placeholder - configure Gemini API key to enable",
+      keyFindings: ["Feature ready", "Add Gemini API key"],
+      recommendations: ["Test with real documents"],
+      confidence: 75
+    });
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    console.log('✅ Gemini AI response received');
+    return text;
+  } catch (error) {
+    console.error('❌ Gemini API error:', error);
+    // Return mock response on error
+    return JSON.stringify({
+      summary: "AI analysis temporarily unavailable",
+      keyFindings: ["Please try again"],
+      recommendations: ["Upload document again"],
+      confidence: 50
+    });
+  }
 };
 
 interface Caller {
