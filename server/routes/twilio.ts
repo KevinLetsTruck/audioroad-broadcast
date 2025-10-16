@@ -27,6 +27,37 @@ router.post('/token', (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/twilio/voice - Handle outgoing web calls (TwiML App Voice URL)
+ */
+router.post('/voice', async (req: Request, res: Response) => {
+  try {
+    const { callerId } = req.body;
+    
+    console.log('Outgoing web call request, callerId:', callerId);
+
+    // Find active episode
+    const activeEpisode = await prisma.episode.findFirst({
+      where: { status: 'live' },
+      orderBy: { scheduledStart: 'desc' }
+    });
+
+    if (!activeEpisode) {
+      // No live show - play message
+      const twiml = generateTwiML('voicemail');
+      return res.type('text/xml').send(twiml);
+    }
+
+    // Queue the caller
+    const twiml = generateTwiML('queue', { queueName: `episode-${activeEpisode.id}` });
+    res.type('text/xml').send(twiml);
+
+  } catch (error) {
+    console.error('Error handling outgoing call:', error);
+    res.status(500).send('Error processing call');
+  }
+});
+
+/**
  * POST /api/twilio/incoming-call - Handle incoming call webhook
  */
 router.post('/incoming-call', async (req: Request, res: Response) => {
