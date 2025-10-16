@@ -8,6 +8,7 @@ export default function CallNow() {
   const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
   const [callerId, setCallerId] = useState<string | null>(null);
   const [isCreatingCaller, setIsCreatingCaller] = useState(false);
+  const [twilioIdentity] = useState(`caller-${Date.now()}`); // Create identity ONCE, not on every render
 
   const {
     isReady,
@@ -17,7 +18,7 @@ export default function CallNow() {
     hangUp,
     toggleMute
   } = useTwilioCall({
-    identity: `caller-${Date.now()}`,
+    identity: twilioIdentity,
     onCallConnected: () => {
       setCallState('connected');
     },
