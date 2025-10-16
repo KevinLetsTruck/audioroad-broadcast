@@ -5,6 +5,15 @@ export default function ScreeningRoom() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [activeEpisode, setActiveEpisode] = useState<any>(null);
   const [incomingCalls, setIncomingCalls] = useState<any[]>([]);
+  const [activeCall, setActiveCall] = useState<any>(null);
+  const [screenerNotes, setScreenerNotes] = useState({
+    name: '',
+    location: '',
+    topic: '',
+    truckerType: 'OTR',
+    priority: 'normal',
+    notes: ''
+  });
 
   useEffect(() => {
     console.log('🚀 ScreeningRoom mounted - initializing...');
@@ -79,21 +88,95 @@ export default function ScreeningRoom() {
     }
   };
 
-  const handleApprove = async (call: any) => {
+  const handlePickUpCall = (call: any) => {
+    console.log('📞 Picking up call:', call.id);
+    setActiveCall(call);
+    // Pre-fill any known information
+    setScreenerNotes({
+      name: call.caller?.name || '',
+      location: call.caller?.location || '',
+      topic: call.topic || '',
+      truckerType: call.caller?.truckerType || 'OTR',
+      priority: 'normal',
+      notes: ''
+    });
+    
+    // TODO: Initiate Twilio connection to caller
+    // For now, screener can fill out info while call is active
+  };
+
+  const handleApproveAndQueue = async () => {
+    if (!activeCall) return;
+    
+    if (!screenerNotes.name || !screenerNotes.topic) {
+      alert('Please fill in at least Name and Topic');
+      return;
+    }
+
     try {
-      await fetch(`/api/calls/${call.id}/approve`, {
-        method: 'PATCH'
+      // Update caller info
+      await fetch(`/api/callers/${activeCall.callerId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: screenerNotes.name,
+          location: screenerNotes.location,
+          truckerType: screenerNotes.truckerType
+        })
+      });
+
+      // Update call with screening info and approve
+      await fetch(`/api/calls/${activeCall.id}/approve`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic: screenerNotes.topic,
+          screenerNotes: screenerNotes.notes,
+          priority: screenerNotes.priority
+        })
+      });
+
+      console.log('✅ Call approved and added to host queue');
+      alert('✅ Call added to host queue!');
+      
+      // Reset and refresh
+      setActiveCall(null);
+      setScreenerNotes({
+        name: '',
+        location: '',
+        topic: '',
+        truckerType: 'OTR',
+        priority: 'normal',
+        notes: ''
       });
       fetchQueuedCalls();
     } catch (error) {
       console.error('Error approving call:', error);
+      alert('Failed to approve call');
     }
   };
 
-  const handleReject = async (call: any) => {
+  const handleRejectCall = async () => {
+    if (!activeCall) return;
+
+    if (!confirm('Reject this call? The caller will be disconnected.')) {
+      return;
+    }
+
     try {
-      await fetch(`/api/calls/${call.id}/reject`, {
+      await fetch(`/api/calls/${activeCall.id}/reject`, {
         method: 'PATCH'
+      });
+
+      console.log('❌ Call rejected');
+      setActiveCall(null);
+      setScreenerNotes({
+        name: '',
+        location: '',
+        topic: '',
+        truckerType: 'OTR',
+        priority: 'normal',
+        notes: ''
       });
       fetchQueuedCalls();
     } catch (error) {
@@ -131,8 +214,13 @@ export default function ScreeningRoom() {
                 onClick={async () => {
                   if (confirm(`Clear all ${incomingCalls.length} test calls from queue?`)) {
                     for (const call of incomingCalls) {
-                      await handleReject(call);
+                      try {
+                        await fetch(`/api/calls/${call.id}/reject`, { method: 'PATCH' });
+                      } catch (error) {
+                        console.error('Error rejecting call:', error);
+                      }
                     }
+                    fetchQueuedCalls();
                   }
                 }}
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold"
@@ -149,6 +237,113 @@ export default function ScreeningRoom() {
 
         {activeEpisode ? (
           <div className="space-y-6">
+            {/* Active Screening Session */}
+            {activeCall && (
+              <div className="bg-green-900/30 border-2 border-green-500 rounded-lg p-6">
+                <div className="mb-6">
+                  <h2 className="text-2xl font-bold text-green-400 mb-2">
+                    🎙️ Screening Call: {activeCall.caller?.name || 'Unknown Caller'}
+                  </h2>
+                  <p className="text-gray-300">
+                    Fill in their information while talking to them
+                  </p>
+                </div>
+
+                {/* Screening Form */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-gray-300">Name *</label>
+                    <input
+                      type="text"
+                      value={screenerNotes.name}
+                      onChange={(e) => setScreenerNotes({ ...screenerNotes, name: e.target.value })}
+                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500"
+                      placeholder="Caller's name"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-gray-300">Location</label>
+                    <input
+                      type="text"
+                      value={screenerNotes.location}
+                      onChange={(e) => setScreenerNotes({ ...screenerNotes, location: e.target.value })}
+                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500"
+                      placeholder="City, State"
+                    />
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold mb-2 text-gray-300">What do they want to discuss? *</label>
+                    <textarea
+                      value={screenerNotes.topic}
+                      onChange={(e) => setScreenerNotes({ ...screenerNotes, topic: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500"
+                      placeholder="Brief description of their topic..."
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-gray-300">Trucker Type</label>
+                    <select
+                      value={screenerNotes.truckerType}
+                      onChange={(e) => setScreenerNotes({ ...screenerNotes, truckerType: e.target.value })}
+                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500"
+                    >
+                      <option value="OTR">OTR (Over The Road)</option>
+                      <option value="Regional">Regional</option>
+                      <option value="Local">Local</option>
+                      <option value="Owner-Operator">Owner-Operator</option>
+                      <option value="Fleet">Fleet Manager</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-gray-300">Priority</label>
+                    <select
+                      value={screenerNotes.priority}
+                      onChange={(e) => setScreenerNotes({ ...screenerNotes, priority: e.target.value })}
+                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500"
+                    >
+                      <option value="normal">Normal</option>
+                      <option value="high">High Priority</option>
+                      <option value="urgent">Urgent</option>
+                    </select>
+                  </div>
+
+                  <div className="col-span-2">
+                    <label className="block text-sm font-semibold mb-2 text-gray-300">Notes for Host</label>
+                    <textarea
+                      value={screenerNotes.notes}
+                      onChange={(e) => setScreenerNotes({ ...screenerNotes, notes: e.target.value })}
+                      rows={2}
+                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500"
+                      placeholder="Any additional context for the host..."
+                    />
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-4">
+                  <button
+                    onClick={handleApproveAndQueue}
+                    disabled={!screenerNotes.name || !screenerNotes.topic}
+                    className="flex-1 px-8 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-bold text-xl transition-colors"
+                  >
+                    ✓ Approve & Add to Host Queue
+                  </button>
+                  <button
+                    onClick={handleRejectCall}
+                    className="px-8 py-4 bg-red-600 hover:bg-red-700 rounded-lg font-bold text-xl transition-colors"
+                  >
+                    ✗ Reject & End Call
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Demo Mode for Testing */}
             <div className="bg-blue-900/20 border border-blue-600 rounded-lg p-6">
               <h3 className="text-lg font-semibold mb-4">🎭 Demo Mode</h3>
@@ -223,18 +418,12 @@ export default function ScreeningRoom() {
                         </div>
                       )}
 
-                      <div className="mt-4 flex gap-3">
+                      <div className="mt-4">
                         <button
-                          onClick={() => handleApprove(call)}
-                          className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-bold transition-colors"
+                          onClick={() => handlePickUpCall(call)}
+                          className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 rounded-lg font-bold text-lg transition-colors"
                         >
-                          ✓ Approve & Queue for Host
-                        </button>
-                        <button
-                          onClick={() => handleReject(call)}
-                          className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg font-bold transition-colors"
-                        >
-                          ✗ Reject
+                          📞 Pick Up & Screen This Call
                         </button>
                       </div>
                     </div>
