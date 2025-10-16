@@ -31,9 +31,9 @@ router.post('/token', (req: Request, res: Response) => {
  */
 router.post('/voice', async (req: Request, res: Response) => {
   try {
-    const { callerId } = req.body;
+    const { callerId, CallSid } = req.body;
     
-    console.log('Outgoing web call request, callerId:', callerId);
+    console.log('📞 Outgoing web call - callerId:', callerId, 'CallSid:', CallSid);
 
     // Find active episode
     const activeEpisode = await prisma.episode.findFirst({
@@ -42,9 +42,36 @@ router.post('/voice', async (req: Request, res: Response) => {
     });
 
     if (!activeEpisode) {
-      // No live show - play message
+      console.log('⚠️  No live episode - sending to voicemail');
       const twiml = generateTwiML('voicemail');
       return res.type('text/xml').send(twiml);
+    }
+
+    // Create call record if we have caller info
+    if (callerId) {
+      const call = await prisma.call.create({
+        data: {
+          episodeId: activeEpisode.id,
+          callerId: callerId,
+          twilioCallSid: CallSid || `web-${Date.now()}`,
+          status: 'queued',
+          incomingAt: new Date(),
+          queuedAt: new Date()
+        }
+      });
+
+      console.log('✅ Call record created:', call.id);
+
+      // Notify screening room via WebSocket
+      const io = req.app.get('io');
+      if (io) {
+        io.to(`episode:${activeEpisode.id}`).emit('call:incoming', {
+          callId: call.id,
+          callerId: callerId,
+          twilioCallSid: CallSid || call.twilioCallSid
+        });
+        console.log('📡 Notified screening room');
+      }
     }
 
     // Queue the caller
@@ -52,7 +79,7 @@ router.post('/voice', async (req: Request, res: Response) => {
     res.type('text/xml').send(twiml);
 
   } catch (error) {
-    console.error('Error handling outgoing call:', error);
+    console.error('❌ Error handling outgoing call:', error);
     res.status(500).send('Error processing call');
   }
 });
