@@ -18,6 +18,7 @@ export default function DocumentUploadWidget({
   const [uploading, setUploading] = useState(false);
   const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
   const [dragActive, setDragActive] = useState(false);
+  const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const documentTypeOptions = [
@@ -232,25 +233,87 @@ export default function DocumentUploadWidget({
           {uploadedDocs.map(doc => (
             <div
               key={doc.id}
-              className="bg-green-900/20 border border-green-700 p-4 rounded-lg"
+              className="bg-green-900/20 border border-green-700 rounded-lg overflow-hidden"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold">{doc.fileName}</p>
-                  <p className="text-sm text-gray-400">
-                    {doc.documentType.replace('_', ' ')} • Uploaded {new Date(doc.uploadedAt).toLocaleTimeString()}
-                  </p>
+              <div 
+                className="p-4 cursor-pointer hover:bg-green-900/30 transition-colors"
+                onClick={() => setExpandedDoc(expandedDoc === doc.id ? null : doc.id)}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="font-semibold">{doc.fileName}</p>
+                    <p className="text-sm text-gray-400">
+                      {doc.documentType.replace('_', ' ')} • Uploaded {new Date(doc.uploadedAt).toLocaleTimeString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {doc.analyzed ? (
+                      <span className="px-3 py-1 bg-green-600 rounded text-sm">
+                        ✓ Analyzed
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 bg-yellow-600 rounded text-sm animate-pulse">
+                        🤖 Analyzing...
+                      </span>
+                    )}
+                    <span className="text-sm text-gray-400">
+                      {expandedDoc === doc.id ? '▼' : '▶'}
+                    </span>
+                  </div>
                 </div>
-                {doc.analyzed ? (
-                  <span className="px-3 py-1 bg-green-600 rounded text-sm">
-                    ✓ Analyzed
-                  </span>
-                ) : (
-                  <span className="px-3 py-1 bg-yellow-600 rounded text-sm animate-pulse">
-                    🤖 Analyzing...
-                  </span>
-                )}
               </div>
+
+              {/* Expanded Analysis Details */}
+              {expandedDoc === doc.id && doc.analyzed && doc.aiAnalysis && (
+                <div className="border-t border-green-700 p-4 bg-gray-900/50">
+                  <div className="space-y-4">
+                    {/* Summary */}
+                    <div>
+                      <h5 className="font-semibold text-green-400 mb-2">📋 Summary</h5>
+                      <p className="text-sm text-gray-300">{doc.aiSummary || doc.aiAnalysis.summary}</p>
+                    </div>
+
+                    {/* Key Findings */}
+                    {(doc.aiKeyFindings || doc.aiAnalysis.keyFindings) && (
+                      <div>
+                        <h5 className="font-semibold text-green-400 mb-2">🔍 Key Findings</h5>
+                        <ul className="text-sm text-gray-300 space-y-1">
+                          {(doc.aiKeyFindings || doc.aiAnalysis.keyFindings).map((finding: string, idx: number) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="text-green-400">•</span>
+                              <span>{finding}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Recommendations */}
+                    {(doc.aiRecommendations || doc.aiAnalysis.recommendations) && (
+                      <div>
+                        <h5 className="font-semibold text-green-400 mb-2">💡 Talking Points</h5>
+                        <ul className="text-sm text-gray-300 space-y-1">
+                          {(doc.aiRecommendations || doc.aiAnalysis.recommendations).map((rec: string, idx: number) => (
+                            <li key={idx} className="flex items-start gap-2">
+                              <span className="text-green-400">→</span>
+                              <span>{rec}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Confidence */}
+                    {(doc.aiConfidence || doc.aiAnalysis.confidence) && (
+                      <div className="pt-2 border-t border-green-700/30">
+                        <p className="text-xs text-gray-400">
+                          Analysis Confidence: <span className="text-green-400 font-semibold">{doc.aiConfidence || doc.aiAnalysis.confidence}%</span>
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
