@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import HostDashboard from './pages/HostDashboard'
-import ScreeningRoomMultiCall from './pages/ScreeningRoomMultiCall'
+import ScreeningRoom from './pages/ScreeningRoom'
 import CallNow from './pages/CallNow'
 import ShowSetupMock from './pages/ShowSetupMock'
 
@@ -64,7 +64,7 @@ function App() {
       <main>
         {currentPage === 'setup' && <ShowSetupMock />}
         {currentPage === 'host' && <HostDashboard />}
-        {currentPage === 'screener' && <ScreeningRoomMultiCall />}
+        {currentPage === 'screener' && <ScreeningRoom />}
         {currentPage === 'callnow' && <CallNow />}
       </main>
     </div>
