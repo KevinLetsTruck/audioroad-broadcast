@@ -7,6 +7,7 @@ export default function CallNow() {
   const [callState, setCallState] = useState<'idle' | 'calling' | 'connected' | 'queued'>('idle');
   const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
   const [callerId, setCallerId] = useState<string | null>(null);
+  const [isCreatingCaller, setIsCreatingCaller] = useState(false);
 
   const {
     isReady,
@@ -24,6 +25,34 @@ export default function CallNow() {
       setCallState('idle');
     }
   });
+
+  // Create caller record on page load so documents can be uploaded
+  useEffect(() => {
+    const createCaller = async () => {
+      if (callerId || isCreatingCaller) return;
+      
+      setIsCreatingCaller(true);
+      try {
+        const response = await fetch('/api/callers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phoneNumber: `web-${Date.now()}`,
+            name: 'Web Caller',
+          })
+        });
+        const caller = await response.json();
+        setCallerId(caller.id);
+        console.log('✅ Caller ID created:', caller.id);
+      } catch (error) {
+        console.error('Error creating caller:', error);
+      } finally {
+        setIsCreatingCaller(false);
+      }
+    };
+
+    createCaller();
+  }, []);
 
   useEffect(() => {
     // Check if show is live (poll every 10 seconds)
@@ -53,23 +82,16 @@ export default function CallNow() {
       return;
     }
 
+    if (!callerId) {
+      alert('Setting up caller profile. Please try again in a moment.');
+      return;
+    }
+
     setCallState('calling');
 
-    // Create caller record with uploaded documents
     try {
-      const response = await fetch('/api/callers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phoneNumber: `web-${Date.now()}`,
-          name: 'Web Caller',
-        })
-      });
-      const caller = await response.json();
-      setCallerId(caller.id);
-
-      // Initiate call with caller ID
-      await makeCall({ callerId: caller.id });
+      // Initiate call with existing caller ID
+      await makeCall({ callerId });
     } catch (error) {
       console.error('Error initiating call:', error);
       setCallState('idle');
