@@ -19,17 +19,23 @@ const generateAIResponse = async (prompt: string): Promise<string> => {
     const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    const text = response.text();
+    let text = response.text();
     
-    console.log('✅ Gemini AI response received');
+    console.log('✅ Gemini AI response received, length:', text.length);
+    
+    // Clean up markdown code blocks if present
+    text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    
+    console.log('📝 Cleaned response:', text.substring(0, 200));
+    
     return text;
   } catch (error) {
     console.error('❌ Gemini API error:', error);
     // Return mock response on error
     return JSON.stringify({
-      summary: "AI analysis temporarily unavailable",
-      keyFindings: ["Please try again"],
-      recommendations: ["Upload document again"],
+      summary: "AI analysis temporarily unavailable - check Railway logs for error details",
+      keyFindings: ["Gemini API error occurred", "Check server logs"],
+      recommendations: ["Contact support if issue persists"],
       confidence: 50
     });
   }
