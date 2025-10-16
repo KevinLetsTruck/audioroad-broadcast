@@ -78,8 +78,12 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
       }
-      // Don't destroy device on cleanup - causes re-initialization loop
-      // Device will be cleaned up when page unloads
+      // Properly destroy device on cleanup
+      if (twilioDevice && twilioDevice.state !== 'destroyed') {
+        console.log('🧹 Cleaning up Twilio Device');
+        twilioDevice.unregister();
+        twilioDevice.destroy();
+      }
     };
   }, [identity]);
 
