@@ -31,9 +31,11 @@ router.post('/token', (req: Request, res: Response) => {
  */
 router.post('/voice', async (req: Request, res: Response) => {
   try {
+    console.log('📞 Voice endpoint called with body:', JSON.stringify(req.body));
+    
     const { callerId, CallSid } = req.body;
     
-    console.log('📞 Outgoing web call - callerId:', callerId, 'CallSid:', CallSid);
+    console.log('📞 Extracted - callerId:', callerId, 'CallSid:', CallSid);
 
     // Find active episode
     const activeEpisode = await prisma.episode.findFirst({
