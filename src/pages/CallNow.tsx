@@ -19,32 +19,29 @@ export default function CallNow() {
     toggleMute
   } = useTwilioCall({
     identity: twilioIdentity,
-    onCallConnected: async () => {
+    onCallConnected: () => {
       setCallState('connected');
       
-      // Notify backend that call is connected
+      // Notify backend that call is connected (non-blocking)
       if (callerId) {
-        try {
-          console.log('📞 Call connected - notifying backend, callerId:', callerId);
-          const response = await fetch('/api/calls', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              episodeId: 'current', // Backend will find active episode
-              callerId: callerId,
-              twilioCallSid: `web-${Date.now()}`,
-              status: 'queued',
-              topic: 'Web caller - awaiting screening'
-            })
-          });
-          
-          if (response.ok) {
-            const call = await response.json();
-            console.log('✅ Call record created:', call.id);
-          }
-        } catch (error) {
-          console.error('Error creating call record:', error);
-        }
+        fetch('/api/calls', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            episodeId: 'current',
+            callerId: callerId,
+            twilioCallSid: `web-${Date.now()}`,
+            status: 'queued',
+            topic: 'Web caller - awaiting screening'
+          })
+        })
+        .then(res => res.json())
+        .then(call => {
+          console.log('✅ Call record created:', call.id);
+        })
+        .catch(error => {
+          console.error('⚠️ Failed to create call record (call still works):', error);
+        });
       }
     },
     onCallDisconnected: () => {
