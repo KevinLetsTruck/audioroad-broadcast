@@ -16,7 +16,10 @@ const generateAIResponse = async (prompt: string): Promise<string> => {
   }
 
   try {
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' }); // Fixed: use gemini-1.5-flash instead of deprecated gemini-pro
+    // Use models/gemini-1.5-flash format for v1 API
+    const model = genAI.getGenerativeModel({ model: 'models/gemini-1.5-flash' });
+    console.log('🤖 Calling Gemini API with model: models/gemini-1.5-flash');
+    
     const result = await model.generateContent(prompt);
     const response = await result.response;
     let text = response.text();
@@ -31,6 +34,7 @@ const generateAIResponse = async (prompt: string): Promise<string> => {
     return text;
   } catch (error) {
     console.error('❌ Gemini API error:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
     // Return mock response on error
     return JSON.stringify({
       summary: "AI analysis temporarily unavailable - check Railway logs for error details",
