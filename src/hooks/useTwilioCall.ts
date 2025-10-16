@@ -41,7 +41,7 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
         // Create and register device
         twilioDevice = new Device(token, {
           enableImprovedSignalingErrorPrecision: true,
-          logLevel: 'warn'
+          logLevel: 'error' // Change from 'warn' to 'error' to reduce console spam
         });
 
         twilioDevice.on('registered', () => {
@@ -75,12 +75,11 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
     initDevice();
 
     return () => {
-      if (twilioDevice) {
-        twilioDevice.destroy();
-      }
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
       }
+      // Don't destroy device on cleanup - causes re-initialization loop
+      // Device will be cleaned up when page unloads
     };
   }, [identity]);
 
