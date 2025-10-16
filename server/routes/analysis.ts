@@ -99,5 +99,28 @@ router.get('/document/:id', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/analysis/documents - Get all documents for a caller
+ */
+router.get('/documents', async (req: Request, res: Response) => {
+  try {
+    const { callerId, callId } = req.query;
+
+    const where: any = {};
+    if (callerId) where.callerId = callerId as string;
+    if (callId) where.callId = callId as string;
+
+    const documents = await prisma.callerDocument.findMany({
+      where,
+      orderBy: { uploadedAt: 'desc' }
+    });
+
+    res.json(documents);
+  } catch (error) {
+    console.error('Error fetching documents:', error);
+    res.status(500).json({ error: 'Failed to fetch documents' });
+  }
+});
+
 export default router;
 
