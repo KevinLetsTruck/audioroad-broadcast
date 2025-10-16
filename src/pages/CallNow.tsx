@@ -26,13 +26,25 @@ export default function CallNow() {
   });
 
   useEffect(() => {
-    // Check if show is live
-    fetch('/api/episodes?status=live')
-      .then(res => res.json())
-      .then(episodes => {
-        setShowStatus(episodes.length > 0 ? 'live' : 'offline');
-      })
-      .catch(() => setShowStatus('offline'));
+    // Check if show is live (poll every 10 seconds)
+    const checkLiveStatus = () => {
+      fetch('/api/episodes?status=live')
+        .then(res => res.json())
+        .then(episodes => {
+          const newStatus = episodes.length > 0 ? 'live' : 'offline';
+          setShowStatus(newStatus);
+          console.log('📡 Live status check:', newStatus, episodes.length, 'episodes');
+        })
+        .catch(() => setShowStatus('offline'));
+    };
+
+    // Check immediately
+    checkLiveStatus();
+
+    // Then poll every 10 seconds
+    const interval = setInterval(checkLiveStatus, 10000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleCallNow = async () => {
