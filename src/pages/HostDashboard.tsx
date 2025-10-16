@@ -70,18 +70,49 @@ export default function HostDashboard() {
         setIsLive(true);
         console.log('✅ Episode started in database:', episode.title);
       } else {
-        // If episode doesn't exist, create it first
-        console.log('📝 Creating new episode in database...');
+        // If episode doesn't exist, create show and episode
+        console.log('📝 Creating new show and episode in database...');
+        
+        // First, ensure show exists
+        let showId = activeEpisode.showId || 'show-1';
+        try {
+          const showResponse = await fetch(`/api/shows/${showId}`);
+          if (!showResponse.ok) {
+            // Create the show first
+            const newShowResponse = await fetch('/api/shows', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: 'The AudioRoad Show',
+                slug: 'audioroad-show',
+                hostId: 'default-host',
+                hostName: 'Host',
+                description: 'Live broadcast for the trucking community',
+                schedule: { days: ['mon', 'wed', 'fri'], time: '15:00', duration: 180 },
+                color: '#3b82f6'
+              })
+            });
+            if (newShowResponse.ok) {
+              const newShow = await newShowResponse.json();
+              showId = newShow.id;
+              console.log('✅ Show created:', newShow.name);
+            }
+          }
+        } catch (err) {
+          console.log('Show check failed, continuing with default ID');
+        }
+        
+        // Now create episode
         const now = new Date();
         const createResponse = await fetch('/api/episodes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            showId: activeEpisode.showId || 'default-show',
+            showId,
             title: activeEpisode.title,
             date: now.toISOString(),
             scheduledStart: now.toISOString(),
-            scheduledEnd: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(), // 3 hours from now
+            scheduledEnd: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
             description: 'Live show created from Host Dashboard'
           })
         });
