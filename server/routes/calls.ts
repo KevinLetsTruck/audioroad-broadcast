@@ -218,6 +218,27 @@ router.patch('/:id/reject', async (req: Request, res: Response) => {
   try {
     const { reason } = req.body;
 
+    // Get call first to access twilioCallSid
+    const existingCall = await prisma.call.findUnique({
+      where: { id: req.params.id }
+    });
+
+    if (!existingCall) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    // End the Twilio call to hang up the caller
+    if (existingCall.twilioCallSid && existingCall.twilioCallSid.startsWith('CA')) {
+      try {
+        const { endCall } = await import('../services/twilioService.js');
+        await endCall(existingCall.twilioCallSid);
+        console.log('📴 Ended Twilio call:', existingCall.twilioCallSid);
+      } catch (twilioError) {
+        console.error('⚠️ Error ending Twilio call:', twilioError);
+        // Continue anyway
+      }
+    }
+
     const call = await prisma.call.update({
       where: { id: req.params.id },
       data: {
