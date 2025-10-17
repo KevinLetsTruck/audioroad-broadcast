@@ -9,6 +9,8 @@ export default function HostDashboard() {
   const [isLive, setIsLive] = useState(false);
   const [hostIdentity] = useState(`host-${Date.now()}`);
   const [approvedCalls, setApprovedCalls] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'calls' | 'documents'>('calls');
+  const [allDocuments, setAllDocuments] = useState<any[]>([]);
   
   // Volume state
   const [volumes, setVolumes] = useState({
@@ -51,9 +53,13 @@ export default function HostDashboard() {
   useEffect(() => {
     if (activeEpisode) {
       fetchApprovedCalls();
+      fetchAllDocuments();
       
       // Poll every 2 seconds
-      const interval = setInterval(fetchApprovedCalls, 2000);
+      const interval = setInterval(() => {
+        fetchApprovedCalls();
+        fetchAllDocuments();
+      }, 2000);
       
       // Also listen for WebSocket events for immediate updates
       const socket = io();
@@ -80,6 +86,26 @@ export default function HostDashboard() {
       };
     }
   }, [activeEpisode]);
+
+  const fetchAllDocuments = async () => {
+    if (!activeEpisode) return;
+    
+    try {
+      // Fetch documents for all approved calls
+      const callerIds = approvedCalls.map(c => c.callerId).filter(Boolean);
+      if (callerIds.length === 0) return;
+
+      const promises = callerIds.map(callerId =>
+        fetch(`/api/analysis/documents?callerId=${callerId}`).then(r => r.json())
+      );
+      
+      const results = await Promise.all(promises);
+      const allDocs = results.flat();
+      setAllDocuments(allDocs);
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+    }
+  };
 
   const fetchApprovedCalls = async () => {
     if (!activeEpisode) return;
@@ -261,7 +287,27 @@ export default function HostDashboard() {
           <h2 className="text-lg font-bold">{activeEpisode?.title || 'Host Control Center'}</h2>
           {activeEpisode && <span className="text-sm text-gray-500">Episode {activeEpisode.episodeNumber}</span>}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
+          {/* Tab Switcher */}
+          <div className="flex gap-1 bg-gray-900 rounded p-1">
+            <button
+              onClick={() => setActiveTab('calls')}
+              className={`px-3 py-1 rounded text-xs font-semibold ${
+                activeTab === 'calls' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              Calls
+            </button>
+            <button
+              onClick={() => setActiveTab('documents')}
+              className={`px-3 py-1 rounded text-xs font-semibold ${
+                activeTab === 'documents' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              Documents
+            </button>
+          </div>
+
           {!isLive && activeEpisode && (
             <button
               onClick={startEpisode}
@@ -285,7 +331,8 @@ export default function HostDashboard() {
       <div className="flex-1 flex">
         {/* Left: Main Content */}
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="space-y-3">
+          {activeTab === 'calls' ? (
+            <div className="space-y-3">
             
             {/* Host Mic Card */}
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
@@ -435,6 +482,82 @@ export default function HostDashboard() {
             })}
 
           </div>
+          ) : (
+            /* Documents Tab - Show AI Analysis */
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold mb-4">Caller Documents & AI Analysis</h3>
+              
+              {allDocuments.length === 0 ? (
+                <div className="text-center py-16 text-gray-400">
+                  <p>No documents uploaded yet</p>
+                  <p className="text-sm mt-2">Documents will appear here when screener uploads them</p>
+                </div>
+              ) : (
+                allDocuments.map((doc: any) => {
+                  const analysis = doc.aiAnalysis ? JSON.parse(doc.aiAnalysis) : null;
+                  const caller = approvedCalls.find(c => c.callerId === doc.callerId);
+                  
+                  return (
+                    <div key={doc.id} className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <h4 className="font-semibold">{caller?.caller?.name || 'Unknown Caller'}</h4>
+                          <p className="text-xs text-gray-500">{doc.fileName}</p>
+                        </div>
+                        <a
+                          href={doc.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-semibold"
+                        >
+                          View File
+                        </a>
+                      </div>
+
+                      {analysis ? (
+                        <div className="bg-gray-900 rounded p-3 text-sm space-y-2">
+                          <div>
+                            <strong className="text-gray-400">Summary:</strong>
+                            <p className="text-gray-300 mt-1">{analysis.summary}</p>
+                          </div>
+                          
+                          {analysis.keyFindings && analysis.keyFindings.length > 0 && (
+                            <div>
+                              <strong className="text-gray-400">Key Findings:</strong>
+                              <ul className="list-disc list-inside text-gray-400 ml-2 mt-1">
+                                {analysis.keyFindings.map((finding: string, i: number) => (
+                                  <li key={i}>{finding}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {analysis.recommendations && analysis.recommendations.length > 0 && (
+                            <div>
+                              <strong className="text-gray-400">Recommendations:</strong>
+                              <ul className="list-disc list-inside text-gray-400 ml-2 mt-1">
+                                {analysis.recommendations.map((rec: string, i: number) => (
+                                  <li key={i}>{rec}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {analysis.confidence && (
+                            <p className="text-xs text-gray-500 mt-2">
+                              Confidence: {analysis.confidence}%
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">Analysis pending...</p>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right: Chat Sidebar - 50/50 Split */}
@@ -445,4 +568,6 @@ export default function HostDashboard() {
     </div>
   );
 }
+
+export {}
 
