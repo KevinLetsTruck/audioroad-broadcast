@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useTwilioCall } from '../hooks/useTwilioCall';
 import ChatPanel from '../components/ChatPanel';
+import DocumentUploadWidget from '../components/DocumentUploadWidget';
 
 export default function ScreeningRoom() {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -449,8 +450,8 @@ export default function ScreeningRoom() {
                     >
                       {isMuted ? 'Unmute' : 'Mute'}
                     </button>
-                  )}
-                </div>
+          )}
+        </div>
 
                 {/* Compact Screening Form - Single Line */}
                 <div className="grid grid-cols-3 gap-2 mb-3">
@@ -476,6 +477,17 @@ export default function ScreeningRoom() {
                     placeholder="Topic *"
                   />
                 </div>
+
+                {/* Document Upload - Compact */}
+                {activeCall.callerId && (
+                  <div className="mb-3">
+                    <DocumentUploadWidget
+                      callerId={activeCall.callerId}
+                      callId={activeCall.id}
+                      maxFiles={3}
+                    />
+                  </div>
+                )}
 
                 {/* Compact Action Buttons */}
                 <div className="flex gap-2">
@@ -563,11 +575,11 @@ export default function ScreeningRoom() {
             )}
 
             {!activeEpisode && (
-              <div className="text-center py-16 bg-gray-800 rounded-lg">
-                <p className="text-gray-400 text-lg">No active episode</p>
-                <p className="text-gray-500 text-sm mt-2">Start a show to begin screening calls</p>
-              </div>
-            )}
+          <div className="text-center py-16 bg-gray-800 rounded-lg">
+            <p className="text-gray-400 text-lg">No active episode</p>
+            <p className="text-gray-500 text-sm mt-2">Start a show to begin screening calls</p>
+          </div>
+        )}
 
           </div>
         </div>
