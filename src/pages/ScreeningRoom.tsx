@@ -432,6 +432,14 @@ export default function ScreeningRoom() {
         </div>
       </div>
 
+      {/* Subheader - Queued for Host */}
+      {!activeCall && activeEpisode && (
+        <div className="px-6 py-2 bg-gray-800/50 border-b border-gray-700 flex items-center justify-between">
+          <h3 className="text-base font-semibold text-gray-300">Queued for Host</h3>
+          <span className="text-lg font-bold text-green-400">{incomingCalls.filter(c => c.status !== 'rejected').length}</span>
+        </div>
+      )}
+
       {/* Main Layout: Content + Chat */}
       <div className="flex-1 flex">
         {/* Left: Screening Content */}
@@ -521,11 +529,6 @@ export default function ScreeningRoom() {
             {/* Queued Calls - Only show if no active call being screened */}
             {!activeCall && activeEpisode && (
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-semibold text-gray-300">Queued for Host</h3>
-                  <span className="text-lg font-bold text-green-400">{incomingCalls.filter(c => c.status !== 'rejected').length}</span>
-                </div>
-
                 {incomingCalls.length === 0 ? (
                 <div className="text-center py-16 bg-gray-800 rounded-lg">
                   <div className="text-6xl mb-6">☎️</div>
