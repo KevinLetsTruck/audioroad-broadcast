@@ -306,8 +306,7 @@ router.post('/conference-status', async (req: Request, res: Response) => {
 router.post('/wait-music', (req: Request, res: Response) => {
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
     <Response>
-      <Say>Thank you for calling. A screener will be with you shortly.</Say>
-      <Play loop="10">https://api.twilio.com/cowbell.mp3</Play>
+      <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
     </Response>`;
   
   res.type('text/xml').send(twiml);
