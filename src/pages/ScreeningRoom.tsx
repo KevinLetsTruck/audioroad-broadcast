@@ -398,47 +398,26 @@ export default function ScreeningRoom() {
 
   return (
     <div className="h-[calc(100vh-73px)] flex flex-col">
-      {/* Compact Header */}
+      {/* Single Header Bar */}
       <div className="px-6 py-3 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {activeEpisode && <span className="inline-block w-3 h-3 bg-red-500 rounded-full animate-pulse" />}
-          <h2 className="text-lg font-bold">Call Screening Room</h2>
-          {activeEpisode && <span className="text-sm text-gray-500">{activeEpisode.title}</span>}
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <p className="text-xs text-gray-400">Calls in Queue</p>
-            <p className="text-xl font-bold text-green-400">{incomingCalls.length}</p>
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3">
+            {activeEpisode && <span className="inline-block w-3 h-3 bg-red-500 rounded-full animate-pulse" />}
+            <h2 className="text-lg font-bold">Call Screening Room</h2>
+            {activeEpisode && <span className="text-sm text-gray-500">{activeEpisode.title}</span>}
           </div>
-          {incomingCalls.length > 0 && (
-            <button
-              onClick={async () => {
-                if (confirm(`Clear all ${incomingCalls.length} calls?`)) {
-                  for (const call of incomingCalls) {
-                    try {
-                      await fetch(`/api/calls/${call.id}/reject`, { method: 'PATCH' });
-                    } catch (error) {
-                      console.error('Error rejecting call:', error);
-                    }
-                  }
-                  fetchQueuedCalls();
-                }
-              }}
-              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-sm font-semibold"
-            >
-              🗑️ Clear All
-            </button>
+          
+          {!activeCall && activeEpisode && (
+            <>
+              <div className="h-6 w-px bg-gray-600"></div>
+              <div className="flex items-center gap-3">
+                <h3 className="text-base font-semibold text-gray-300">Queued for Host</h3>
+                <span className="text-xl font-bold text-green-400">{incomingCalls.filter(c => c.status !== 'rejected').length}</span>
+              </div>
+            </>
           )}
         </div>
       </div>
-
-      {/* Subheader - Queued for Host */}
-      {!activeCall && activeEpisode && (
-        <div className="px-6 py-2 bg-gray-800/50 border-b border-gray-700 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-gray-300">Queued for Host</h3>
-          <span className="text-lg font-bold text-green-400">{incomingCalls.filter(c => c.status !== 'rejected').length}</span>
-        </div>
-      )}
 
       {/* Main Layout: Content + Chat */}
       <div className="flex-1 flex">
