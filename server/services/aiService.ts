@@ -330,15 +330,9 @@ export async function extractDocumentText(fileBuffer: Buffer, mimeType: string):
       console.log('📄 Attempting PDF text extraction, buffer size:', fileBuffer.length);
       const pdfParse = require('pdf-parse');
       
-      // The function is exported as PDFParse (capital letters)
-      const parsePDF = pdfParse.PDFParse;
-      
-      if (typeof parsePDF !== 'function') {
-        console.error('❌ PDFParse is not a function. Type:', typeof parsePDF);
-        throw new Error('PDFParse function not found');
-      }
-      
-      const pdfData = await parsePDF(fileBuffer);
+      // PDFParse is a class constructor - need to instantiate with 'new'
+      const parser = new pdfParse.PDFParse();
+      const pdfData = await parser.parse(fileBuffer);
       console.log('✅ Extracted text from PDF, pages:', pdfData.numpages, 'length:', pdfData.text.length);
       
       if (!pdfData.text || pdfData.text.trim().length === 0) {
