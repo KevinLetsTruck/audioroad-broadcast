@@ -283,14 +283,19 @@ export default function ScreeningRoom() {
     }
 
     try {
-      // End screener's audio connection
+      // End screener's audio connection and clear active call state
       if (screenerConnected) {
         console.log('📴 Ending screener audio connection');
         endCall();
       }
+      
+      const callToApprove = activeCall;
+      
+      // Clear active call FIRST to trigger document widget unmount
+      setActiveCall(null);
 
       // Update caller info
-      const callerResponse = await fetch(`/api/callers/${activeCall.callerId}`, {
+      const callerResponse = await fetch(`/api/callers/${callToApprove.callerId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -305,7 +310,7 @@ export default function ScreeningRoom() {
       }
 
       // Update call with screening info and approve
-      const callResponse = await fetch(`/api/calls/${activeCall.id}/approve`, {
+      const callResponse = await fetch(`/api/calls/${callToApprove.id}/approve`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -321,8 +326,7 @@ export default function ScreeningRoom() {
 
       console.log('✅ Call approved and added to host queue');
       
-      // Reset FIRST, then alert (prevents form flash)
-      setActiveCall(null);
+      // Clear form data
       const resetNotes = {
         name: '',
         location: '',

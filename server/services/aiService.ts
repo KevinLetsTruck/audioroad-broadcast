@@ -16,9 +16,9 @@ const generateAIResponse = async (prompt: string): Promise<string> => {
   }
 
   try {
-    // Use gemini-pro for v1beta API compatibility
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-    console.log('🤖 Calling Gemini API with model: gemini-pro');
+    // Use gemini-1.5-pro (supported in v1beta as of SDK 0.24.1)
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
+    console.log('🤖 Calling Gemini API with model: gemini-1.5-pro');
     
     const result = await model.generateContent(prompt);
     const response = await result.response;
