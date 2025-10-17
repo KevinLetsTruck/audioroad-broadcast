@@ -12,6 +12,8 @@ interface ChatMessage {
   senderName: string;
   senderRole: string;
   message: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
   createdAt: Date;
 }
 
@@ -19,7 +21,9 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [, setSocket] = useState<Socket | null>(null);
+  const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchMessages();
@@ -51,6 +55,53 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('documentType', 'other');
+      formData.append('callerId', episodeId); // Use episodeId as identifier
+
+      const response = await fetch('/api/analysis/document', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (response.ok) {
+        const doc = await response.json();
+        
+        // Send chat message with file attachment
+        await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            episodeId,
+            senderId: 'current-user',
+            senderName: userRole === 'host' ? 'Host' : 'User',
+            senderRole: userRole,
+            message: `Shared file: ${file.name}`,
+            attachmentUrl: doc.fileUrl,
+            attachmentName: file.name
+          })
+        });
+        
+        console.log('✅ File shared in chat');
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      alert('Failed to upload file');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
@@ -61,7 +112,7 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           episodeId,
-          senderId: 'current-user', // TODO: Get from auth
+          senderId: 'current-user',
           senderName: userRole === 'host' ? 'Host' : 'User',
           senderRole: userRole,
           message: newMessage
@@ -102,13 +153,23 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
               </span>
             </div>
             <p className="text-sm text-gray-300">{msg.message}</p>
+            {msg.attachmentUrl && (
+              <a
+                href={msg.attachmentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block mt-2 px-3 py-1.5 bg-primary-600 hover:bg-primary-700 rounded text-xs font-semibold"
+              >
+                📎 {msg.attachmentName || 'Download'}
+              </a>
+            )}
           </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
 
       <form onSubmit={sendMessage} className="p-4 border-t border-gray-700">
-        <div className="flex gap-2">
+        <div className="flex gap-2 mb-2">
           <input
             type="text"
             value={newMessage}
@@ -117,12 +178,28 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
             className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded focus:outline-none focus:border-primary-500 text-sm"
           />
           <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 rounded text-sm"
+            title="Upload file"
+          >
+            {uploading ? '⏳' : '📎'}
+          </button>
+          <button
             type="submit"
             className="px-4 py-2 bg-primary-600 hover:bg-primary-700 rounded font-semibold text-sm"
           >
             Send
           </button>
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          onChange={handleFileUpload}
+          accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+          className="hidden"
+        />
       </form>
     </div>
   );
