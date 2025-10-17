@@ -292,7 +292,7 @@ router.patch('/:id/onair', async (req: Request, res: Response) => {
  */
 router.patch('/:id/complete', async (req: Request, res: Response) => {
   try {
-    const { recordingUrl, recordingSid, duration } = req.body;
+    const { recordingUrl, recordingSid, duration, airDuration } = req.body;
 
     const call = await prisma.call.findUnique({
       where: { id: req.params.id }
@@ -302,12 +302,24 @@ router.patch('/:id/complete', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Call not found' });
     }
 
+    // End the Twilio call to hang up the caller
+    if (call.twilioCallSid && call.twilioCallSid.startsWith('CA')) {
+      try {
+        const { endCall } = await import('../services/twilioService.js');
+        await endCall(call.twilioCallSid);
+        console.log('📴 Ended Twilio call via host:', call.twilioCallSid);
+      } catch (twilioError) {
+        console.error('⚠️ Error ending Twilio call:', twilioError);
+        // Continue anyway
+      }
+    }
+
     // Calculate durations
     const queueDuration = call.queuedAt && call.onAirAt 
       ? Math.floor((call.onAirAt.getTime() - call.queuedAt.getTime()) / 1000)
       : null;
 
-    const airDuration = call.onAirAt
+    const calculatedAirDuration = call.onAirAt
       ? Math.floor((Date.now() - call.onAirAt.getTime()) / 1000)
       : null;
 
@@ -318,7 +330,7 @@ router.patch('/:id/complete', async (req: Request, res: Response) => {
         endedAt: new Date(),
         recordingUrl,
         recordingSid,
-        airDuration: airDuration || duration,
+        airDuration: airDuration || calculatedAirDuration || duration,
         queueDuration,
         totalDuration: duration
       },
