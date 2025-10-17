@@ -361,8 +361,13 @@ export default function ScreeningRoom() {
         endCall();
       }
 
+      const callToReject = activeCall;
+      
+      // Clear active call FIRST to unmount document widget
+      setActiveCall(null);
+
       // Reject the call in database and end caller's Twilio call
-      const response = await fetch(`/api/calls/${activeCall.id}/reject`, {
+      const response = await fetch(`/api/calls/${callToReject.id}/reject`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -375,7 +380,7 @@ export default function ScreeningRoom() {
         alert('Call rejected and ended');
       }
 
-      setActiveCall(null);
+      // Clear form
       setScreenerNotes({
         name: '',
         location: '',
