@@ -401,15 +401,6 @@ export default function ScreeningRoom() {
           )}
           </div>
           <div className="flex items-center gap-4">
-            <button
-              onClick={() => {
-                console.log('🔄 Manual refresh clicked');
-                fetchQueuedCalls();
-              }}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold"
-            >
-              🔄 Refresh Queue
-            </button>
             {incomingCalls.length > 0 && (
               <button
                 onClick={async () => {
