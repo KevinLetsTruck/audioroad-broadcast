@@ -86,13 +86,40 @@ export default function ScreeningRoom() {
       fetchQueuedCalls(); // Refresh the list
     });
 
+    socket.on('call:approved', (data) => {
+      console.log('✅ Call approved:', data);
+      // Remove from queue if it was picked up by this screener
+      if (activeCall && activeCall.id === data.id) {
+        setActiveCall(null);
+      }
+      fetchQueuedCalls();
+    });
+
+    socket.on('call:rejected', (data) => {
+      console.log('❌ Call rejected:', data);
+      // Remove from queue
+      if (activeCall && activeCall.id === data.id) {
+        setActiveCall(null);
+      }
+      fetchQueuedCalls();
+    });
+
     socket.on('call:completed', () => {
+      console.log('📴 Call completed');
       fetchQueuedCalls(); // Refresh the list
     });
 
+    // Auto-refresh every 5 seconds to catch missed events
+    const refreshInterval = setInterval(() => {
+      fetchQueuedCalls();
+    }, 5000);
+
     return () => {
       socket.off('call:incoming');
+      socket.off('call:approved');
+      socket.off('call:rejected');
       socket.off('call:completed');
+      clearInterval(refreshInterval);
     };
   }, [socket, activeEpisode]);
 
@@ -200,11 +227,25 @@ export default function ScreeningRoom() {
     }
 
     try {
-      await fetch(`/api/calls/${activeCall.id}/reject`, {
-        method: 'PATCH'
+      // End screener's audio connection first
+      if (screenerConnected) {
+        endCall();
+      }
+
+      // Reject the call in database and end caller's Twilio call
+      const response = await fetch(`/api/calls/${activeCall.id}/reject`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason: 'Rejected by screener'
+        })
       });
 
-      console.log('❌ Call rejected');
+      if (response.ok) {
+        console.log('✅ Call rejected successfully');
+        alert('Call rejected and ended');
+      }
+
       setActiveCall(null);
       setScreenerNotes({
         name: '',
@@ -217,6 +258,7 @@ export default function ScreeningRoom() {
       fetchQueuedCalls();
     } catch (error) {
       console.error('Error rejecting call:', error);
+      alert('Error rejecting call - check console');
     }
   };
 
