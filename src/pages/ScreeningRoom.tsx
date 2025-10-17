@@ -518,45 +518,6 @@ export default function ScreeningRoom() {
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-gray-300">Trucker Type</label>
-                    <select
-                      value={screenerNotes.truckerType}
-                      onChange={(e) => setScreenerNotes({ ...screenerNotes, truckerType: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500"
-                    >
-                      <option value="OTR">OTR (Over The Road)</option>
-                      <option value="Regional">Regional</option>
-                      <option value="Local">Local</option>
-                      <option value="Owner-Operator">Owner-Operator</option>
-                      <option value="Fleet">Fleet Manager</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-gray-300">Priority</label>
-                    <select
-                      value={screenerNotes.priority}
-                      onChange={(e) => setScreenerNotes({ ...screenerNotes, priority: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500"
-                    >
-                      <option value="normal">Normal</option>
-                      <option value="high">High Priority</option>
-                      <option value="urgent">Urgent</option>
-                    </select>
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className="block text-sm font-semibold mb-2 text-gray-300">Notes for Host</label>
-                    <textarea
-                      value={screenerNotes.notes}
-                      onChange={(e) => setScreenerNotes({ ...screenerNotes, notes: e.target.value })}
-                      rows={2}
-                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500"
-                      placeholder="Any additional context for the host..."
-                    />
-                  </div>
                 </div>
 
                 {/* Action Buttons */}
