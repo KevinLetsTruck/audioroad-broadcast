@@ -33,9 +33,33 @@ router.post('/voice', async (req: Request, res: Response) => {
   try {
     console.log('📞 Voice endpoint called with body:', JSON.stringify(req.body));
     
-    const { callerId, CallSid } = req.body;
+    const { callerId, CallSid, role, callId } = req.body;
     
-    console.log('📞 Extracted - callerId:', callerId, 'CallSid:', CallSid);
+    console.log('📞 Extracted - callerId:', callerId, 'CallSid:', CallSid, 'role:', role);
+
+    // If this is a screener connecting, route to conference join
+    if (role === 'screener' && callId) {
+      const call = await prisma.call.findUnique({
+        where: { id: callId },
+        include: { episode: true }
+      });
+
+      if (!call) {
+        return res.status(404).send('Call not found');
+      }
+
+      const conferenceName = `episode-${call.episodeId}`;
+      console.log('🎙️ Screener joining conference:', conferenceName);
+
+      const twiml = generateTwiML('conference', { 
+        conferenceName,
+        startConferenceOnEnter: true,  // Screener starts the conference
+        endConferenceOnExit: false,
+        muted: false
+      });
+
+      return res.type('text/xml').send(twiml);
+    }
 
     // Find active episode
     const activeEpisode = await prisma.episode.findFirst({
