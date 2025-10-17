@@ -108,11 +108,15 @@ export default function CallQueueMock({ onSelectCaller, onTakeCall, episodeId }:
         <h3 className="font-semibold text-lg">
           Call Queue ({calls.filter(c => c.status === 'ready').length} Ready)
         </h3>
-        {calls.some(c => c.status === 'screening') && (
-          <span className="text-xs text-yellow-400 animate-pulse">
-            🔍 Screening in progress...
-          </span>
-        )}
+        <button
+          onClick={() => {
+            console.log('🔄 Manual refresh - Host queue');
+            fetchApprovedCalls();
+          }}
+          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm font-semibold"
+        >
+          🔄 Refresh
+        </button>
       </div>
 
       {calls.length === 0 ? (
