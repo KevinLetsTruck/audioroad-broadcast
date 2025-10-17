@@ -38,8 +38,8 @@ export default function CallQueueMock({ onSelectCaller, onTakeCall, episodeId }:
 
     fetchApprovedCalls();
     
-    // Poll every 5 seconds
-    const interval = setInterval(fetchApprovedCalls, 5000);
+    // Poll every 2 seconds for faster updates
+    const interval = setInterval(fetchApprovedCalls, 2000);
     return () => clearInterval(interval);
   }, [episodeId]);
 
@@ -50,8 +50,13 @@ export default function CallQueueMock({ onSelectCaller, onTakeCall, episodeId }:
       const response = await fetch(`/api/calls?episodeId=${episodeId}&status=approved`);
       const dbCalls = await response.json();
       
+      // Filter out completed/ended calls
+      const activeCalls = dbCalls.filter((call: any) => 
+        call.status === 'approved' && !call.endedAt
+      );
+      
       // Map database calls to component format
-      const formattedCalls: Call[] = dbCalls.map((call: any) => ({
+      const formattedCalls: Call[] = activeCalls.map((call: any) => ({
         id: call.id,
         caller: {
           name: call.caller?.name || 'Unknown Caller',
@@ -66,7 +71,9 @@ export default function CallQueueMock({ onSelectCaller, onTakeCall, episodeId }:
       }));
       
       setCalls(formattedCalls);
-      console.log('📋 Loaded', formattedCalls.length, 'approved calls for host queue');
+      if (formattedCalls.length !== calls.length) {
+        console.log('📋 Host queue updated:', formattedCalls.length, 'approved calls');
+      }
     } catch (error) {
       console.error('Error fetching approved calls:', error);
     }

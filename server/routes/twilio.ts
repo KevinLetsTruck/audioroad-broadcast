@@ -301,12 +301,12 @@ router.post('/conference-status', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/twilio/wait-music - Provide hold music for queue
+ * POST /api/twilio/wait-music - Provide hold music for queue (NO BEEPS!)
  */
 router.post('/wait-music', (req: Request, res: Response) => {
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
     <Response>
-      <Say>Thank you for calling AudioRoad Network. Please hold while we connect you.</Say>
+      <Say>Thank you for calling. A screener will be with you shortly.</Say>
       <Play loop="10">https://api.twilio.com/cowbell.mp3</Play>
     </Response>`;
   
