@@ -73,30 +73,39 @@ router.post('/voice', async (req: Request, res: Response) => {
       return res.type('text/xml').send(twiml);
     }
 
-    // Create call record if we have caller info
-    if (callerId) {
-      const call = await prisma.call.create({
-        data: {
-          episodeId: activeEpisode.id,
-          callerId: callerId,
-          twilioCallSid: CallSid || `web-${Date.now()}`,
-          status: 'queued',
-          incomingAt: new Date(),
-          queuedAt: new Date()
-        }
+    // Create call record if we have caller info (prevent duplicates)
+    if (callerId && CallSid) {
+      // Check if call already exists with this CallSid
+      const existingCall = await prisma.call.findFirst({
+        where: { twilioCallSid: CallSid }
       });
 
-      console.log('✅ Call record created:', call.id);
-
-      // Notify screening room via WebSocket
-      const io = req.app.get('io');
-      if (io) {
-        io.to(`episode:${activeEpisode.id}`).emit('call:incoming', {
-          callId: call.id,
-          callerId: callerId,
-          twilioCallSid: CallSid || call.twilioCallSid
+      if (existingCall) {
+        console.log('⚠️ Call already exists with CallSid:', CallSid, '- skipping duplicate');
+      } else {
+        const call = await prisma.call.create({
+          data: {
+            episodeId: activeEpisode.id,
+            callerId: callerId,
+            twilioCallSid: CallSid || `web-${Date.now()}`,
+            status: 'queued',
+            incomingAt: new Date(),
+            queuedAt: new Date()
+          }
         });
-        console.log('📡 Notified screening room');
+
+        console.log('✅ Call record created:', call.id, 'CallSid:', CallSid);
+
+        // Notify screening room via WebSocket
+        const io = req.app.get('io');
+        if (io) {
+          io.to(`episode:${activeEpisode.id}`).emit('call:incoming', {
+            callId: call.id,
+            callerId: callerId,
+            twilioCallSid: CallSid || call.twilioCallSid
+          });
+          console.log('📡 Notified screening room');
+        }
       }
     }
 
@@ -229,8 +238,32 @@ router.post('/recording-status', async (req: Request, res: Response) => {
  */
 router.post('/conference-status', async (req: Request, res: Response) => {
   try {
-    const { ConferenceSid, StatusCallbackEvent } = req.body;
-    console.log('Conference event:', StatusCallbackEvent, 'for:', ConferenceSid);
+    const { ConferenceSid, StatusCallbackEvent, CallSid, FriendlyName } = req.body;
+    console.log('📞 Conference event:', StatusCallbackEvent, 'Conference:', FriendlyName, 'CallSid:', CallSid);
+
+    // When a participant leaves, check if it's a caller we should mark as completed
+    if (StatusCallbackEvent === 'participant-leave' && CallSid) {
+      const call = await prisma.call.findFirst({
+        where: { twilioCallSid: CallSid }
+      });
+
+      if (call && call.status === 'queued') {
+        // Caller hung up before being screened
+        await prisma.call.update({
+          where: { id: call.id },
+          data: {
+            status: 'completed',
+            endedAt: new Date()
+          }
+        });
+
+        const io = req.app.get('io');
+        io.to(`episode:${call.episodeId}`).emit('call:completed', { callId: call.id });
+        
+        console.log('✅ Call marked completed (caller hung up):', call.id);
+      }
+    }
+
     res.sendStatus(200);
   } catch (error) {
     console.error('Error handling conference status:', error);
