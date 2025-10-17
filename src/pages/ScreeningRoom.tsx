@@ -223,30 +223,18 @@ export default function ScreeningRoom() {
 
     console.log('📞 Picking up call:', call.id);
     
-    // CLEAR form first to prevent data from previous call
+    // Set active call first
+    setActiveCall(call);
+    
+    // IMMEDIATELY clear and populate with fresh data (no delay)
     setScreenerNotes({
-      name: '',
-      location: '',
-      topic: '',
-      truckerType: 'OTR',
+      name: call.caller?.name || '',
+      location: call.caller?.location || '',
+      topic: call.topic || '',
+      truckerType: call.caller?.truckerType || 'OTR',
       priority: 'normal',
       notes: ''
     });
-    
-    // Then set active call (triggers form display)
-    setActiveCall(call);
-    
-    // Then pre-fill any known information (brief delay to ensure clean state)
-    setTimeout(() => {
-      setScreenerNotes({
-        name: call.caller?.name || '',
-        location: call.caller?.location || '',
-        topic: call.topic || '',
-        truckerType: call.caller?.truckerType || 'OTR',
-        priority: 'normal',
-        notes: ''
-      });
-    }, 100);
     
     // Connect screener's audio to the caller
     if (!screenerReady) {
@@ -585,15 +573,18 @@ export default function ScreeningRoom() {
                         </div>
                       )}
 
-                      <div className="mt-4">
-                        <button
-                          onClick={() => handlePickUpCall(call)}
-                          disabled={!!activeCall || !screenerReady}
-                          className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-bold text-lg transition-colors"
-                        >
-                          {!screenerReady ? '⏳ Phone System Loading...' : activeCall ? '🔒 Screening Another Call' : '📞 Pick Up & Screen This Call'}
-                        </button>
-                      </div>
+                      {/* Don't show button if THIS call is being screened */}
+                      {activeCall && activeCall.id === call.id ? null : (
+                        <div className="mt-4">
+                          <button
+                            onClick={() => handlePickUpCall(call)}
+                            disabled={!!activeCall || !screenerReady}
+                            className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-bold text-lg transition-colors"
+                          >
+                            {!screenerReady ? '⏳ Phone System Loading...' : activeCall ? '🔒 Screening Another Call' : '📞 Pick Up & Screen This Call'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
