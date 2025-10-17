@@ -6,54 +6,40 @@ import CallerInfo from '../components/CallerInfo';
 import ChatPanel from '../components/ChatPanel';
 
 export default function HostDashboard() {
-  const [activeEpisode, setActiveEpisode] = useState<any>({
-    id: 'episode-1',
-    title: 'The AudioRoad Show - October 15, 2025',
-    episodeNumber: 1,
-    status: 'live',
-    show: { name: 'The AudioRoad Show' },
-    showId: 'show-1'
-  });
+  const [activeEpisode, setActiveEpisode] = useState<any>(null);
   const [onAirCall, setOnAirCall] = useState<any>(null); // Currently on-air
-  const [isLive, setIsLive] = useState(true);
-
-  // Mock document analysis data
-  const mockDocumentAnalysis = {
-    summary: 'Patient shows elevated glucose levels averaging 145 mg/dL with significant spikes after meals. HbA1c at 6.2% indicates pre-diabetic range. Fasting glucose consistently above optimal range.',
-    keyFindings: [
-      'Post-meal glucose spikes to 180+ mg/dL (should be <140)',
-      'Fasting glucose 110-115 mg/dL (optimal <100)',
-      'HbA1c 6.2% - pre-diabetic range (5.7-6.4%)',
-      'Poor overnight glucose control - staying elevated'
-    ],
-    recommendations: [
-      'Discuss meal timing and carb intake correlation',
-      'Ask about current diet - likely too many refined carbs',
-      'Recommend protein-first meals to stabilize blood sugar',
-      'Consider supplement protocol for insulin sensitivity'
-    ],
-    confidence: 92
-  };
+  const [isLive, setIsLive] = useState(false);
 
   useEffect(() => {
-    // Try to fetch active episode from API, create mock if needed
-    fetch('/api/episodes?status=live')
-      .then(res => res.json())
-      .then(episodes => {
-        if (episodes.length > 0) {
-          setActiveEpisode(episodes[0]);
-          setIsLive(true);
-          console.log('✅ Found live episode:', episodes[0].title);
-        } else {
-          console.log('⚠️  No live episodes found - using mock (click GO LIVE to sync)');
-          setIsLive(false); // Mark as not live since no database episode exists
-        }
-      })
-      .catch(error => {
-        console.log('Using mock episode data', error);
-        // Already set to mock data above
-      });
+    // Fetch active episode from database
+    fetchActiveEpisode();
+    
+    // Poll every 10 seconds for updates
+    const interval = setInterval(fetchActiveEpisode, 10000);
+    
+    return () => clearInterval(interval);
   }, []);
+
+  const fetchActiveEpisode = async () => {
+    try {
+      const response = await fetch('/api/episodes?status=live');
+      const episodes = await response.json();
+      
+      if (episodes.length > 0) {
+        setActiveEpisode(episodes[0]);
+        setIsLive(true);
+        console.log('✅ Found live episode:', episodes[0].title);
+      } else {
+        setActiveEpisode(null);
+        setIsLive(false);
+        console.log('⚠️ No live episodes found');
+      }
+    } catch (error) {
+      console.error('Error fetching episode:', error);
+      setActiveEpisode(null);
+      setIsLive(false);
+    }
+  };
 
   const startEpisode = async () => {
     if (!activeEpisode) return;
@@ -234,7 +220,7 @@ export default function HostDashboard() {
                   screenerNotes: onAirCall.screenerNotes
                 }}
                 hasDocuments={onAirCall.hasDocuments}
-                documentAnalysis={onAirCall.documentAnalyzed ? mockDocumentAnalysis : null}
+                documentAnalysis={onAirCall.documentAnalysis || null}
               />
             </div>
           </div>
