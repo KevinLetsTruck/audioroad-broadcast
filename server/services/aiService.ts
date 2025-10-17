@@ -16,10 +16,10 @@ const generateAIResponse = async (prompt: string): Promise<string> => {
   }
 
   try {
-    console.log('🤖 Calling Claude API with model: claude-3-5-sonnet-20241022');
+    console.log('🤖 Calling Claude API with model: claude-haiku-4-5 (latest!)');
     
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-haiku-4-5',
       max_tokens: 1024,
       messages: [{
         role: 'user',
