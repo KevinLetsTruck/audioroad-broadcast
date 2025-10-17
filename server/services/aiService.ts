@@ -323,14 +323,22 @@ export async function extractDocumentText(fileBuffer: Buffer, mimeType: string):
   // Handle PDFs
   if (mimeType.includes('application/pdf')) {
     try {
+      console.log('📄 Attempting PDF text extraction, buffer size:', fileBuffer.length);
       // Use dynamic require for CommonJS module
       const pdfParse = require('pdf-parse');
       const pdfData = await pdfParse(fileBuffer);
-      console.log('✅ Extracted text from PDF, length:', pdfData.text.length);
+      console.log('✅ Extracted text from PDF, pages:', pdfData.numpages, 'length:', pdfData.text.length);
+      
+      if (!pdfData.text || pdfData.text.trim().length === 0) {
+        console.warn('⚠️ PDF extracted but no text content found (might be scanned image)');
+        return `[PDF appears to be a scanned image with no extractable text. For image-based PDFs, please use JPG/PNG format or a text-based PDF export.]`;
+      }
+      
       return pdfData.text;
     } catch (error) {
       console.error('❌ PDF parsing error:', error);
-      return `[PDF text extraction failed - error: ${error instanceof Error ? error.message : 'Unknown error'}]`;
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      return `[PDF text extraction failed - ${errorMsg}. Please try a different format or re-export as text-based PDF.]`;
     }
   }
   
