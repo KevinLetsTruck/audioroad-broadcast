@@ -419,9 +419,9 @@ export default function ScreeningRoom() {
         </div>
       </div>
 
-      {/* Main Layout: Content + Chat */}
+      {/* Main Layout: Content + Chat - 50/50 Split */}
       <div className="flex-1 flex">
-        {/* Left: Screening Content */}
+        {/* Left: Screening Content - 50% */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
 
@@ -576,8 +576,8 @@ export default function ScreeningRoom() {
           </div>
         </div>
 
-        {/* Right: Chat Sidebar */}
-        <div className="w-80 border-l border-gray-700">
+        {/* Right: Chat Sidebar - 50% */}
+        <div className="flex-1 border-l border-gray-700">
           {activeEpisode && <ChatPanel episodeId={activeEpisode.id} userRole="screener" />}
         </div>
       </div>
