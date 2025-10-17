@@ -38,13 +38,14 @@ export default function DocumentUploadWidget({
   }, [callerId]);
 
   const fetchExistingDocuments = async () => {
-    if (!callerId) return;
+    if (!callerId || !callId) return;
     
     try {
-      const response = await fetch(`/api/analysis/documents?callerId=${callerId}`);
+      // Fetch documents for THIS specific call only (not all calls from this caller)
+      const response = await fetch(`/api/analysis/documents?callId=${callId}`);
       if (response.ok) {
         const docs = await response.json();
-        console.log('📄 Loaded existing documents:', docs.length);
+        console.log('📄 Loaded existing documents for current call:', docs.length);
         setUploadedDocs(docs);
       }
     } catch (error) {
