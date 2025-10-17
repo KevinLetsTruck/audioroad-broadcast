@@ -428,104 +428,69 @@ export default function ScreeningRoom() {
         <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
 
-            {/* Active Screening Session */}
+            {/* Active Screening Session - Compact */}
             {activeCall && activeEpisode && (
-              <div className="bg-green-900/30 border-2 border-green-500 rounded-lg p-6">
-                <div className="mb-6 flex items-center justify-between">
-                  <div>
-                    <h2 className="text-2xl font-bold text-green-400 mb-2">
-                      🎙️ Screening Call: {activeCall.caller?.name || 'Unknown Caller'}
-                    </h2>
-                    <div className="flex items-center gap-3">
-                      {screenerConnected ? (
-                        <>
-                          <span className="inline-block w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
-                          <p className="text-green-300 font-semibold">🎙️ Audio Connected</p>
-                        </>
-                      ) : (
-                        <>
-                          <span className="inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></span>
-                          <p className="text-yellow-300">⏳ Connecting audio...</p>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    {screenerConnected && (
-                      <>
-                        <div className="text-2xl font-mono font-bold text-green-400">
-                          {formattedDuration}
-                        </div>
-                        <button
-                          onClick={toggleMute}
-                          className={`px-6 py-3 rounded-lg font-bold transition-colors ${
-                            isMuted ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'
-                          }`}
-                        >
-                          {isMuted ? '🔇 Unmute' : '🔊 Mute'}
-                        </button>
-                        <button
-                          onClick={endCall}
-                          className="px-6 py-3 bg-orange-600 hover:bg-orange-700 rounded-lg font-bold"
-                        >
-                          📞 End Audio
-                        </button>
-                      </>
+              <div className="bg-green-900/30 border-2 border-green-500 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    {screenerConnected ? (
+                      <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                    ) : (
+                      <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
                     )}
+                    <span className="text-sm text-gray-400">{formattedDuration}</span>
                   </div>
+                  {screenerConnected && (
+                    <button
+                      onClick={toggleMute}
+                      className={`px-3 py-1 rounded text-xs font-semibold ${
+                        isMuted ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'
+                      }`}
+                    >
+                      {isMuted ? 'Unmute' : 'Mute'}
+                    </button>
+                  )}
                 </div>
 
-                {/* Screening Form */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-gray-300">Name *</label>
-                    <input
-                      type="text"
-                      value={screenerNotes.name}
-                      onChange={(e) => setScreenerNotes({ ...screenerNotes, name: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500"
-                      placeholder="Caller's name"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-gray-300">Location</label>
-                    <input
-                      type="text"
-                      value={screenerNotes.location}
-                      onChange={(e) => setScreenerNotes({ ...screenerNotes, location: e.target.value })}
-                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500"
-                      placeholder="City, State"
-                    />
-                  </div>
-
-                  <div className="col-span-2">
-                    <label className="block text-sm font-semibold mb-2 text-gray-300">What do they want to discuss? *</label>
-                    <textarea
-                      value={screenerNotes.topic}
-                      onChange={(e) => setScreenerNotes({ ...screenerNotes, topic: e.target.value })}
-                      rows={3}
-                      className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500"
-                      placeholder="Brief description of their topic..."
-                    />
-                  </div>
-
+                {/* Compact Screening Form - Single Line */}
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  <input
+                    type="text"
+                    value={screenerNotes.name}
+                    onChange={(e) => setScreenerNotes({ ...screenerNotes, name: e.target.value })}
+                    className="px-3 py-2 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500 text-sm"
+                    placeholder="Name *"
+                  />
+                  <input
+                    type="text"
+                    value={screenerNotes.location}
+                    onChange={(e) => setScreenerNotes({ ...screenerNotes, location: e.target.value })}
+                    className="px-3 py-2 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500 text-sm"
+                    placeholder="Location"
+                  />
+                  <input
+                    type="text"
+                    value={screenerNotes.topic}
+                    onChange={(e) => setScreenerNotes({ ...screenerNotes, topic: e.target.value })}
+                    className="px-3 py-2 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-green-500 text-sm"
+                    placeholder="Topic *"
+                  />
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex gap-4">
+                {/* Compact Action Buttons */}
+                <div className="flex gap-2">
                   <button
                     onClick={handleApproveAndQueue}
                     disabled={!screenerNotes.name || !screenerNotes.topic}
-                    className="flex-1 px-8 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-bold text-xl transition-colors"
+                    className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-sm font-semibold"
                   >
-                    ✓ Approve & Add to Host Queue
+                    ✓ Approve
                   </button>
                   <button
                     onClick={handleRejectCall}
-                    className="px-8 py-4 bg-red-600 hover:bg-red-700 rounded-lg font-bold text-xl transition-colors"
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-sm font-semibold"
                   >
-                    ✗ Reject & End Call
+                    ✗ Reject
                   </button>
                 </div>
               </div>
