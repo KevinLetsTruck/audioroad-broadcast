@@ -16,9 +16,9 @@ const generateAIResponse = async (prompt: string): Promise<string> => {
   }
 
   try {
-    // Use models/gemini-1.5-flash format for v1 API
-    const model = genAI.getGenerativeModel({ model: 'models/gemini-1.5-flash' });
-    console.log('🤖 Calling Gemini API with model: models/gemini-1.5-flash');
+    // Use gemini-1.5-flash (simple name works with latest SDK)
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    console.log('🤖 Calling Gemini API with model: gemini-1.5-flash');
     
     const result = await model.generateContent(prompt);
     const response = await result.response;
