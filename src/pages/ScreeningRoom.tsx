@@ -137,6 +137,12 @@ export default function ScreeningRoom() {
   };
 
   const handlePickUpCall = async (call: any) => {
+    // Prevent picking up multiple calls
+    if (activeCall) {
+      alert('You are already screening a call. Please finish it first.');
+      return;
+    }
+
     console.log('📞 Picking up call:', call.id);
     setActiveCall(call);
     
@@ -151,20 +157,24 @@ export default function ScreeningRoom() {
     });
     
     // Connect screener's audio to the caller
-    if (screenerReady) {
-      console.log('🎙️ Connecting screener to caller...');
-      try {
-        await connectToCall({ 
-          callId: call.id,
-          callerId: call.callerId,
-          role: 'screener'
-        });
-      } catch (error) {
-        console.error('Error connecting to caller:', error);
-        alert('Failed to connect audio. Please try again.');
-      }
-    } else {
-      alert('Phone system not ready. Please wait a moment and try again.');
+    if (!screenerReady) {
+      alert('⚠️ Phone system not ready. Please wait a moment and try again.');
+      setActiveCall(null);
+      return;
+    }
+
+    console.log('🎙️ Connecting screener to caller...');
+    try {
+      await connectToCall({ 
+        callId: call.id,
+        callerId: call.callerId,
+        role: 'screener'
+      });
+      console.log('✅ Audio connection initiated');
+    } catch (error) {
+      console.error('❌ Error connecting to caller:', error);
+      alert('Failed to connect audio. Please try again.');
+      setActiveCall(null);
     }
   };
 
@@ -172,13 +182,19 @@ export default function ScreeningRoom() {
     if (!activeCall) return;
     
     if (!screenerNotes.name || !screenerNotes.topic) {
-      alert('Please fill in at least Name and Topic');
+      alert('⚠️ Please fill in at least Name and Topic before approving');
       return;
     }
 
     try {
+      // End screener's audio connection
+      if (screenerConnected) {
+        console.log('📴 Ending screener audio connection');
+        endCall();
+      }
+
       // Update caller info
-      await fetch(`/api/callers/${activeCall.callerId}`, {
+      const callerResponse = await fetch(`/api/callers/${activeCall.callerId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -188,8 +204,12 @@ export default function ScreeningRoom() {
         })
       });
 
+      if (!callerResponse.ok) {
+        throw new Error('Failed to update caller info');
+      }
+
       // Update call with screening info and approve
-      await fetch(`/api/calls/${activeCall.id}/approve`, {
+      const callResponse = await fetch(`/api/calls/${activeCall.id}/approve`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -199,8 +219,12 @@ export default function ScreeningRoom() {
         })
       });
 
+      if (!callResponse.ok) {
+        throw new Error('Failed to approve call');
+      }
+
       console.log('✅ Call approved and added to host queue');
-      alert('✅ Call added to host queue!');
+      alert('✅ Call approved! Caller is now in host queue.');
       
       // Reset and refresh
       setActiveCall(null);
@@ -212,10 +236,12 @@ export default function ScreeningRoom() {
         priority: 'normal',
         notes: ''
       });
+      
+      // Immediate refresh
       fetchQueuedCalls();
     } catch (error) {
-      console.error('Error approving call:', error);
-      alert('Failed to approve call');
+      console.error('❌ Error approving call:', error);
+      alert('❌ Failed to approve call. Please try again.');
     }
   };
 
@@ -323,9 +349,19 @@ export default function ScreeningRoom() {
                     <h2 className="text-2xl font-bold text-green-400 mb-2">
                       🎙️ Screening Call: {activeCall.caller?.name || 'Unknown Caller'}
                     </h2>
-                    <p className="text-gray-300">
-                      {screenerConnected ? 'Connected - Talk to the caller' : 'Connecting...'}
-                    </p>
+                    <div className="flex items-center gap-3">
+                      {screenerConnected ? (
+                        <>
+                          <span className="inline-block w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+                          <p className="text-green-300 font-semibold">🎙️ Audio Connected</p>
+                        </>
+                      ) : (
+                        <>
+                          <span className="inline-block w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></span>
+                          <p className="text-yellow-300">⏳ Connecting audio...</p>
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-4">
                     {screenerConnected && (
@@ -335,7 +371,7 @@ export default function ScreeningRoom() {
                         </div>
                         <button
                           onClick={toggleMute}
-                          className={`px-6 py-3 rounded-lg font-bold ${
+                          className={`px-6 py-3 rounded-lg font-bold transition-colors ${
                             isMuted ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'
                           }`}
                         >
@@ -343,9 +379,9 @@ export default function ScreeningRoom() {
                         </button>
                         <button
                           onClick={endCall}
-                          className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg font-bold"
+                          className="px-6 py-3 bg-orange-600 hover:bg-orange-700 rounded-lg font-bold"
                         >
-                          End Audio
+                          📞 End Audio
                         </button>
                       </>
                     )}
@@ -524,9 +560,10 @@ export default function ScreeningRoom() {
                       <div className="mt-4">
                         <button
                           onClick={() => handlePickUpCall(call)}
-                          className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 rounded-lg font-bold text-lg transition-colors"
+                          disabled={!!activeCall || !screenerReady}
+                          className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-bold text-lg transition-colors"
                         >
-                          📞 Pick Up & Screen This Call
+                          {!screenerReady ? '⏳ Phone System Loading...' : activeCall ? '🔒 Screening Another Call' : '📞 Pick Up & Screen This Call'}
                         </button>
                       </div>
                     </div>

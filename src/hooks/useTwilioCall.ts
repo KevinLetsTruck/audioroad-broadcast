@@ -95,6 +95,9 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
       
       // Start call duration timer
       setCallDuration(0);
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+      }
       durationIntervalRef.current = setInterval(() => {
         setCallDuration(prev => prev + 1);
       }, 1000);
@@ -104,17 +107,22 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
 
     activeCall.on('ringing', () => {
       console.log('📞 Call is ringing...');
+      setIsConnecting(true);
     });
 
     activeCall.on('disconnect', () => {
       console.log('📴 Call disconnected');
+      
+      // Full cleanup
       setIsConnected(false);
+      setIsConnecting(false);
       setCall(null);
       setCallDuration(0);
-      setIsConnecting(false);
+      setIsMuted(false);
       
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
+        durationIntervalRef.current = undefined;
       }
 
       if (onCallDisconnected) onCallDisconnected();
@@ -122,12 +130,32 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
 
     activeCall.on('error', (error) => {
       console.error('❌ Call error:', error);
+      
+      // Full cleanup on error
+      setIsConnected(false);
       setIsConnecting(false);
+      setCallDuration(0);
+      
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+      }
+      
       if (onError) onError(error);
+    });
+
+    activeCall.on('reconnecting', (error) => {
+      console.log('🔄 Call reconnecting...', error);
+      setIsConnecting(true);
+    });
+
+    activeCall.on('reconnected', () => {
+      console.log('✅ Call reconnected!');
+      setIsConnecting(false);
+      setIsConnected(true);
     });
   };
 
-  const makeCall = async (params: Record<string, string> = {}) => {
+  const makeCall = async (params: Record<string, string> = {}, retryCount = 0) => {
     if (!device || !isReady) {
       console.error('Device not ready');
       return;
@@ -143,8 +171,18 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
       setupCallHandlers(outgoingCall);
     } catch (error) {
       console.error('❌ Failed to make call:', error);
-      setIsConnecting(false);
-      if (onError) onError(error as Error);
+      
+      // Retry logic - up to 3 attempts
+      if (retryCount < 3) {
+        console.log(`🔄 Retrying call... Attempt ${retryCount + 1}/3`);
+        setTimeout(() => {
+          makeCall(params, retryCount + 1);
+        }, 1000 * (retryCount + 1)); // Exponential backoff
+      } else {
+        setIsConnecting(false);
+        if (onError) onError(error as Error);
+        alert('Failed to connect after 3 attempts. Please try again later.');
+      }
     }
   };
 
