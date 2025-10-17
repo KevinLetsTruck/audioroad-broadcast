@@ -437,8 +437,8 @@ export default function HostDashboard() {
           </div>
         </div>
 
-        {/* Right: Chat Sidebar */}
-        <div className="w-80 border-l border-gray-700">
+        {/* Right: Chat Sidebar - 50/50 Split */}
+        <div className="flex-1 border-l border-gray-700">
           {activeEpisode && <ChatPanel episodeId={activeEpisode.id} userRole="host" />}
         </div>
       </div>

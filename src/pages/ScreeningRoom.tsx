@@ -391,19 +391,23 @@ export default function ScreeningRoom() {
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto p-8">
         <div className="max-w-5xl mx-auto">
-        <div className="mb-8 flex items-center justify-between">
-          <div className="flex-1">
-          <h1 className="text-3xl font-bold mb-2">Call Screening Room</h1>
-          {activeEpisode && (
-            <p className="text-gray-400">
-                {activeEpisode.title} • Live Now • Episode ID: {activeEpisode.id}
-            </p>
-          )}
-          {!activeEpisode && (
-            <p className="text-yellow-400">No live episode - start a show to receive calls</p>
-          )}
-          </div>
-          <div className="flex items-center gap-4">
+          <div className="mb-8 flex items-center justify-between">
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-bold">Call Screening Room</h1>
+              {activeEpisode && (
+                <p className="text-sm text-gray-400">{activeEpisode.title} • Live Now</p>
+              )}
+              {!activeEpisode && (
+                <p className="text-sm text-yellow-400">No live episode</p>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <p className="text-xs text-gray-500">Calls in Queue</p>
+                <p className="text-2xl font-bold text-green-400">{incomingCalls.length}</p>
+              </div>
             {incomingCalls.length > 0 && (
               <button
                 onClick={async () => {
@@ -423,12 +427,9 @@ export default function ScreeningRoom() {
                 🗑️ Clear All ({incomingCalls.length})
               </button>
             )}
-            <div className="text-right">
-              <p className="text-sm text-gray-400">Calls in Queue</p>
-              <p className="text-4xl font-bold text-green-400">{incomingCalls.length}</p>
             </div>
           </div>
-        </div>
+          </div>
 
         {activeEpisode ? (
           <div className="space-y-6">
@@ -537,9 +538,9 @@ export default function ScreeningRoom() {
 
             {/* Queued Calls */}
             <div>
-              <h3 className="text-xl font-semibold mb-4">Queued for Host</h3>
-              <div className="text-right mb-4">
-                <span className="text-3xl font-bold text-green-400">{incomingCalls.filter(c => c.status !== 'rejected').length}</span>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">Queued for Host</h3>
+                <span className="text-xl font-bold text-green-400">{incomingCalls.filter(c => c.status !== 'rejected').length}</span>
               </div>
 
               {incomingCalls.length === 0 ? (
@@ -605,6 +606,7 @@ export default function ScreeningRoom() {
             <p className="text-gray-500 text-sm mt-2">Start a show to begin screening calls</p>
           </div>
         )}
+        </div>
         </div>
       </div>
 
