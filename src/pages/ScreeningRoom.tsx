@@ -35,7 +35,33 @@ export default function ScreeningRoom() {
     },
     onCallDisconnected: () => {
       console.log('📴 Screener audio disconnected');
-      // Don't clear activeCall - screener might still need to approve/reject
+      
+      // Check if this was due to caller hanging up
+      // If activeCall exists but no longer in queue, caller hung up
+      if (activeCall) {
+        setTimeout(() => {
+          // Check if call still exists
+          fetch(`/api/calls/${activeCall.id}`)
+            .then(res => res.json())
+            .then(call => {
+              if (call.status === 'completed' || call.endedAt) {
+                console.log('🔴 Caller hung up - closing screening form');
+                alert('Caller has disconnected');
+                setActiveCall(null);
+                setScreenerNotes({
+                  name: '',
+                  location: '',
+                  topic: '',
+                  truckerType: 'OTR',
+                  priority: 'normal',
+                  notes: ''
+                });
+                fetchQueuedCalls();
+              }
+            })
+            .catch(err => console.error('Error checking call status:', err));
+        }, 1000);
+      }
     },
     onError: (error) => {
       console.error('❌ Screener audio error:', error);

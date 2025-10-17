@@ -63,7 +63,9 @@ router.post('/voice', async (req: Request, res: Response) => {
         conferenceName,
         startConferenceOnEnter: true,  // Screener starts the conference
         endConferenceOnExit: false,
-        muted: false
+        muted: false,
+        beep: false,  // No beep when joining
+        waitUrl: '' // Don't play hold music for screener
       });
 
       return res.type('text/xml').send(twiml);
@@ -131,7 +133,9 @@ router.post('/voice', async (req: Request, res: Response) => {
       conferenceName,
       startConferenceOnEnter: false,  // Don't start until screener joins
       endConferenceOnExit: true,      // End conference when caller leaves
-      waitUrl: '/api/twilio/wait-music'
+      waitUrl: '/api/twilio/wait-music',
+      beep: false,  // No beep
+      muted: false  // Ensure caller is NOT muted
     });
     
     console.log('📞 Sending caller to conference:', conferenceName);
