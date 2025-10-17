@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useTwilioCall } from '../hooks/useTwilioCall';
+import ChatPanel from '../components/ChatPanel';
 
 export default function ScreeningRoom() {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -386,8 +387,10 @@ export default function ScreeningRoom() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-73px)] p-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="h-[calc(100vh-73px)] flex">
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-5xl mx-auto">
         <div className="mb-8 flex items-center justify-between">
           <div className="flex-1">
           <h1 className="text-3xl font-bold mb-2">Call Screening Room</h1>
@@ -602,6 +605,12 @@ export default function ScreeningRoom() {
             <p className="text-gray-500 text-sm mt-2">Start a show to begin screening calls</p>
           </div>
         )}
+        </div>
+      </div>
+
+      {/* Right: Chat Sidebar */}
+      <div className="w-80 border-l border-gray-700">
+        {activeEpisode && <ChatPanel episodeId={activeEpisode.id} userRole="screener" />}
       </div>
     </div>
   );

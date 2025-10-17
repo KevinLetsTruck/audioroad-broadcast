@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import CallQueueMock from '../components/CallQueueMock';
+import ChatPanel from '../components/ChatPanel';
 import { useTwilioCall } from '../hooks/useTwilioCall';
 
 export default function HostDashboard() {
@@ -7,6 +7,19 @@ export default function HostDashboard() {
   const [onAirCall, setOnAirCall] = useState<any>(null); // Currently on-air
   const [isLive, setIsLive] = useState(false);
   const [hostIdentity] = useState(`host-${Date.now()}`);
+  const [approvedCalls, setApprovedCalls] = useState<any[]>([]);
+  
+  // Volume state
+  const [volumes, setVolumes] = useState({
+    host: 80,
+    cohost: 0,
+    callers: {} as Record<string, number>
+  });
+  const [muted, setMuted] = useState({
+    host: false,
+    cohost: true,
+    callers: {} as Record<string, boolean>
+  });
 
   // Twilio Device for host
   const {
@@ -33,6 +46,26 @@ export default function HostDashboard() {
     
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (activeEpisode) {
+      fetchApprovedCalls();
+      const interval = setInterval(fetchApprovedCalls, 2000);
+      return () => clearInterval(interval);
+    }
+  }, [activeEpisode]);
+
+  const fetchApprovedCalls = async () => {
+    if (!activeEpisode) return;
+    try {
+      const response = await fetch(`/api/calls?episodeId=${activeEpisode.id}&status=approved`);
+      const calls = await response.json();
+      const activeCalls = calls.filter((call: any) => !call.endedAt);
+      setApprovedCalls(activeCalls);
+    } catch (error) {
+      console.error('Error fetching approved calls:', error);
+    }
+  };
 
   const fetchActiveEpisode = async () => {
     try {
@@ -221,141 +254,154 @@ export default function HostDashboard() {
         </div>
       </div>
 
-      {/* Main Content: All Call Cards in Single Column */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-5xl mx-auto space-y-4">
-          
-          {/* Host Mic Card - Always Visible */}
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+      {/* Main Layout: Content + Chat Sidebar */}
+      <div className="flex-1 flex">
+        {/* Left: Main Content */}
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="space-y-3">
+            
+            {/* Host Mic Card */}
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
-                    <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z" />
                   </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold">Host Mic</h3>
-                  <p className="text-sm text-gray-400">Volume: 80%</p>
-                </div>
-              </div>
-              <div className="text-3xl font-bold">80</div>
-            </div>
-            <input 
-              type="range" 
-              min="0" 
-              max="100" 
-              defaultValue="80"
-              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-            />
-          </div>
-          {/* ON AIR Caller Card - If Call Active */}
-          {onAirCall && (
-            <div className="bg-red-900/30 border-2 border-red-500 rounded-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <span className="inline-block w-4 h-4 bg-red-500 rounded-full animate-pulse" />
-                  <div>
-                    <h3 className="text-xl font-bold">ON AIR: {onAirCall.caller?.name || 'Web Caller'}</h3>
-                    <p className="text-sm text-gray-400">{onAirCall.caller?.location || 'Location not provided'}</p>
-                  </div>
+                  <span className="text-sm font-semibold">Host Mic</span>
+                  <span className="text-xs text-gray-500">Vol: {volumes.host}%</span>
                 </div>
                 <button
-                  onClick={handleEndCall}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded font-bold transition-colors"
+                  onClick={() => setMuted({ ...muted, host: !muted.host })}
+                  className={`px-2 py-1 rounded text-xs font-semibold ${muted.host ? 'bg-red-600' : 'bg-gray-700'}`}
                 >
-                  End Call
+                  {muted.host ? 'Unmute' : 'Mute'}
                 </button>
               </div>
-              
-              {onAirCall.topic && (
-                <div className="bg-gray-900/50 rounded p-3 mb-4">
-                  <p className="text-sm font-semibold text-gray-400 mb-1">Topic:</p>
-                  <p className="text-gray-200">{onAirCall.topic}</p>
-                </div>
-              )}
-              
-              {onAirCall.screenerNotes && (
-                <div className="bg-gray-900/50 rounded p-3 mb-4">
-                  <p className="text-sm font-semibold text-gray-400 mb-1">Screener Notes:</p>
-                  <p className="text-gray-200">{onAirCall.screenerNotes}</p>
-                </div>
-              )}
-
-              {/* Inline Audio Controls for Caller */}
-              <div className="flex items-center gap-4 mt-4 pt-4 border-t border-red-700">
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M10 2a.75.75 0 01.75.75v12.5a.75.75 0 01-1.5 0V2.75A.75.75 0 0110 2z" />
-                    </svg>
-                  </div>
-                  <span className="text-sm font-semibold">Caller - Muted</span>
-                </div>
-                <div className="flex-1 flex items-center gap-2">
-                  <span className="text-xs text-gray-400">0</span>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="100" 
-                    defaultValue="0"
-                    disabled
-                    className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none"
-                  />
-                  <span className="text-xs text-gray-400">100</span>
-                </div>
-              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                value={volumes.host}
+                onChange={(e) => setVolumes({ ...volumes, host: parseInt(e.target.value) })}
+                className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+              />
             </div>
-          )}
 
-          {/* Call Queue - Waiting Callers */}
-          {activeEpisode && (
-            <CallQueueMock 
-              episodeId={activeEpisode.id}
-              onSelectCaller={() => {}}
-              onTakeCall={async (call) => {
-                console.log('📞 Taking call on-air, full data:', call);
-                setOnAirCall(call);
-                
-                if (hostReady && activeEpisode) {
-                  console.log('🎙️ Connecting host to conference...');
-                  try {
-                    await connectToConference({
-                      callId: call.id,
-                      episodeId: activeEpisode.id,
-                      role: 'host'
-                    });
-                    console.log('✅ Host audio connection initiated');
-                  } catch (error) {
-                    console.error('❌ Error connecting host audio:', error);
-                    alert('Failed to connect audio. You can still see caller info.');
-                  }
-                } else if (!hostReady) {
-                  alert('⚠️ Audio system not ready. Caller info shown but no audio.');
-                }
-              }}
-            />
-          )}
-
-          {/* Co-host Card - Always Visible */}
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gray-600 rounded-full flex items-center justify-center">
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+            {/* Co-host Card */}
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 opacity-60">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
                   </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold">Co-host</h3>
-                  <p className="text-sm text-gray-400">Muted</p>
+                  <span className="text-sm font-semibold">Co-host</span>
+                  <span className="text-xs text-gray-500">Offline</span>
                 </div>
               </div>
-              <div className="text-2xl font-bold text-gray-500">--</div>
             </div>
-          </div>
 
+            {/* Caller Cards */}
+            {approvedCalls.map((call) => {
+              const isOnAir = onAirCall && onAirCall.id === call.id;
+              const callVolume = volumes.callers[call.id] || 0;
+              const callMuted = muted.callers[call.id] ?? true;
+              
+              return (
+                <div
+                  key={call.id}
+                  className={`rounded-lg p-3 ${
+                    isOnAir 
+                      ? 'bg-red-900/30 border-2 border-red-500' 
+                      : 'bg-gray-800 border border-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        {isOnAir && <span className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
+                        <span className="text-sm font-semibold">{call.caller?.name || 'Web Caller'}</span>
+                        {isOnAir && <span className="px-2 py-0.5 bg-red-600 rounded text-xs font-bold">LIVE</span>}
+                      </div>
+                      <p className="text-xs text-gray-400">{call.caller?.location || 'Location not provided'}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {isOnAir ? (
+                        <>
+                          <button
+                            onClick={() => setMuted({ 
+                              ...muted, 
+                              callers: { ...muted.callers, [call.id]: !callMuted }
+                            })}
+                            className={`px-2 py-1 rounded text-xs font-semibold ${callMuted ? 'bg-red-600' : 'bg-gray-700'}`}
+                          >
+                            {callMuted ? 'Unmute' : 'Mute'}
+                          </button>
+                          <button
+                            onClick={async () => {
+                              await handleEndCall();
+                            }}
+                            className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-semibold"
+                          >
+                            End
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={async () => {
+                            setOnAirCall(call);
+                            if (hostReady && activeEpisode) {
+                              try {
+                                await connectToConference({
+                                  callId: call.id,
+                                  episodeId: activeEpisode.id,
+                                  role: 'host'
+                                });
+                              } catch (error) {
+                                console.error('Error connecting:', error);
+                              }
+                            }
+                          }}
+                          className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-semibold"
+                        >
+                          Take Call
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Volume Control */}
+                  {isOnAir && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className="text-xs text-gray-500">Vol:</span>
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="100" 
+                        value={callVolume}
+                        onChange={(e) => setVolumes({
+                          ...volumes,
+                          callers: { ...volumes.callers, [call.id]: parseInt(e.target.value) }
+                        })}
+                        className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                      />
+                      <span className="text-xs text-gray-500 w-8 text-right">{callVolume}%</span>
+                    </div>
+                  )}
+
+                  {/* Topic (if on air) */}
+                  {isOnAir && call.topic && (
+                    <p className="text-xs text-gray-400 mt-2">Topic: {call.topic}</p>
+                  )}
+                </div>
+              );
+            })}
+
+          </div>
+        </div>
+
+        {/* Right: Chat Sidebar */}
+        <div className="w-80 border-l border-gray-700">
+          {activeEpisode && <ChatPanel episodeId={activeEpisode.id} userRole="host" />}
         </div>
       </div>
     </div>
