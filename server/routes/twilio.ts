@@ -219,5 +219,44 @@ router.post('/wait-music', (req: Request, res: Response) => {
   res.type('text/xml').send(twiml);
 });
 
+/**
+ * POST /api/twilio/screener-connect - Connect screener to caller via conference
+ */
+router.post('/screener-connect', async (req: Request, res: Response) => {
+  try {
+    const { callId, role } = req.body;
+    
+    console.log('🎙️ Screener connecting to call:', callId);
+
+    // Find the call
+    const call = await prisma.call.findUnique({
+      where: { id: callId },
+      include: { episode: true }
+    });
+
+    if (!call) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    // Conference name based on episode
+    const conferenceName = `episode-${call.episodeId}`;
+    
+    console.log('📞 Connecting to conference:', conferenceName);
+
+    // Return TwiML to join the conference
+    const twiml = generateTwiML('conference', { 
+      conferenceName,
+      startConferenceOnEnter: true,  // Screener starts the conference
+      endConferenceOnExit: false,
+      muted: false
+    });
+
+    res.type('text/xml').send(twiml);
+  } catch (error) {
+    console.error('Error connecting screener:', error);
+    res.status(500).json({ error: 'Failed to connect screener' });
+  }
+});
+
 export default router;
 
