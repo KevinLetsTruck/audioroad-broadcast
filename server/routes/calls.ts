@@ -181,6 +181,33 @@ router.patch('/:id/screen', async (req: Request, res: Response) => {
 });
 
 /**
+ * PATCH /api/calls/:id/screen - Mark call as being screened
+ */
+router.patch('/:id/screen', async (req: Request, res: Response) => {
+  try {
+    const call = await prisma.call.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'screening',
+        screenedAt: new Date()
+      },
+      include: {
+        caller: true
+      }
+    });
+
+    const io = req.app.get('io');
+    emitToEpisode(io, call.episodeId, 'call:screening', call);
+
+    console.log('✅ Call marked as screening:', call.id);
+    res.json(call);
+  } catch (error) {
+    console.error('Error updating call to screening:', error);
+    res.status(500).json({ error: 'Failed to update call status' });
+  }
+});
+
+/**
  * PATCH /api/calls/:id/approve - Approve call for on-air
  */
 router.patch('/:id/approve', async (req: Request, res: Response) => {
