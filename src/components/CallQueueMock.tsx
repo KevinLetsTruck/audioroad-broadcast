@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface Call {
   id: string;
@@ -20,49 +20,57 @@ interface CallQueueMockProps {
   onTakeCall?: (call: Call) => void;
 }
 
-export default function CallQueueMock({ onSelectCaller, onTakeCall }: CallQueueMockProps) {
-  const [calls, setCalls] = useState<Call[]>([
-    {
-      id: '1',
-      caller: {
-        name: 'Mike Johnson',
-        location: 'Nashville, TN',
-        phoneNumber: '+1 615-555-0123'
-      },
-      topic: 'ELD mandate compliance questions for owner-operators',
-      status: 'ready',
-      screenerNotes: 'Regular caller, very knowledgeable',
-      hasDocuments: false,
-      priority: 'normal'
-    },
-    {
-      id: '2',
-      caller: {
-        name: 'Sarah Martinez',
-        location: 'Phoenix, AZ',
-        phoneNumber: '+1 602-555-0456'
-      },
-      topic: 'Healthy eating on the road - need meal prep tips for Wednesday show',
-      status: 'ready',
-      screenerNotes: 'Has CGM data to discuss',
-      hasDocuments: true,
-      documentAnalyzed: true,
-      priority: 'normal'
-    },
-    {
-      id: '3',
-      caller: {
-        name: 'Tom Williams',
-        location: 'Dallas, TX',
-        phoneNumber: '+1 214-555-0789'
-      },
-      topic: 'Oil analysis showing high wear metals - concerned about engine',
-      status: 'screening',
-      hasDocuments: true,
-      documentAnalyzed: false,
-      priority: 'high'
+interface CallQueueMockProps {
+  onSelectCaller?: (call: Call) => void;
+  onTakeCall?: (call: Call) => void;
+  episodeId?: string;
+}
+
+export default function CallQueueMock({ onSelectCaller, onTakeCall, episodeId }: CallQueueMockProps) {
+  const [calls, setCalls] = useState<Call[]>([]);
+
+  // Fetch real approved calls from database
+  useEffect(() => {
+    if (!episodeId) {
+      console.log('⚠️ No episodeId provided to CallQueue');
+      return;
     }
-  ]);
+
+    fetchApprovedCalls();
+    
+    // Poll every 5 seconds
+    const interval = setInterval(fetchApprovedCalls, 5000);
+    return () => clearInterval(interval);
+  }, [episodeId]);
+
+  const fetchApprovedCalls = async () => {
+    if (!episodeId) return;
+    
+    try {
+      const response = await fetch(`/api/calls?episodeId=${episodeId}&status=approved`);
+      const dbCalls = await response.json();
+      
+      // Map database calls to component format
+      const formattedCalls: Call[] = dbCalls.map((call: any) => ({
+        id: call.id,
+        caller: {
+          name: call.caller?.name || 'Unknown Caller',
+          location: call.caller?.location || 'Location not provided',
+          phoneNumber: call.caller?.phoneNumber || ''
+        },
+        topic: call.topic || 'No topic provided',
+        status: 'ready', // All approved calls are ready for host
+        screenerNotes: call.screenerNotes,
+        hasDocuments: false, // TODO: Check if caller has documents
+        priority: call.priority || 'normal'
+      }));
+      
+      setCalls(formattedCalls);
+      console.log('📋 Loaded', formattedCalls.length, 'approved calls for host queue');
+    } catch (error) {
+      console.error('Error fetching approved calls:', error);
+    }
+  };
 
   const takeCall = (call: Call) => {
     // Remove from queue

@@ -182,12 +182,13 @@ export default function HostDashboard() {
 
         <div className="flex-1 overflow-y-auto">
           {activeEpisode && (
-            <CallQueueMock 
-              onSelectCaller={() => {}} // No preview needed
-              onTakeCall={(call) => {
-                setOnAirCall(call); // Put caller on-air
-              }}
-            />
+          <CallQueueMock 
+            episodeId={activeEpisode.id}
+            onSelectCaller={() => {}} // No preview needed
+            onTakeCall={(call) => {
+              setOnAirCall(call); // Put caller on-air
+            }}
+          />
           )}
         </div>
       </div>
