@@ -328,19 +328,25 @@ export async function extractDocumentText(fileBuffer: Buffer, mimeType: string):
   if (mimeType.includes('application/pdf')) {
     try {
       console.log('📄 Attempting PDF text extraction, buffer size:', fileBuffer.length);
-      const pdfParse = require('pdf-parse');
+      const { PDFParse } = require('pdf-parse');
       
-      // PDFParse class needs options object with verbosity level
-      const parser = new pdfParse.PDFParse({ verbosity: pdfParse.VerbosityLevel.ERRORS });
-      const pdfData = await parser.parse(fileBuffer);
-      console.log('✅ Extracted text from PDF, pages:', pdfData.numpages, 'length:', pdfData.text.length);
+      // v2 API: Pass buffer in options, call getText()
+      const parser = new PDFParse({ 
+        data: fileBuffer,
+        verbosity: 0  // Minimal logging
+      });
       
-      if (!pdfData.text || pdfData.text.trim().length === 0) {
+      const result = await parser.getText();
+      await parser.destroy(); // Clean up resources
+      
+      console.log('✅ Extracted text from PDF, pages:', result.numpages, 'length:', result.text.length);
+      
+      if (!result.text || result.text.trim().length === 0) {
         console.warn('⚠️ PDF extracted but no text content found (might be scanned image)');
         return `[PDF appears to be a scanned image with no extractable text. For image-based PDFs, please use JPG/PNG format or a text-based PDF export.]`;
       }
       
-      return pdfData.text;
+      return result.text;
     } catch (error) {
       console.error('❌ PDF parsing error:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
