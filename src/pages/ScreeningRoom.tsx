@@ -387,54 +387,49 @@ export default function ScreeningRoom() {
   };
 
   return (
-    <div className="h-[calc(100vh-73px)] flex">
-      {/* Main Content */}
-      <div className="flex-1 overflow-y-auto p-8">
-        <div className="max-w-5xl mx-auto">
-          <div className="mb-8 flex items-center justify-between">
-            <div className="flex-1">
-              <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold">Call Screening Room</h1>
-              {activeEpisode && (
-                <p className="text-sm text-gray-400">{activeEpisode.title} • Live Now</p>
-              )}
-              {!activeEpisode && (
-                <p className="text-sm text-yellow-400">No live episode</p>
-              )}
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="text-right">
-                <p className="text-xs text-gray-500">Calls in Queue</p>
-                <p className="text-2xl font-bold text-green-400">{incomingCalls.length}</p>
-              </div>
-            {incomingCalls.length > 0 && (
-              <button
-                onClick={async () => {
-                  if (confirm(`Clear all ${incomingCalls.length} test calls from queue?`)) {
-                    for (const call of incomingCalls) {
-                      try {
-                        await fetch(`/api/calls/${call.id}/reject`, { method: 'PATCH' });
-                      } catch (error) {
-                        console.error('Error rejecting call:', error);
-                      }
+    <div className="h-[calc(100vh-73px)] flex flex-col">
+      {/* Compact Header */}
+      <div className="px-6 py-3 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {activeEpisode && <span className="inline-block w-3 h-3 bg-red-500 rounded-full animate-pulse" />}
+          <h2 className="text-lg font-bold">Call Screening Room</h2>
+          {activeEpisode && <span className="text-sm text-gray-500">{activeEpisode.title}</span>}
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <p className="text-xs text-gray-400">Calls in Queue</p>
+            <p className="text-xl font-bold text-green-400">{incomingCalls.length}</p>
+          </div>
+          {incomingCalls.length > 0 && (
+            <button
+              onClick={async () => {
+                if (confirm(`Clear all ${incomingCalls.length} calls?`)) {
+                  for (const call of incomingCalls) {
+                    try {
+                      await fetch(`/api/calls/${call.id}/reject`, { method: 'PATCH' });
+                    } catch (error) {
+                      console.error('Error rejecting call:', error);
                     }
-                    fetchQueuedCalls();
                   }
-                }}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold"
-              >
-                🗑️ Clear All ({incomingCalls.length})
-              </button>
-            )}
-            </div>
-          </div>
-          </div>
+                  fetchQueuedCalls();
+                }
+              }}
+              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-sm font-semibold"
+            >
+              🗑️ Clear All
+            </button>
+          )}
+        </div>
+      </div>
 
-        {activeEpisode ? (
+      {/* Main Layout: Content + Chat */}
+      <div className="flex-1 flex">
+        {/* Left: Screening Content */}
+        <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
+
             {/* Active Screening Session */}
-            {activeCall && (
+            {activeCall && activeEpisode && (
               <div className="bg-green-900/30 border-2 border-green-500 rounded-lg p-6">
                 <div className="mb-6 flex items-center justify-between">
                   <div>
@@ -536,14 +531,15 @@ export default function ScreeningRoom() {
               </div>
             )}
 
-            {/* Queued Calls */}
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold">Queued for Host</h3>
-                <span className="text-xl font-bold text-green-400">{incomingCalls.filter(c => c.status !== 'rejected').length}</span>
-              </div>
+            {/* Queued Calls - Only show if no active call being screened */}
+            {!activeCall && activeEpisode && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-semibold text-gray-300">Queued for Host</h3>
+                  <span className="text-lg font-bold text-green-400">{incomingCalls.filter(c => c.status !== 'rejected').length}</span>
+                </div>
 
-              {incomingCalls.length === 0 ? (
+                {incomingCalls.length === 0 ? (
                 <div className="text-center py-16 bg-gray-800 rounded-lg">
                   <div className="text-6xl mb-6">☎️</div>
                   <h3 className="text-2xl font-bold mb-4">Waiting for incoming calls...</h3>
@@ -598,21 +594,23 @@ export default function ScreeningRoom() {
                   ))}
                 </div>
               )}
-            </div>
-          </div>
-        ) : (
-          <div className="text-center py-16 bg-gray-800 rounded-lg">
-            <p className="text-gray-400 text-lg">No active episode</p>
-            <p className="text-gray-500 text-sm mt-2">Start a show to begin screening calls</p>
-          </div>
-        )}
-        </div>
-        </div>
-      </div>
+              </div>
+            )}
 
-      {/* Right: Chat Sidebar */}
-      <div className="w-80 border-l border-gray-700">
-        {activeEpisode && <ChatPanel episodeId={activeEpisode.id} userRole="screener" />}
+            {!activeEpisode && (
+              <div className="text-center py-16 bg-gray-800 rounded-lg">
+                <p className="text-gray-400 text-lg">No active episode</p>
+                <p className="text-gray-500 text-sm mt-2">Start a show to begin screening calls</p>
+              </div>
+            )}
+
+          </div>
+        </div>
+
+        {/* Right: Chat Sidebar */}
+        <div className="w-80 border-l border-gray-700">
+          {activeEpisode && <ChatPanel episodeId={activeEpisode.id} userRole="screener" />}
+        </div>
       </div>
     </div>
   );
