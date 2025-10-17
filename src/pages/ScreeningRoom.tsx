@@ -136,9 +136,48 @@ export default function ScreeningRoom() {
       fetchQueuedCalls();
     });
 
-    socket.on('call:completed', () => {
-      console.log('📴 Call completed');
+    socket.on('call:completed', (data) => {
+      console.log('📴 Call completed:', data);
+      
+      // If this is the call being screened, close the form
+      if (activeCall && data.callId === activeCall.id) {
+        console.log('🔴 Active call completed - closing form');
+        alert('Caller has hung up');
+        setActiveCall(null);
+        setScreenerNotes({
+          name: '',
+          location: '',
+          topic: '',
+          truckerType: 'OTR',
+          priority: 'normal',
+          notes: ''
+        });
+        if (screenerConnected) {
+          endCall();
+        }
+      }
+      
       fetchQueuedCalls(); // Refresh the list
+    });
+
+    socket.on('call:hungup', (data) => {
+      console.log('📴 Caller hung up event:', data);
+      
+      // Close form if this is active call
+      if (activeCall && data.callId === activeCall.id) {
+        setActiveCall(null);
+        setScreenerNotes({
+          name: '',
+          location: '',
+          topic: '',
+          truckerType: 'OTR',
+          priority: 'normal',
+          notes: ''
+        });
+        if (screenerConnected) {
+          endCall();
+        }
+      }
     });
 
     // Auto-refresh every 5 seconds to catch missed events
@@ -151,6 +190,7 @@ export default function ScreeningRoom() {
       socket.off('call:approved');
       socket.off('call:rejected');
       socket.off('call:completed');
+      socket.off('call:hungup');
       clearInterval(refreshInterval);
     };
   }, [socket, activeEpisode]);

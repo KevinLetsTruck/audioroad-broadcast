@@ -267,8 +267,8 @@ router.post('/conference-status', async (req: Request, res: Response) => {
         where: { twilioCallSid: CallSid }
       });
 
-      if (call && call.status === 'queued') {
-        // Caller hung up before being screened
+      if (call && (call.status === 'queued' || call.status === 'screening')) {
+        // Caller hung up (either waiting or being screened)
         await prisma.call.update({
           where: { id: call.id },
           data: {
@@ -278,7 +278,9 @@ router.post('/conference-status', async (req: Request, res: Response) => {
         });
 
         const io = req.app.get('io');
+        // Emit both events to ensure screener gets notified
         io.to(`episode:${call.episodeId}`).emit('call:completed', { callId: call.id });
+        io.to(`episode:${call.episodeId}`).emit('call:hungup', { callId: call.id });
         
         console.log('✅ Call marked completed (caller hung up):', call.id);
       }
