@@ -117,7 +117,16 @@ Format your response as JSON:
 `;
 
     const text = await generateAIResponse(prompt);
-    return JSON.parse(text);
+    
+    // Extract JSON from response
+    let jsonText = text;
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      jsonText = text.substring(jsonStart, jsonEnd + 1);
+    }
+    
+    return JSON.parse(jsonText);
 
   } catch (error) {
     console.error('Error generating caller summary:', error);
@@ -176,7 +185,17 @@ Format as JSON:
 
     const fullPrompt = `${systemPrompts[documentType]}\n\n${prompt}`;
     const text = await generateAIResponse(fullPrompt);
-    const parsed = JSON.parse(text);
+    
+    // Extract JSON from response (handle cases where Claude adds extra text)
+    let jsonText = text;
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+      jsonText = text.substring(jsonStart, jsonEnd + 1);
+      console.log('📋 Extracted JSON from response');
+    }
+    
+    const parsed = JSON.parse(jsonText);
     return {
       summary: parsed.summary || 'Document analysis completed.',
       keyFindings: parsed.keyFindings || [],
@@ -220,7 +239,16 @@ Format as JSON:
 `;
 
     const text = await generateAIResponse(prompt);
-    return JSON.parse(text);
+    
+    // Extract JSON from response
+    let jsonText = text;
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      jsonText = text.substring(jsonStart, jsonEnd + 1);
+    }
+    
+    return JSON.parse(jsonText);
 
   } catch (error) {
     console.error('Error summarizing transcript:', error);
@@ -261,7 +289,16 @@ Format as JSON:
 `;
 
     const text = await generateAIResponse(prompt);
-    return JSON.parse(text);
+    
+    // Extract JSON from response
+    let jsonText = text;
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      jsonText = text.substring(jsonStart, jsonEnd + 1);
+    }
+    
+    return JSON.parse(jsonText);
 
   } catch (error) {
     console.error('Error generating social content:', error);
@@ -273,19 +310,32 @@ Format as JSON:
  * Extract text from various document formats (helper for document analysis)
  */
 export async function extractDocumentText(fileBuffer: Buffer, mimeType: string): Promise<string> {
-  // For MVP, we'll handle simple text extraction
-  // In production, you'd want to use libraries like pdf-parse, mammoth, etc.
-  
-  if (mimeType.includes('text/plain')) {
+  // Handle text files
+  if (mimeType.includes('text/plain') || mimeType.includes('text/csv')) {
     return fileBuffer.toString('utf-8');
   }
   
+  // Handle JSON files
   if (mimeType.includes('application/json')) {
     return fileBuffer.toString('utf-8');
   }
   
-  // For PDFs, images, etc., you'd need additional processing
-  // For now, return a placeholder
-  return `[Document of type ${mimeType} - text extraction not yet implemented in MVP]`;
+  // Handle PDFs
+  if (mimeType.includes('application/pdf')) {
+    try {
+      // Use dynamic require for CommonJS module
+      const pdfParse = require('pdf-parse');
+      const pdfData = await pdfParse(fileBuffer);
+      console.log('✅ Extracted text from PDF, length:', pdfData.text.length);
+      return pdfData.text;
+    } catch (error) {
+      console.error('❌ PDF parsing error:', error);
+      return `[PDF text extraction failed - error: ${error instanceof Error ? error.message : 'Unknown error'}]`;
+    }
+  }
+  
+  // For images and other formats, return a placeholder
+  // In the future, you could add OCR for images
+  return `[Document of type ${mimeType} - text extraction not yet implemented]`;
 }
 
