@@ -23,12 +23,17 @@ export default function DocumentUploadWidget({
 
   // Load existing documents from database when callerId changes
   useEffect(() => {
+    // ALWAYS clear state first to prevent showing old caller's docs
+    setUploadedDocs([]);
+    setFiles([]);
+    setDocumentTypes({});
+    setExpandedDoc(null);
+    
     if (callerId) {
-      // Clear state first to prevent showing old caller's docs
-      setUploadedDocs([]);
+      console.log('📄 Loading documents for callerId:', callerId);
       fetchExistingDocuments();
     } else {
-      setUploadedDocs([]);
+      console.log('📄 No callerId - clearing all documents');
     }
   }, [callerId]);
 
