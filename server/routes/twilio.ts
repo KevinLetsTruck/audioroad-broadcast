@@ -31,11 +31,19 @@ router.post('/token', (req: Request, res: Response) => {
  */
 router.post('/voice', async (req: Request, res: Response) => {
   try {
-    console.log('📞 Voice endpoint called with body:', JSON.stringify(req.body));
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📞 VOICE ENDPOINT CALLED');
+    console.log('Full request body:', JSON.stringify(req.body, null, 2));
+    console.log('Request headers:', JSON.stringify(req.headers, null, 2));
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     const { callerId, CallSid, role, callId } = req.body;
     
-    console.log('📞 Extracted - callerId:', callerId, 'CallSid:', CallSid, 'role:', role);
+    console.log('📞 Extracted params:');
+    console.log('  - callerId:', callerId);
+    console.log('  - CallSid:', CallSid);
+    console.log('  - role:', role);
+    console.log('  - callId:', callId);
 
     // If this is a screener connecting, route to conference join
     if (role === 'screener' && callId) {
