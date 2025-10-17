@@ -1,9 +1,5 @@
 import { useState, useEffect } from 'react';
 import CallQueueMock from '../components/CallQueueMock';
-import AudioMixer from '../components/AudioMixer';
-import Soundboard from '../components/Soundboard';
-import CallerInfo from '../components/CallerInfo';
-import ChatPanel from '../components/ChatPanel';
 import { useTwilioCall } from '../hooks/useTwilioCall';
 
 export default function HostDashboard() {
@@ -197,140 +193,170 @@ export default function HostDashboard() {
   };
 
   return (
-    <div className="h-[calc(100vh-73px)] flex">
-      {/* Left Panel: Call Queue & Caller Info */}
-      <div className="w-1/3 border-r border-gray-700 flex flex-col">
-        <div className="p-4 bg-gray-800 border-b border-gray-700">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xl font-bold">
-              {isLive && <span className="inline-block w-3 h-3 bg-red-500 rounded-full animate-pulse mr-2" />}
-              {activeEpisode?.title || 'Host Control Center'}
-            </h2>
-            {!isLive && activeEpisode && (
-              <button
-                onClick={startEpisode}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded font-semibold"
-              >
-                GO LIVE
-              </button>
-            )}
-            {isLive && (
-              <button
-                onClick={endEpisode}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded font-semibold"
-              >
-                END SHOW
-              </button>
-            )}
-          </div>
-          {activeEpisode && (
-            <p className="text-sm text-gray-400">
-              {activeEpisode.show?.name} • Episode {activeEpisode.episodeNumber}
-            </p>
-          )}
+    <div className="h-[calc(100vh-73px)] flex flex-col">
+      {/* Compact Header */}
+      <div className="px-6 py-3 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {isLive && <span className="inline-block w-3 h-3 bg-red-500 rounded-full animate-pulse" />}
+          <h2 className="text-lg font-bold">{activeEpisode?.title || 'Host Control Center'}</h2>
+          {activeEpisode && <span className="text-sm text-gray-500">Episode {activeEpisode.episodeNumber}</span>}
         </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {activeEpisode && (
-          <CallQueueMock 
-            episodeId={activeEpisode.id}
-            onSelectCaller={() => {}} // No preview needed
-            onTakeCall={async (call) => {
-              console.log('📞 Taking call on-air, full data:', call);
-              setOnAirCall(call); // Put caller on-air
-              
-              // Connect host's audio to the conference
-              if (hostReady && activeEpisode) {
-                console.log('🎙️ Connecting host to conference...');
-                try {
-                  await connectToConference({
-                    callId: call.id,
-                    episodeId: activeEpisode.id,
-                    role: 'host'
-                  });
-                  console.log('✅ Host audio connection initiated');
-                } catch (error) {
-                  console.error('❌ Error connecting host audio:', error);
-                  alert('Failed to connect audio. You can still see caller info.');
-                }
-              } else if (!hostReady) {
-                alert('⚠️ Audio system not ready. Caller info shown but no audio.');
-              }
-            }}
-          />
+        <div className="flex items-center gap-3">
+          {!isLive && activeEpisode && (
+            <button
+              onClick={startEpisode}
+              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-sm font-semibold"
+            >
+              GO LIVE
+            </button>
+          )}
+          {isLive && (
+            <button
+              onClick={endEpisode}
+              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-sm font-semibold"
+            >
+              END SHOW
+            </button>
           )}
         </div>
       </div>
 
-      {/* Center Panel: Caller Info (when on-air) OR Audio Controls */}
-      <div className="flex-1 flex flex-col bg-gray-850">
-        {onAirCall ? (
-          /* CALLER ON-AIR - Show caller info and analysis */
-          <div className="flex-1 overflow-y-auto">
-            <div className="bg-red-900/30 border-2 border-red-500 p-6 sticky top-0 z-10">
-              <div className="flex items-center justify-between">
+      {/* Main Content: All Call Cards in Single Column */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-5xl mx-auto space-y-4">
+          
+          {/* Host Mic Card - Always Visible */}
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
+                    <path d="M5.5 9.643a.75.75 0 00-1.5 0V10c0 3.06 2.29 5.585 5.25 5.954V17.5h-1.5a.75.75 0 000 1.5h4.5a.75.75 0 000-1.5h-1.5v-1.546A6.001 6.001 0 0016 10v-.357a.75.75 0 00-1.5 0V10a4.5 4.5 0 01-9 0v-.357z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Host Mic</h3>
+                  <p className="text-sm text-gray-400">Volume: 80%</p>
+                </div>
+              </div>
+              <div className="text-3xl font-bold">80</div>
+            </div>
+            <input 
+              type="range" 
+              min="0" 
+              max="100" 
+              defaultValue="80"
+              className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
+          {/* ON AIR Caller Card - If Call Active */}
+          {onAirCall && (
+            <div className="bg-red-900/30 border-2 border-red-500 rounded-lg p-6">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <span className="inline-block w-4 h-4 bg-red-500 rounded-full animate-pulse" />
-                  <h2 className="text-2xl font-bold">ON AIR: {onAirCall.caller.name}</h2>
+                  <div>
+                    <h3 className="text-xl font-bold">ON AIR: {onAirCall.caller?.name || 'Web Caller'}</h3>
+                    <p className="text-sm text-gray-400">{onAirCall.caller?.location || 'Location not provided'}</p>
+                  </div>
                 </div>
                 <button
                   onClick={handleEndCall}
-                  className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded font-bold transition-colors"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded font-bold transition-colors"
                 >
                   End Call
                 </button>
               </div>
-            </div>
+              
+              {onAirCall.topic && (
+                <div className="bg-gray-900/50 rounded p-3 mb-4">
+                  <p className="text-sm font-semibold text-gray-400 mb-1">Topic:</p>
+                  <p className="text-gray-200">{onAirCall.topic}</p>
+                </div>
+              )}
+              
+              {onAirCall.screenerNotes && (
+                <div className="bg-gray-900/50 rounded p-3 mb-4">
+                  <p className="text-sm font-semibold text-gray-400 mb-1">Screener Notes:</p>
+                  <p className="text-gray-200">{onAirCall.screenerNotes}</p>
+                </div>
+              )}
 
-            <div className="px-6 pb-6">
-              <CallerInfo 
-                caller={{
-                  ...onAirCall.caller,
-                  topic: onAirCall.topic,
-                  screenerNotes: onAirCall.screenerNotes
-                }}
-                hasDocuments={onAirCall.hasDocuments}
-                documentAnalysis={onAirCall.documentAnalysis || null}
-              />
+              {/* Inline Audio Controls for Caller */}
+              <div className="flex items-center gap-4 mt-4 pt-4 border-t border-red-700">
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10 2a.75.75 0 01.75.75v12.5a.75.75 0 01-1.5 0V2.75A.75.75 0 0110 2z" />
+                    </svg>
+                  </div>
+                  <span className="text-sm font-semibold">Caller - Muted</span>
+                </div>
+                <div className="flex-1 flex items-center gap-2">
+                  <span className="text-xs text-gray-400">0</span>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="100" 
+                    defaultValue="0"
+                    disabled
+                    className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none"
+                  />
+                  <span className="text-xs text-gray-400">100</span>
+                </div>
+              </div>
             </div>
-          </div>
-        ) : (
-          /* NO CALL ON-AIR - Show audio controls */
-          <div className="flex-1 p-6 overflow-y-auto">
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold mb-4">Audio Mixer</h3>
-              {activeEpisode && <AudioMixer episodeId={activeEpisode.id} />}
-            </div>
+          )}
 
-            <div>
-              <h3 className="text-lg font-semibold mb-4">Soundboard</h3>
-              {activeEpisode && <Soundboard showId={activeEpisode.showId} />}
-            </div>
-          </div>
-        )}
-      </div>
+          {/* Call Queue - Waiting Callers */}
+          {activeEpisode && (
+            <CallQueueMock 
+              episodeId={activeEpisode.id}
+              onSelectCaller={() => {}}
+              onTakeCall={async (call) => {
+                console.log('📞 Taking call on-air, full data:', call);
+                setOnAirCall(call);
+                
+                if (hostReady && activeEpisode) {
+                  console.log('🎙️ Connecting host to conference...');
+                  try {
+                    await connectToConference({
+                      callId: call.id,
+                      episodeId: activeEpisode.id,
+                      role: 'host'
+                    });
+                    console.log('✅ Host audio connection initiated');
+                  } catch (error) {
+                    console.error('❌ Error connecting host audio:', error);
+                    alert('Failed to connect audio. You can still see caller info.');
+                  }
+                } else if (!hostReady) {
+                  alert('⚠️ Audio system not ready. Caller info shown but no audio.');
+                }
+              }}
+            />
+          )}
 
-      {/* Right Panel: Audio Controls (when on-air) OR Chat */}
-      <div className="w-1/3 border-l border-gray-700 flex flex-col">
-        {onAirCall ? (
-          /* CALLER ON-AIR - Show audio controls */
-          <div className="flex-1 p-6 overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4">Audio Controls</h3>
-            {activeEpisode && <AudioMixer episodeId={activeEpisode.id} />}
-            
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-4">Soundboard</h3>
-              {activeEpisode && <Soundboard showId={activeEpisode.showId} />}
+          {/* Co-host Card - Always Visible */}
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gray-600 rounded-full flex items-center justify-center">
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">Co-host</h3>
+                  <p className="text-sm text-gray-400">Muted</p>
+                </div>
+              </div>
+              <div className="text-2xl font-bold text-gray-500">--</div>
             </div>
           </div>
-        ) : (
-          /* NO CALL - Show chat */
-          <div className="flex-1 overflow-y-auto">
-            {activeEpisode && (
-              <ChatPanel episodeId={activeEpisode.id} userRole="host" />
-            )}
-          </div>
-        )}
+
+        </div>
       </div>
     </div>
   );
