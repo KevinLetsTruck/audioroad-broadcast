@@ -330,8 +330,8 @@ export async function extractDocumentText(fileBuffer: Buffer, mimeType: string):
       console.log('📄 Attempting PDF text extraction, buffer size:', fileBuffer.length);
       const pdfParse = require('pdf-parse');
       
-      // PDFParse is a class constructor - need to instantiate with 'new'
-      const parser = new pdfParse.PDFParse();
+      // PDFParse class needs options object with verbosity level
+      const parser = new pdfParse.PDFParse({ verbosity: pdfParse.VerbosityLevel.ERRORS });
       const pdfData = await parser.parse(fileBuffer);
       console.log('✅ Extracted text from PDF, pages:', pdfData.numpages, 'length:', pdfData.text.length);
       
