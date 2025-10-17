@@ -96,22 +96,23 @@ export default function HostDashboard() {
     if (!activeEpisode) return;
     
     try {
-      // Fetch documents for all approved calls
-      const callerIds = approvedCalls.map(c => c.callerId).filter(Boolean);
-      console.log('📄 Fetching documents for callerIds:', callerIds);
+      // Fetch documents for CURRENT approved calls only (by callId, not callerId)
+      const callIds = approvedCalls.map(c => c.id).filter(Boolean);
+      console.log('📄 Fetching documents for current approved calls:', callIds.length);
       
-      if (callerIds.length === 0) {
-        console.log('⚠️ No approved calls with callerIds yet');
+      if (callIds.length === 0) {
+        console.log('⚠️ No approved calls yet');
+        setAllDocuments([]);
         return;
       }
 
-      const promises = callerIds.map(callerId =>
-        fetch(`/api/analysis/documents?callerId=${callerId}`).then(r => r.json())
+      const promises = callIds.map(callId =>
+        fetch(`/api/analysis/documents?callId=${callId}`).then(r => r.json())
       );
       
       const results = await Promise.all(promises);
       const allDocs = results.flat();
-      console.log('📄 Fetched documents:', allDocs.length, 'total');
+      console.log('📄 Fetched documents for current calls:', allDocs.length, 'total');
       setAllDocuments(allDocs);
     } catch (error) {
       console.error('Error fetching documents:', error);
