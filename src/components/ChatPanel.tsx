@@ -59,41 +59,60 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    console.log('📎 Uploading file:', file.name, file.size, 'bytes');
     setUploading(true);
+    
     try {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('documentType', 'other');
       formData.append('callerId', episodeId); // Use episodeId as identifier
 
+      console.log('📤 Sending to /api/analysis/document...');
       const response = await fetch('/api/analysis/document', {
         method: 'POST',
         body: formData
       });
 
-      if (response.ok) {
-        const doc = await response.json();
-        
-        // Send chat message with file attachment
-        await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            episodeId,
-            senderId: 'current-user',
-            senderName: userRole === 'host' ? 'Host' : 'User',
-            senderRole: userRole,
-            message: `Shared file: ${file.name}`,
-            attachmentUrl: doc.fileUrl,
-            attachmentName: file.name
-          })
-        });
-        
-        console.log('✅ File shared in chat');
+      console.log('📥 Upload response status:', response.status);
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+        throw new Error(error.error || `Upload failed with status ${response.status}`);
       }
+
+      const doc = await response.json();
+      console.log('✅ File uploaded:', doc);
+      
+      // Send chat message with file attachment
+      console.log('💬 Sending chat message with attachment...');
+      const chatResponse = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          episodeId,
+          senderId: 'current-user',
+          senderName: userRole === 'host' ? 'Host' : 'User',
+          senderRole: userRole,
+          message: `📎 Shared: ${file.name}`,
+          attachmentUrl: doc.fileUrl,
+          attachmentName: file.name
+        })
+      });
+
+      if (!chatResponse.ok) {
+        throw new Error('Failed to send chat message');
+      }
+
+      const chatMsg = await chatResponse.json();
+      console.log('✅ File shared in chat:', chatMsg);
+      
+      // Manually add to messages for immediate display
+      setMessages(prev => [...prev, { ...chatMsg, attachmentName: file.name }]);
+      
     } catch (error) {
-      console.error('Error uploading file:', error);
-      alert('Failed to upload file');
+      console.error('❌ Error uploading file:', error);
+      alert(`Failed to upload file: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setUploading(false);
       if (fileInputRef.current) {
