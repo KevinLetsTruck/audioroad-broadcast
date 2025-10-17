@@ -223,6 +223,17 @@ export default function ScreeningRoom() {
 
     console.log('📞 Picking up call:', call.id);
     
+    // Update call status to 'screening' in database
+    try {
+      await fetch(`/api/calls/${call.id}/screen`, {
+        method: 'PATCH'
+      });
+      console.log('✅ Call status updated to screening');
+    } catch (error) {
+      console.error('⚠️ Error updating call status:', error);
+      // Continue anyway
+    }
+    
     // Set active call first
     setActiveCall(call);
     
@@ -235,6 +246,9 @@ export default function ScreeningRoom() {
       priority: 'normal',
       notes: ''
     });
+    
+    // Refresh queues to remove this call from "Queued for Host" list
+    fetchQueuedCalls();
     
     // Connect screener's audio to the caller
     if (!screenerReady) {
