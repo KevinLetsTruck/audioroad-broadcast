@@ -4,11 +4,29 @@ import AudioMixer from '../components/AudioMixer';
 import Soundboard from '../components/Soundboard';
 import CallerInfo from '../components/CallerInfo';
 import ChatPanel from '../components/ChatPanel';
+import { useTwilioCall } from '../hooks/useTwilioCall';
 
 export default function HostDashboard() {
   const [activeEpisode, setActiveEpisode] = useState<any>(null);
   const [onAirCall, setOnAirCall] = useState<any>(null); // Currently on-air
   const [isLive, setIsLive] = useState(false);
+  const [hostIdentity] = useState(`host-${Date.now()}`);
+
+  // Twilio Device for host
+  const {
+    isReady: hostReady,
+    makeCall: connectToConference
+  } = useTwilioCall({
+    identity: hostIdentity,
+    onCallConnected: () => {
+      console.log('✅ Host connected to caller!');
+    },
+    onCallDisconnected: () => {
+      console.log('📴 Host disconnected from caller');
+      // Clear on-air call when audio ends
+      setOnAirCall(null);
+    }
+  });
 
   useEffect(() => {
     // Fetch active episode from database
@@ -185,8 +203,27 @@ export default function HostDashboard() {
           <CallQueueMock 
             episodeId={activeEpisode.id}
             onSelectCaller={() => {}} // No preview needed
-            onTakeCall={(call) => {
+            onTakeCall={async (call) => {
+              console.log('📞 Taking call on-air, full data:', call);
               setOnAirCall(call); // Put caller on-air
+              
+              // Connect host's audio to the conference
+              if (hostReady && activeEpisode) {
+                console.log('🎙️ Connecting host to conference...');
+                try {
+                  await connectToConference({
+                    callId: call.id,
+                    episodeId: activeEpisode.id,
+                    role: 'host'
+                  });
+                  console.log('✅ Host audio connection initiated');
+                } catch (error) {
+                  console.error('❌ Error connecting host audio:', error);
+                  alert('Failed to connect audio. You can still see caller info.');
+                }
+              } else if (!hostReady) {
+                alert('⚠️ Audio system not ready. Caller info shown but no audio.');
+              }
             }}
           />
           )}

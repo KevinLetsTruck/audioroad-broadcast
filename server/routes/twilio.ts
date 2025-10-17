@@ -37,35 +37,42 @@ router.post('/voice', async (req: Request, res: Response) => {
     console.log('Request headers:', JSON.stringify(req.headers, null, 2));
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
-    const { callerId, CallSid, role, callId } = req.body;
+    const { callerId, CallSid, role, callId, episodeId } = req.body;
     
     console.log('📞 Extracted params:');
     console.log('  - callerId:', callerId);
     console.log('  - CallSid:', CallSid);
     console.log('  - role:', role);
     console.log('  - callId:', callId);
+    console.log('  - episodeId:', episodeId);
 
-    // If this is a screener connecting, route to conference join
-    if (role === 'screener' && callId) {
-      const call = await prisma.call.findUnique({
-        where: { id: callId },
-        include: { episode: true }
-      });
+    // If this is a screener or host connecting, route to conference join
+    if ((role === 'screener' || role === 'host') && (callId || episodeId)) {
+      let conferenceName = '';
+      
+      if (callId) {
+        const call = await prisma.call.findUnique({
+          where: { id: callId },
+          include: { episode: true }
+        });
 
-      if (!call) {
-        return res.status(404).send('Call not found');
+        if (!call) {
+          return res.status(404).send('Call not found');
+        }
+        
+        conferenceName = `episode-${call.episodeId}`;
+      } else if (episodeId) {
+        conferenceName = `episode-${episodeId}`;
       }
 
-      const conferenceName = `episode-${call.episodeId}`;
-      console.log('🎙️ Screener joining conference:', conferenceName);
+      console.log(`🎙️ ${role} joining conference:`, conferenceName);
 
       const twiml = generateTwiML('conference', { 
         conferenceName,
-        startConferenceOnEnter: true,  // Screener starts the conference
-        endConferenceOnExit: false,
+        startConferenceOnEnter: role === 'screener',  // Screener starts, host joins existing
+        endConferenceOnExit: role === 'host',  // End when host leaves
         muted: false,
-        beep: false,  // No beep when joining
-        waitUrl: '' // Don't play hold music for screener
+        beep: false
       });
 
       return res.type('text/xml').send(twiml);

@@ -72,10 +72,27 @@ export default function CallQueueMock({ onSelectCaller, onTakeCall, episodeId }:
     }
   };
 
-  const takeCall = (call: Call) => {
-    // Remove from queue
-    setCalls(calls.filter(c => c.id !== call.id));
-    if (onTakeCall) onTakeCall(call);
+  const takeCall = async (call: Call) => {
+    try {
+      // Update call status to on-air in database
+      const response = await fetch(`/api/calls/${call.id}/onair`, {
+        method: 'PATCH'
+      });
+
+      if (response.ok) {
+        const updatedCall = await response.json();
+        console.log('✅ Call taken on-air:', updatedCall.id);
+        
+        // Remove from queue
+        setCalls(calls.filter(c => c.id !== call.id));
+        
+        // Pass FULL updated call data to host
+        if (onTakeCall) onTakeCall(updatedCall);
+      }
+    } catch (error) {
+      console.error('Error taking call on-air:', error);
+      alert('Failed to take call on-air');
+    }
   };
 
   return (
