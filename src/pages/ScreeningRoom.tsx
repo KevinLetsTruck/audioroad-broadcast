@@ -16,6 +16,9 @@ export default function ScreeningRoom() {
     notes: ''
   });
 
+  // Stable identity for screener (prevents device loop)
+  const [screenerIdentity] = useState(`screener-${Date.now()}`);
+
   // Twilio Device for screener
   const {
     isReady: screenerReady,
@@ -26,13 +29,16 @@ export default function ScreeningRoom() {
     hangUp: endCall,
     toggleMute
   } = useTwilioCall({
-    identity: `screener-${Date.now()}`,
+    identity: screenerIdentity,
     onCallConnected: () => {
-      console.log('🎙️ Screener connected to caller');
+      console.log('✅ Screener audio connected to caller!');
     },
     onCallDisconnected: () => {
-      console.log('📴 Screener disconnected');
+      console.log('📴 Screener audio disconnected');
       // Don't clear activeCall - screener might still need to approve/reject
+    },
+    onError: (error) => {
+      console.error('❌ Screener audio error:', error);
     }
   });
 

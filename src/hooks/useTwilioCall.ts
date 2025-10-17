@@ -78,11 +78,22 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
       }
-      // Properly destroy device on cleanup
-      if (twilioDevice && twilioDevice.state !== 'destroyed') {
-        console.log('🧹 Cleaning up Twilio Device');
-        twilioDevice.unregister();
-        twilioDevice.destroy();
+      // Properly destroy device on cleanup - check state first
+      if (twilioDevice) {
+        const state = twilioDevice.state;
+        console.log('🧹 Cleaning up Twilio Device, current state:', state);
+        
+        try {
+          if (state === 'registered' || state === 'registering') {
+            twilioDevice.unregister();
+          }
+          if (state !== 'destroyed') {
+            twilioDevice.destroy();
+          }
+        } catch (error) {
+          console.log('⚠️ Error during device cleanup:', error);
+          // Ignore cleanup errors
+        }
       }
     };
   }, [identity]);
