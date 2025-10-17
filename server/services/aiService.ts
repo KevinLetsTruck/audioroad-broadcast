@@ -1,30 +1,37 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Anthropic from '@anthropic-ai/sdk';
 
-const geminiApiKey = process.env.GEMINI_API_KEY;
-const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
+const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+const anthropic = anthropicApiKey ? new Anthropic({ apiKey: anthropicApiKey }) : null;
 
-// Generate AI response using Gemini
+// Generate AI response using Claude
 const generateAIResponse = async (prompt: string): Promise<string> => {
-  if (!genAI || !geminiApiKey) {
-    console.log('⚠️  Gemini API not configured, using mock response');
+  if (!anthropic || !anthropicApiKey) {
+    console.log('⚠️  Claude API not configured, using mock response');
     return JSON.stringify({
-      summary: "AI analysis placeholder - configure Gemini API key to enable",
-      keyFindings: ["Feature ready", "Add Gemini API key"],
+      summary: "AI analysis placeholder - configure Claude API key to enable",
+      keyFindings: ["Feature ready", "Add ANTHROPIC_API_KEY to Railway"],
       recommendations: ["Test with real documents"],
       confidence: 75
     });
   }
 
   try {
-    // Use gemini-1.5-flash (base model name without suffix)
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    console.log('🤖 Calling Gemini API with model: gemini-1.5-flash');
+    console.log('🤖 Calling Claude API with model: claude-3-5-sonnet-20241022');
     
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    let text = response.text();
+    const message = await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 1024,
+      messages: [{
+        role: 'user',
+        content: prompt
+      }]
+    });
     
-    console.log('✅ Gemini AI response received, length:', text.length);
+    // Extract text from Claude response
+    const textContent = message.content.find(block => block.type === 'text');
+    let text = textContent && 'text' in textContent ? textContent.text : '';
+    
+    console.log('✅ Claude AI response received, length:', text.length);
     
     // Clean up markdown code blocks if present
     text = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
@@ -33,12 +40,12 @@ const generateAIResponse = async (prompt: string): Promise<string> => {
     
     return text;
   } catch (error) {
-    console.error('❌ Gemini API error:', error);
+    console.error('❌ Claude API error:', error);
     console.error('Error details:', JSON.stringify(error, null, 2));
     // Return mock response on error
     return JSON.stringify({
       summary: "AI analysis temporarily unavailable - check Railway logs for error details",
-      keyFindings: ["Gemini API error occurred", "Check server logs"],
+      keyFindings: ["Claude API error occurred", "Check server logs"],
       recommendations: ["Contact support if issue persists"],
       confidence: 50
     });
