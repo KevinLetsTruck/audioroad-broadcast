@@ -53,12 +53,10 @@ export default function HostDashboard() {
   useEffect(() => {
     if (activeEpisode) {
       fetchApprovedCalls();
-      fetchAllDocuments();
       
       // Poll every 2 seconds
       const interval = setInterval(() => {
         fetchApprovedCalls();
-        fetchAllDocuments();
       }, 2000);
       
       // Also listen for WebSocket events for immediate updates
@@ -87,13 +85,25 @@ export default function HostDashboard() {
     }
   }, [activeEpisode]);
 
+  // Fetch documents whenever approved calls change
+  useEffect(() => {
+    if (approvedCalls.length > 0) {
+      fetchAllDocuments();
+    }
+  }, [approvedCalls]);
+
   const fetchAllDocuments = async () => {
     if (!activeEpisode) return;
     
     try {
       // Fetch documents for all approved calls
       const callerIds = approvedCalls.map(c => c.callerId).filter(Boolean);
-      if (callerIds.length === 0) return;
+      console.log('📄 Fetching documents for callerIds:', callerIds);
+      
+      if (callerIds.length === 0) {
+        console.log('⚠️ No approved calls with callerIds yet');
+        return;
+      }
 
       const promises = callerIds.map(callerId =>
         fetch(`/api/analysis/documents?callerId=${callerId}`).then(r => r.json())
@@ -101,6 +111,7 @@ export default function HostDashboard() {
       
       const results = await Promise.all(promises);
       const allDocs = results.flat();
+      console.log('📄 Fetched documents:', allDocs.length, 'total');
       setAllDocuments(allDocs);
     } catch (error) {
       console.error('Error fetching documents:', error);
@@ -494,7 +505,16 @@ export default function HostDashboard() {
                 </div>
               ) : (
                 allDocuments.map((doc: any) => {
-                  const analysis = doc.aiAnalysis ? JSON.parse(doc.aiAnalysis) : null;
+                  // Handle aiAnalysis - might be object or string
+                  let analysis = null;
+                  try {
+                    analysis = typeof doc.aiAnalysis === 'string' 
+                      ? JSON.parse(doc.aiAnalysis) 
+                      : doc.aiAnalysis;
+                  } catch (e) {
+                    console.error('Error parsing analysis:', e);
+                  }
+                  
                   const caller = approvedCalls.find(c => c.callerId === doc.callerId);
                   
                   return (
