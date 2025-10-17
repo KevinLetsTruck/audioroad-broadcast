@@ -236,7 +236,7 @@ export default function ScreeningRoom() {
       // Continue anyway
     }
     
-    // Set active call first
+    // Set active call first (this will cause DocumentUploadWidget to re-render with new callerId)
     setActiveCall(call);
     
     // IMMEDIATELY clear and populate with fresh data (no delay)

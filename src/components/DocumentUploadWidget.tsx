@@ -21,10 +21,14 @@ export default function DocumentUploadWidget({
   const [expandedDoc, setExpandedDoc] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load existing documents from database on mount
+  // Load existing documents from database when callerId changes
   useEffect(() => {
     if (callerId) {
+      // Clear state first to prevent showing old caller's docs
+      setUploadedDocs([]);
       fetchExistingDocuments();
+    } else {
+      setUploadedDocs([]);
     }
   }, [callerId]);
 
