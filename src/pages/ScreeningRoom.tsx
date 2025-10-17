@@ -222,17 +222,31 @@ export default function ScreeningRoom() {
     }
 
     console.log('📞 Picking up call:', call.id);
-    setActiveCall(call);
     
-    // Pre-fill any known information
+    // CLEAR form first to prevent data from previous call
     setScreenerNotes({
-      name: call.caller?.name || '',
-      location: call.caller?.location || '',
-      topic: call.topic || '',
-      truckerType: call.caller?.truckerType || 'OTR',
+      name: '',
+      location: '',
+      topic: '',
+      truckerType: 'OTR',
       priority: 'normal',
       notes: ''
     });
+    
+    // Then set active call (triggers form display)
+    setActiveCall(call);
+    
+    // Then pre-fill any known information (brief delay to ensure clean state)
+    setTimeout(() => {
+      setScreenerNotes({
+        name: call.caller?.name || '',
+        location: call.caller?.location || '',
+        topic: call.topic || '',
+        truckerType: call.caller?.truckerType || 'OTR',
+        priority: 'normal',
+        notes: ''
+      });
+    }, 100);
     
     // Connect screener's audio to the caller
     if (!screenerReady) {
@@ -302,21 +316,24 @@ export default function ScreeningRoom() {
       }
 
       console.log('✅ Call approved and added to host queue');
-      alert('✅ Call approved! Caller is now in host queue.');
       
-      // Reset and refresh
+      // Reset FIRST, then alert (prevents form flash)
       setActiveCall(null);
-      setScreenerNotes({
+      const resetNotes = {
         name: '',
         location: '',
         topic: '',
         truckerType: 'OTR',
         priority: 'normal',
         notes: ''
-      });
+      };
+      setScreenerNotes(resetNotes);
       
-      // Immediate refresh
+      // Force immediate refresh
       fetchQueuedCalls();
+      
+      // Then show success message
+      alert('✅ Call approved! Caller is now in host queue.');
     } catch (error) {
       console.error('❌ Error approving call:', error);
       alert('❌ Failed to approve call. Please try again.');
