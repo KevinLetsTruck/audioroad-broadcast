@@ -129,8 +129,14 @@ export default function ScreeningRoom() {
     try {
       const response = await fetch(`/api/calls?episodeId=${activeEpisode.id}&status=queued`);
       const data = await response.json();
-      console.log('📋 Queued calls:', data.length);
-      setIncomingCalls(data);
+      
+      // Filter out any that shouldn't be shown
+      const activeCalls = data.filter((call: any) => 
+        call.status === 'queued' && !call.endedAt
+      );
+      
+      console.log('📋 Active queued calls:', activeCalls.length, '(filtered from', data.length, 'total)');
+      setIncomingCalls(activeCalls);
     } catch (error) {
       console.error('Error fetching queued calls:', error);
     }
