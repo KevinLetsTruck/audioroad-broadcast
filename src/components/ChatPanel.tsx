@@ -186,14 +186,21 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
             </div>
             <p className="text-sm text-gray-300">{msg.message}</p>
             {msg.attachmentUrl && (
-              <a
-                href={msg.attachmentUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block mt-2 px-3 py-1.5 bg-primary-600 hover:bg-primary-700 rounded text-xs font-semibold"
-              >
-                📎 {msg.attachmentName || 'Download'}
-              </a>
+              msg.attachmentUrl.startsWith('file://') ? (
+                <div className="inline-block mt-2 px-3 py-1.5 bg-gray-700 rounded text-xs">
+                  📎 {msg.attachmentName || 'File'} <span className="text-yellow-400">(Preview only - S3 not configured)</span>
+                </div>
+              ) : (
+                <a
+                  href={msg.attachmentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download={msg.attachmentName}
+                  className="inline-block mt-2 px-3 py-1.5 bg-primary-600 hover:bg-primary-700 rounded text-xs font-semibold cursor-pointer"
+                >
+                  📎 Download {msg.attachmentName || 'File'}
+                </a>
+              )
             )}
           </div>
         ))}
