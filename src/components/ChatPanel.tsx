@@ -63,10 +63,23 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
     setUploading(true);
     
     try {
+      // First, ensure a system caller exists for this episode
+      const callerResponse = await fetch('/api/callers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumber: `episode-${episodeId}`,
+          name: 'Team Chat Files'
+        })
+      });
+      
+      const caller = await callerResponse.json();
+      console.log('📁 Using caller:', caller.id);
+
       const formData = new FormData();
       formData.append('file', file);
       formData.append('documentType', 'other');
-      formData.append('callerId', episodeId); // Use episodeId as identifier
+      formData.append('callerId', caller.id);
 
       console.log('📤 Sending to /api/analysis/document...');
       const response = await fetch('/api/analysis/document', {
