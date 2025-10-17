@@ -329,8 +329,20 @@ export async function extractDocumentText(fileBuffer: Buffer, mimeType: string):
     try {
       console.log('📄 Attempting PDF text extraction, buffer size:', fileBuffer.length);
       const pdfParse = require('pdf-parse');
-      // Handle both default export and direct function export
-      const parsePDF = pdfParse.default || pdfParse;
+      
+      // Try different export patterns
+      let parsePDF;
+      if (typeof pdfParse === 'function') {
+        parsePDF = pdfParse;
+      } else if (typeof pdfParse.default === 'function') {
+        parsePDF = pdfParse.default;
+      } else if (typeof pdfParse.default?.default === 'function') {
+        parsePDF = pdfParse.default.default;
+      } else {
+        console.error('❌ Could not find pdf-parse function. Module structure:', Object.keys(pdfParse));
+        throw new Error('pdf-parse module structure unexpected');
+      }
+      
       const pdfData = await parsePDF(fileBuffer);
       console.log('✅ Extracted text from PDF, pages:', pdfData.numpages, 'length:', pdfData.text.length);
       
