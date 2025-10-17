@@ -110,6 +110,11 @@ if (process.env.NODE_ENV === 'production') {
         res.setHeader('Content-Type', 'application/javascript');
       } else if (filepath.endsWith('.css')) {
         res.setHeader('Content-Type', 'text/css');
+      } else if (filepath.endsWith('.html')) {
+        // Prevent HTML caching to always get latest app version
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
       }
     }
   }));
