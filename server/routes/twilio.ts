@@ -74,14 +74,22 @@ router.post('/voice', async (req: Request, res: Response) => {
     }
 
     // Create call record if we have caller info (prevent duplicates)
-    if (callerId && CallSid) {
-      // Check if call already exists with this CallSid
+    if (callerId) {
+      // Check for duplicates in last 60 seconds (aggressive)
+      const recentCutoff = new Date(Date.now() - 60000); // 60 seconds ago
+      
       const existingCall = await prisma.call.findFirst({
-        where: { twilioCallSid: CallSid }
+        where: {
+          callerId: callerId,
+          episodeId: activeEpisode.id,
+          incomingAt: {
+            gte: recentCutoff
+          }
+        }
       });
 
       if (existingCall) {
-        console.log('⚠️ Call already exists with CallSid:', CallSid, '- skipping duplicate');
+        console.log('⚠️ Duplicate call prevented! CallerId:', callerId, 'existing call:', existingCall.id);
       } else {
         const call = await prisma.call.create({
           data: {
@@ -94,7 +102,7 @@ router.post('/voice', async (req: Request, res: Response) => {
           }
         });
 
-        console.log('✅ Call record created:', call.id, 'CallSid:', CallSid);
+        console.log('✅ Call record created:', call.id, 'CallSid:', CallSid, 'CallerId:', callerId);
 
         // Notify screening room via WebSocket
         const io = req.app.get('io');

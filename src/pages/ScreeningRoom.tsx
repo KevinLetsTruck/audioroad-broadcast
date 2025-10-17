@@ -489,34 +489,6 @@ export default function ScreeningRoom() {
               </div>
             )}
 
-            {/* Demo Mode for Testing */}
-            <div className="bg-blue-900/20 border border-blue-600 rounded-lg p-6">
-              <h3 className="text-lg font-semibold mb-4">🎭 Demo Mode</h3>
-              <button
-                onClick={() => {
-                  // Simulate a call for testing
-                  const mockCall = {
-                    id: `mock-${Date.now()}`,
-                    caller: {
-                      name: 'Test Caller',
-                      phoneNumber: '+15555551234',
-                      location: 'Test City, ST'
-                    },
-                    topic: 'Test topic',
-                    status: 'queued',
-                    incomingAt: new Date()
-                  };
-                  setIncomingCalls([...incomingCalls, mockCall]);
-                }}
-                className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-bold transition-colors"
-              >
-                📞 Simulate Incoming Call
-              </button>
-              <p className="text-sm text-gray-400 mt-2">
-                Callers will appear here when they click "Call Now"
-              </p>
-            </div>
-
             {/* Queued Calls */}
             <div>
               <h3 className="text-xl font-semibold mb-4">Queued for Host</h3>

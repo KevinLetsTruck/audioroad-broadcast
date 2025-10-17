@@ -188,27 +188,6 @@ export default function CallQueueMock({ onSelectCaller, onTakeCall, episodeId }:
         </div>
       )}
 
-      {/* Add Demo Call Button */}
-      <button
-        onClick={() => {
-          const newCall: Call = {
-            id: Date.now().toString(),
-            caller: {
-              name: `Caller ${calls.length + 1}`,
-              location: 'Demo, USA',
-              phoneNumber: '+1 555-0000'
-            },
-            topic: 'Demo topic for testing',
-            status: 'ready',
-            hasDocuments: false,
-            priority: 'normal'
-          };
-          setCalls([...calls, newCall]);
-        }}
-        className="w-full mt-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm font-semibold transition-colors"
-      >
-        + Add Demo Call
-      </button>
     </div>
   );
 }
