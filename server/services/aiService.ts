@@ -1,7 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { createRequire } from 'module';
 
 const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
 const anthropic = anthropicApiKey ? new Anthropic({ apiKey: anthropicApiKey }) : null;
+
+// Create require for CommonJS modules in ES module environment
+const require = createRequire(import.meta.url);
 
 // Generate AI response using Claude
 const generateAIResponse = async (prompt: string): Promise<string> => {
@@ -324,7 +328,6 @@ export async function extractDocumentText(fileBuffer: Buffer, mimeType: string):
   if (mimeType.includes('application/pdf')) {
     try {
       console.log('📄 Attempting PDF text extraction, buffer size:', fileBuffer.length);
-      // Use dynamic require for CommonJS module
       const pdfParse = require('pdf-parse');
       const pdfData = await pdfParse(fileBuffer);
       console.log('✅ Extracted text from PDF, pages:', pdfData.numpages, 'length:', pdfData.text.length);
