@@ -482,6 +482,7 @@ export default function ScreeningRoom() {
                 {activeCall.callerId && (
                   <div className="mb-3">
                     <DocumentUploadWidget
+                      key={activeCall.id}
                       callerId={activeCall.callerId}
                       callId={activeCall.id}
                       maxFiles={3}
