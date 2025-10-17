@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { io } from 'socket.io-client';
 import ChatPanel from '../components/ChatPanel';
 import { useTwilioCall } from '../hooks/useTwilioCall';
 
@@ -50,8 +51,33 @@ export default function HostDashboard() {
   useEffect(() => {
     if (activeEpisode) {
       fetchApprovedCalls();
+      
+      // Poll every 2 seconds
       const interval = setInterval(fetchApprovedCalls, 2000);
-      return () => clearInterval(interval);
+      
+      // Also listen for WebSocket events for immediate updates
+      const socket = io();
+      socket.emit('join:episode', activeEpisode.id);
+      
+      socket.on('call:completed', () => {
+        console.log('🔔 Call completed event - refreshing queue');
+        fetchApprovedCalls();
+        // If this was the on-air call, clear it
+        if (onAirCall) {
+          fetch(`/api/calls/${onAirCall.id}`)
+            .then(res => res.json())
+            .then(call => {
+              if (call.status === 'completed' || call.endedAt) {
+                setOnAirCall(null);
+              }
+            });
+        }
+      });
+      
+      return () => {
+        clearInterval(interval);
+        socket.close();
+      };
     }
   }, [activeEpisode]);
 
@@ -215,7 +241,8 @@ export default function HostDashboard() {
       if (response.ok) {
         console.log('✅ Call ended successfully');
         setOnAirCall(null);
-        // Queue will auto-refresh via polling
+        // Refresh immediately to clear from list
+        fetchApprovedCalls();
       } else {
         throw new Error('Failed to end call');
       }
@@ -303,8 +330,9 @@ export default function HostDashboard() {
             {/* Caller Cards */}
             {approvedCalls.map((call) => {
               const isOnAir = onAirCall && onAirCall.id === call.id;
-              const callVolume = volumes.callers[call.id] || 0;
-              const callMuted = muted.callers[call.id] ?? true;
+              // Initialize volume at 75% and unmuted for new callers
+              const callVolume = volumes.callers[call.id] ?? 75;
+              const callMuted = muted.callers[call.id] ?? false;
               
               return (
                 <div
@@ -349,6 +377,16 @@ export default function HostDashboard() {
                         <button
                           onClick={async () => {
                             setOnAirCall(call);
+                            // Initialize caller volume to 75% when taking call
+                            setVolumes({
+                              ...volumes,
+                              callers: { ...volumes.callers, [call.id]: 75 }
+                            });
+                            setMuted({
+                              ...muted,
+                              callers: { ...muted.callers, [call.id]: false }
+                            });
+                            
                             if (hostReady && activeEpisode) {
                               try {
                                 await connectToConference({
