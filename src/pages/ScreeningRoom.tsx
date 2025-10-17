@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { useTwilioCall } from '../hooks/useTwilioCall';
 
 export default function ScreeningRoom() {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -13,6 +14,26 @@ export default function ScreeningRoom() {
     truckerType: 'OTR',
     priority: 'normal',
     notes: ''
+  });
+
+  // Twilio Device for screener
+  const {
+    isReady: screenerReady,
+    isConnected: screenerConnected,
+    isMuted,
+    formattedDuration,
+    makeCall: connectToCall,
+    hangUp: endCall,
+    toggleMute
+  } = useTwilioCall({
+    identity: `screener-${Date.now()}`,
+    onCallConnected: () => {
+      console.log('🎙️ Screener connected to caller');
+    },
+    onCallDisconnected: () => {
+      console.log('📴 Screener disconnected');
+      // Don't clear activeCall - screener might still need to approve/reject
+    }
   });
 
   useEffect(() => {
@@ -88,9 +109,10 @@ export default function ScreeningRoom() {
     }
   };
 
-  const handlePickUpCall = (call: any) => {
+  const handlePickUpCall = async (call: any) => {
     console.log('📞 Picking up call:', call.id);
     setActiveCall(call);
+    
     // Pre-fill any known information
     setScreenerNotes({
       name: call.caller?.name || '',
@@ -101,8 +123,22 @@ export default function ScreeningRoom() {
       notes: ''
     });
     
-    // TODO: Initiate Twilio connection to caller
-    // For now, screener can fill out info while call is active
+    // Connect screener's audio to the caller
+    if (screenerReady) {
+      console.log('🎙️ Connecting screener to caller...');
+      try {
+        await connectToCall({ 
+          callId: call.id,
+          callerId: call.callerId,
+          role: 'screener'
+        });
+      } catch (error) {
+        console.error('Error connecting to caller:', error);
+        alert('Failed to connect audio. Please try again.');
+      }
+    } else {
+      alert('Phone system not ready. Please wait a moment and try again.');
+    }
   };
 
   const handleApproveAndQueue = async () => {
@@ -189,15 +225,15 @@ export default function ScreeningRoom() {
       <div className="max-w-6xl mx-auto">
         <div className="mb-8 flex items-center justify-between">
           <div className="flex-1">
-            <h1 className="text-3xl font-bold mb-2">Call Screening Room</h1>
-            {activeEpisode && (
-              <p className="text-gray-400">
+          <h1 className="text-3xl font-bold mb-2">Call Screening Room</h1>
+          {activeEpisode && (
+            <p className="text-gray-400">
                 {activeEpisode.title} • Live Now • Episode ID: {activeEpisode.id}
-              </p>
-            )}
-            {!activeEpisode && (
-              <p className="text-yellow-400">No live episode - start a show to receive calls</p>
-            )}
+            </p>
+          )}
+          {!activeEpisode && (
+            <p className="text-yellow-400">No live episode - start a show to receive calls</p>
+          )}
           </div>
           <div className="flex items-center gap-4">
             <button
@@ -240,13 +276,38 @@ export default function ScreeningRoom() {
             {/* Active Screening Session */}
             {activeCall && (
               <div className="bg-green-900/30 border-2 border-green-500 rounded-lg p-6">
-                <div className="mb-6">
-                  <h2 className="text-2xl font-bold text-green-400 mb-2">
-                    🎙️ Screening Call: {activeCall.caller?.name || 'Unknown Caller'}
-                  </h2>
-                  <p className="text-gray-300">
-                    Fill in their information while talking to them
-                  </p>
+                <div className="mb-6 flex items-center justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-green-400 mb-2">
+                      🎙️ Screening Call: {activeCall.caller?.name || 'Unknown Caller'}
+                    </h2>
+                    <p className="text-gray-300">
+                      {screenerConnected ? 'Connected - Talk to the caller' : 'Connecting...'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    {screenerConnected && (
+                      <>
+                        <div className="text-2xl font-mono font-bold text-green-400">
+                          {formattedDuration}
+                        </div>
+                        <button
+                          onClick={toggleMute}
+                          className={`px-6 py-3 rounded-lg font-bold ${
+                            isMuted ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'
+                          }`}
+                        >
+                          {isMuted ? '🔇 Unmute' : '🔊 Mute'}
+                        </button>
+                        <button
+                          onClick={endCall}
+                          className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg font-bold"
+                        >
+                          End Audio
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Screening Form */}
