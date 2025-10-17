@@ -164,6 +164,38 @@ export default function HostDashboard() {
     }
   };
 
+  const handleEndCall = async () => {
+    if (!onAirCall) return;
+
+    if (!confirm('End this call? The caller will be disconnected.')) {
+      return;
+    }
+
+    try {
+      console.log('📴 Ending on-air call:', onAirCall.id);
+
+      // End the call in database - this will trigger Twilio to end it
+      const response = await fetch(`/api/calls/${onAirCall.id}/complete`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          airDuration: Math.floor((Date.now() - new Date(onAirCall.onAirAt || Date.now()).getTime()) / 1000)
+        })
+      });
+
+      if (response.ok) {
+        console.log('✅ Call ended successfully');
+        setOnAirCall(null);
+        // Queue will auto-refresh via polling
+      } else {
+        throw new Error('Failed to end call');
+      }
+    } catch (error) {
+      console.error('❌ Error ending call:', error);
+      alert('Failed to end call properly. Please try again.');
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-73px)] flex">
       {/* Left Panel: Call Queue & Caller Info */}
@@ -242,7 +274,7 @@ export default function HostDashboard() {
                   <h2 className="text-2xl font-bold">ON AIR: {onAirCall.caller.name}</h2>
                 </div>
                 <button
-                  onClick={() => setOnAirCall(null)}
+                  onClick={handleEndCall}
                   className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded font-bold transition-colors"
                 >
                   End Call
