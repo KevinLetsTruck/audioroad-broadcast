@@ -19,7 +19,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { episodeId, senderId, senderName, senderRole, recipientId, message } = req.body;
+    const { episodeId, senderId, senderName, senderRole, recipientId, message, attachmentUrl, attachmentName } = req.body;
     
     const chatMessage = await prisma.chatMessage.create({
       data: {
@@ -29,15 +29,20 @@ router.post('/', async (req: Request, res: Response) => {
         senderRole,
         recipientId: recipientId || null,
         message,
-        messageType: 'text'
+        messageType: attachmentUrl ? 'file' : 'text',
+        attachmentUrl: attachmentUrl || null
       }
     });
 
     const io = req.app.get('io');
-    io.to(`episode:${episodeId}`).emit('chat:message', chatMessage);
+    io.to(`episode:${episodeId}`).emit('chat:message', {
+      ...chatMessage,
+      attachmentName // Include in WebSocket event
+    });
 
     res.status(201).json(chatMessage);
   } catch (error) {
+    console.error('Error sending chat message:', error);
     res.status(500).json({ error: 'Failed to send message' });
   }
 });
