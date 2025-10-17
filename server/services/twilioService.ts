@@ -236,6 +236,9 @@ export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', opti
       twiml.dial().conference({
         startConferenceOnEnter: false,
         endConferenceOnExit: false,
+        statusCallback: `${process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app'}/api/twilio/conference-status`,
+        statusCallbackEvent: ['start', 'end', 'join', 'leave'],
+        statusCallbackMethod: 'POST',
         ...options
       }, options.conferenceName);
       break;
