@@ -232,11 +232,12 @@ export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', opti
       break;
 
     case 'conference':
-      // Don't say "Connecting you now" - just connect silently
-      twiml.dial().conference({
+      // Don't say anything - just connect silently
+      const dial = twiml.dial();
+      dial.conference({
         startConferenceOnEnter: false,
         endConferenceOnExit: false,
-        beep: false,  // Disable ALL beeps
+        beep: false,  // Try boolean false again
         statusCallback: `${process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app'}/api/twilio/conference-status`,
         statusCallbackEvent: ['start', 'end', 'join', 'leave'],
         statusCallbackMethod: 'POST',

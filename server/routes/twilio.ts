@@ -72,7 +72,7 @@ router.post('/voice', async (req: Request, res: Response) => {
         startConferenceOnEnter: role === 'screener',  // Screener starts, host joins existing
         endConferenceOnExit: role === 'host',  // End when host leaves
         muted: false,
-        beep: 'false'  // String 'false' for Twilio
+        beep: false  // Boolean false
       });
 
       return res.type('text/xml').send(twiml);
@@ -141,7 +141,7 @@ router.post('/voice', async (req: Request, res: Response) => {
       startConferenceOnEnter: false,  // Don't start until screener joins
       endConferenceOnExit: true,      // End conference when caller leaves
       waitUrl: '/api/twilio/wait-music',
-      beep: 'false',  // Must be string 'false' not boolean for Twilio
+      beep: false,  // Boolean false
       muted: false  // Ensure caller is NOT muted
     });
     
