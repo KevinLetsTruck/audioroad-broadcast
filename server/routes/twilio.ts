@@ -76,8 +76,16 @@ router.post('/voice', async (req: Request, res: Response) => {
       }
     }
 
-    // Queue the caller
-    const twiml = generateTwiML('queue', { queueName: `episode-${activeEpisode.id}` });
+    // Put caller in conference (so screener can join later)
+    const conferenceName = `episode-${activeEpisode.id}`;
+    const twiml = generateTwiML('conference', { 
+      conferenceName,
+      startConferenceOnEnter: false,  // Don't start until screener joins
+      endConferenceOnExit: true,      // End conference when caller leaves
+      waitUrl: '/api/twilio/wait-music'
+    });
+    
+    console.log('📞 Sending caller to conference:', conferenceName);
     res.type('text/xml').send(twiml);
 
   } catch (error) {
