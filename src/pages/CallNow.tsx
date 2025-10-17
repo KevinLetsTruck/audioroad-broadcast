@@ -20,31 +20,12 @@ export default function CallNow() {
   } = useTwilioCall({
     identity: twilioIdentity,
     onCallConnected: () => {
+      console.log('✅ Call connected!');
       setCallState('connected');
-      
-      // Notify backend that call is connected (non-blocking)
-      if (callerId) {
-        fetch('/api/calls', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            episodeId: 'current',
-            callerId: callerId,
-            twilioCallSid: `web-${Date.now()}`,
-            status: 'queued',
-            topic: 'Web caller - awaiting screening'
-          })
-        })
-        .then(res => res.json())
-        .then(call => {
-          console.log('✅ Call record created:', call.id);
-        })
-        .catch(error => {
-          console.error('⚠️ Failed to create call record (call still works):', error);
-        });
-      }
+      // Note: Call record is created by /api/twilio/voice endpoint
     },
     onCallDisconnected: () => {
+      console.log('📴 Call disconnected');
       setCallState('idle');
     }
   });
