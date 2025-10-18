@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import ChatPanel from '../components/ChatPanel';
-import { useTwilioCall } from '../hooks/useTwilioCall';
 import { useBroadcast } from '../contexts/BroadcastContext';
 
 export default function HostDashboard() {
   const broadcast = useBroadcast(); // Access global mixer
   
   const [activeEpisode, setActiveEpisode] = useState<any>(null);
-  const [onAirCall, setOnAirCall] = useState<any>(null); // Currently on-air
   const [isLive, setIsLive] = useState(false);
-  const [hostIdentity] = useState(`host-${Date.now()}`);
+  
+  // On-air call comes from global context now
+  const onAirCall = broadcast.onAirCall;
   const [approvedCalls, setApprovedCalls] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'calls' | 'documents'>('calls');
   const [allDocuments, setAllDocuments] = useState<any[]>([]);
@@ -27,22 +27,8 @@ export default function HostDashboard() {
     return source?.muted ?? false;
   };
 
-  // Twilio Device for host
-  const {
-    isReady: hostReady,
-    makeCall: connectToConference,
-    getAudioStream
-  } = useTwilioCall({
-    identity: hostIdentity,
-    onCallConnected: () => {
-      console.log('✅ Host connected to caller!');
-    },
-    onCallDisconnected: () => {
-      console.log('📴 Host disconnected from caller');
-      // Clear on-air call when audio ends
-      setOnAirCall(null);
-    }
-  });
+  // Use global Twilio device from context
+  const hostReady = broadcast.twilioDevice !== null;
 
   useEffect(() => {
     // Fetch active episode from database
@@ -70,16 +56,7 @@ export default function HostDashboard() {
       socket.on('call:completed', () => {
         console.log('🔔 Call completed event - refreshing queue');
         fetchApprovedCalls();
-        // If this was the on-air call, clear it
-        if (onAirCall) {
-          fetch(`/api/calls/${onAirCall.id}`)
-            .then(res => res.json())
-            .then(call => {
-              if (call.status === 'completed' || call.endedAt) {
-                setOnAirCall(null);
-              }
-            });
-        }
+        // On-air call managed globally now - no need to clear locally
       });
       
       return () => {
@@ -269,24 +246,26 @@ export default function HostDashboard() {
     }
 
     try {
-      console.log('📴 Ending on-air call:', onAirCall.id);
+      console.log('📴 Ending on-air call:', onAirCall.callId);
 
-      // End the call in database - this will trigger Twilio to end it
-      const response = await fetch(`/api/calls/${onAirCall.id}/complete`, {
+      // Disconnect via global context (handles Twilio + mixer cleanup)
+      await broadcast.disconnectCall(onAirCall.callId);
+
+      // End the call in database
+      const response = await fetch(`/api/calls/${onAirCall.callId}/complete`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          airDuration: Math.floor((Date.now() - new Date(onAirCall.onAirAt || Date.now()).getTime()) / 1000)
+          airDuration: Math.floor((Date.now() - onAirCall.connectedAt.getTime()) / 1000)
         })
       });
 
       if (response.ok) {
         console.log('✅ Call ended successfully');
-        setOnAirCall(null);
         // Refresh immediately to clear from list
         fetchApprovedCalls();
       } else {
-        throw new Error('Failed to end call');
+        console.warn('⚠️ Failed to update call in database');
       }
     } catch (error) {
       console.error('❌ Error ending call:', error);
@@ -404,7 +383,7 @@ export default function HostDashboard() {
 
             {/* Caller Cards */}
             {approvedCalls.map((call) => {
-              const isOnAir = onAirCall && onAirCall.id === call.id;
+              const isOnAir = onAirCall?.callId === call.id;
               // Get volume from mixer
               const callVolume = getCallerVolume(call.id);
               const callMuted = getCallerMuted(call.id);
@@ -450,27 +429,14 @@ export default function HostDashboard() {
                       ) : (
                         <button
                           onClick={async () => {
-                            setOnAirCall(call);
-                            
                             if (hostReady && activeEpisode) {
                               try {
-                                await connectToConference({
-                                  callId: call.id,
-                                  episodeId: activeEpisode.id,
-                                  role: 'host'
-                                });
-                                
-                                // Add caller to mixer if mixer is running
-                                if (broadcast.mixer) {
-                                  const audioStream = getAudioStream();
-                                  if (audioStream) {
-                                    const callerName = call.caller?.name || 'Caller';
-                                    broadcast.mixer.addCallerAudio(call.id, callerName, audioStream);
-                                    console.log('🎚️ Added caller to mixer:', callerName);
-                                  }
-                                }
+                                const callerName = call.caller?.name || 'Web Caller';
+                                await broadcast.connectToCall(call.id, callerName, activeEpisode.id);
+                                console.log('✅ Call connected via global context');
                               } catch (error) {
-                                console.error('Error connecting:', error);
+                                console.error('❌ Error connecting to call:', error);
+                                alert('Failed to connect to call');
                               }
                             }
                           }}
