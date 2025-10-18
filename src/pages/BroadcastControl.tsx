@@ -38,6 +38,8 @@ export default function BroadcastControl() {
   const [isStarting, setIsStarting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [masterLevel, setMasterLevel] = useState(0);
+  const [audioSources, setAudioSources] = useState<any[]>([]);
+  const [levels, setLevels] = useState<Record<string, number>>({});
   
   // Settings
   const [autoRecord, setAutoRecord] = useState(true);
@@ -83,7 +85,11 @@ export default function BroadcastControl() {
         if (sourceId === 'master') {
           setMasterLevel(level);
         }
+        setLevels(prev => ({ ...prev, [sourceId]: level }));
       });
+
+      // Update sources list
+      setAudioSources(mixer.getSources());
 
       // Step 4: Connect microphone
       await mixer.connectMicrophone();
@@ -264,6 +270,27 @@ export default function BroadcastControl() {
   };
 
   /**
+   * Handle volume change for a source
+   */
+  const handleVolumeChange = (sourceId: string, volume: number) => {
+    if (!mixerRef.current) return;
+    mixerRef.current.setVolume(sourceId, volume);
+    setAudioSources(mixerRef.current.getSources());
+  };
+
+  /**
+   * Handle mute toggle
+   */
+  const handleMuteToggle = (sourceId: string) => {
+    if (!mixerRef.current) return;
+    const source = mixerRef.current.getSource(sourceId);
+    if (source) {
+      mixerRef.current.setMuted(sourceId, !source.muted);
+      setAudioSources(mixerRef.current.getSources());
+    }
+  };
+
+  /**
    * Start duration timer
    */
   const startDurationTimer = () => {
@@ -415,6 +442,61 @@ export default function BroadcastControl() {
                 />
               </div>
 
+              {/* Audio Sources (Inline Mixer Controls) */}
+              {audioSources.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-sm font-semibold text-gray-400 mb-3">Audio Levels</h3>
+                  <div className="space-y-2">
+                    {audioSources.map((source) => (
+                      <div
+                        key={source.id}
+                        className={`p-3 rounded-lg ${
+                          source.type === 'caller'
+                            ? 'bg-blue-900/30 border border-blue-600'
+                            : 'bg-gray-800 border border-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Source icon and name */}
+                          <div className="flex-shrink-0 w-32">
+                            <div className="text-sm font-semibold">
+                              {source.type === 'host' && '🎤'} {source.type === 'caller' && '📞'} {source.label}
+                            </div>
+                            <div className="text-xs text-gray-500">{source.volume}%</div>
+                          </div>
+
+                          {/* Mini VU Meter */}
+                          <div className="flex-1">
+                            <VUMeter level={source.muted ? 0 : levels[source.id] || 0} width={200} height={16} showPeakIndicator={false} />
+                          </div>
+
+                          {/* Volume slider */}
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={source.volume}
+                            onChange={(e) => handleVolumeChange(source.id, parseInt(e.target.value))}
+                            disabled={source.muted}
+                            className="w-24 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                          />
+
+                          {/* Mute button */}
+                          <button
+                            onClick={() => handleMuteToggle(source.id)}
+                            className={`px-3 py-1 rounded text-xs font-semibold w-16 ${
+                              source.muted ? 'bg-red-600' : 'bg-gray-700'
+                            }`}
+                          >
+                            {source.muted ? '🔇' : '🔊'}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Master VU Meter */}
               <div className="mb-6">
                 <label className="block text-sm text-gray-400 mb-2">Master Output Level</label>
@@ -438,29 +520,29 @@ export default function BroadcastControl() {
 
         {/* Quick Links */}
         {status.isLive && (
-          <div className="grid grid-cols-3 gap-4">
-            <a
-              href="/host-dashboard"
-              className="block p-4 bg-gray-800 rounded-lg text-center hover:bg-gray-700 transition-colors"
-            >
-              <div className="text-2xl mb-2">📊</div>
-              <div className="text-sm">Full Dashboard</div>
-            </a>
-            <a
-              href="/screening-room"
-              className="block p-4 bg-gray-800 rounded-lg text-center hover:bg-gray-700 transition-colors"
-            >
-              <div className="text-2xl mb-2">🔍</div>
-              <div className="text-sm">Screening Room</div>
-            </a>
-            <a
-              href="/host-dashboard?tab=mixer"
-              className="block p-4 bg-gray-800 rounded-lg text-center hover:bg-gray-700 transition-colors"
-            >
-              <div className="text-2xl mb-2">🎚️</div>
-              <div className="text-sm">Audio Mixer</div>
-            </a>
-          </div>
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              <a
+                href="/host-dashboard"
+                className="block p-4 bg-gray-800 rounded-lg text-center hover:bg-gray-700 transition-colors"
+              >
+                <div className="text-2xl mb-2">📊</div>
+                <div className="text-sm">Full Dashboard</div>
+                <div className="text-xs text-gray-500 mt-1">View calls & documents</div>
+              </a>
+              <a
+                href="/screening-room"
+                className="block p-4 bg-gray-800 rounded-lg text-center hover:bg-gray-700 transition-colors"
+              >
+                <div className="text-2xl mb-2">🔍</div>
+                <div className="text-sm">Screening Room</div>
+                <div className="text-xs text-gray-500 mt-1">Screen incoming calls</div>
+              </a>
+            </div>
+            <p className="text-center text-xs text-gray-500 mt-4">
+              💡 Tip: Audio controls are above. Need advanced mixer features? Visit the Full Dashboard → Mixer tab.
+            </p>
+          </>
         )}
       </div>
     </div>
