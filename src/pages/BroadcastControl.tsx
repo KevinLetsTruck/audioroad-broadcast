@@ -7,41 +7,23 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { AudioMixerEngine } from '../services/audioMixerEngine';
+import { useBroadcast } from '../contexts/BroadcastContext';
 import { StreamEncoder, StreamConfig } from '../services/streamEncoder';
 import VUMeter from '../components/VUMeter';
 import { detectCurrentShow, getShowDisplayName } from '../utils/showScheduler';
 
-interface BroadcastStatus {
-  isLive: boolean;
-  episodeId: string | null;
-  showName: string;
-  startTime: Date | null;
-  micConnected: boolean;
-  isRecording: boolean;
-  isStreaming: boolean;
-  callersCount: number;
-  duration: string;
-}
-
 export default function BroadcastControl() {
-  const [status, setStatus] = useState<BroadcastStatus>({
-    isLive: false,
-    episodeId: null,
-    showName: '',
-    startTime: null,
-    micConnected: false,
-    isRecording: false,
-    isStreaming: false,
-    callersCount: 0,
-    duration: '00:00:00'
-  });
-
+  // Use broadcast context for persistent state
+  const broadcast = useBroadcast();
+  
   const [isStarting, setIsStarting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [masterLevel, setMasterLevel] = useState(0);
-  const [audioSources, setAudioSources] = useState<any[]>([]);
-  const [levels, setLevels] = useState<Record<string, number>>({});
+  const [duration, setDuration] = useState('00:00:00');
+  
+  // UI status indicators (local to this page)
+  const [isRecording, setIsRecording] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   
   // Show selection
   const [allShows, setAllShows] = useState<any[]>([]);
@@ -53,10 +35,14 @@ export default function BroadcastControl() {
   const [autoStream, setAutoStream] = useState(true);
   const [radioCoPassword, setRadioCoPassword] = useState('');
 
-  // Mixer refs
-  const mixerRef = useRef<AudioMixerEngine | null>(null);
+  // Local refs (encoder still local, mixer from context)
   const encoderRef = useRef<StreamEncoder | null>(null);
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Get state from context
+  const status = broadcast.state;
+  const audioSources = broadcast.audioSources;
+  const levels = broadcast.levels;
 
   /**
    * Fetch shows and auto-detect current show on mount
@@ -101,13 +87,13 @@ export default function BroadcastControl() {
         console.log('📡 Found existing live episode:', liveEpisode.title);
         
         // Show that episode is live (but don't auto-start mixer)
-        setStatus(prev => ({
-          ...prev,
+        broadcast.setState({
+          ...status,
           episodeId: liveEpisode.id,
           showName: liveEpisode.title,
           startTime: liveEpisode.actualStart ? new Date(liveEpisode.actualStart) : new Date(),
           // Don't set isLive to true unless mixer is also running
-        }));
+        });
         
         if (liveEpisode.actualStart) {
           startDurationTimer();
@@ -145,39 +131,32 @@ export default function BroadcastControl() {
         console.log('✅ Episode started');
       }
 
-      // Step 3: Initialize audio mixer
-      const mixer = new AudioMixerEngine({
-        sampleRate: 48000,
-        bitrate: 256,
-        outputChannels: 2
-      });
-      await mixer.initialize();
-      mixerRef.current = mixer;
+      // Step 3: Initialize audio mixer (use global context)
+      await broadcast.initializeMixer();
       console.log('✅ Mixer initialized');
 
       // Set up level monitoring
-      mixer.onLevelUpdate((sourceId, level) => {
-        if (sourceId === 'master') {
-          setMasterLevel(level);
-        }
-        setLevels(prev => ({ ...prev, [sourceId]: level }));
-      });
+      if (broadcast.mixer) {
+        broadcast.mixer.onLevelUpdate((sourceId, level) => {
+          if (sourceId === 'master') {
+            setMasterLevel(level);
+          }
+        });
 
-      // Update sources list
-      setAudioSources(mixer.getSources());
-
-      // Step 4: Connect microphone
-      await mixer.connectMicrophone();
-      console.log('✅ Microphone connected');
+        // Step 4: Connect microphone
+        await broadcast.mixer.connectMicrophone();
+        console.log('✅ Microphone connected');
+      }
 
       // Step 5: Start recording (if enabled)
-      if (autoRecord) {
-        mixer.startRecording();
+      if (autoRecord && broadcast.mixer) {
+        broadcast.mixer.startRecording();
+        setIsRecording(true);
         console.log('✅ Recording started');
       }
 
       // Step 6: Start Radio.co stream (if enabled and password provided)
-      if (autoStream && radioCoPassword) {
+      if (autoStream && radioCoPassword && broadcast.mixer) {
         const encoder = new StreamEncoder();
         const streamConfig: StreamConfig = {
           serverUrl: 'pear.radio.co',
@@ -190,25 +169,23 @@ export default function BroadcastControl() {
         };
 
         encoder.configure(streamConfig);
-        const outputStream = mixer.getOutputStream();
+        const outputStream = broadcast.mixer.getOutputStream();
         if (outputStream) {
           await encoder.startStreaming(outputStream);
           encoderRef.current = encoder;
+          setIsStreaming(true);
           console.log('✅ Streaming to Radio.co');
         }
       }
 
-      // Update status
-      setStatus({
+      // Update status in context (persists across pages!)
+      broadcast.setState({
         isLive: true,
         episodeId: episode.id,
+        showId: episode.showId,
         showName: episode.title || 'Live Show',
         startTime: new Date(),
-        micConnected: true,
-        isRecording: autoRecord,
-        isStreaming: autoStream && !!radioCoPassword,
-        callersCount: 0,
-        duration: '00:00:00'
+        selectedShow: selectedShow
       });
 
       // Start duration timer
@@ -221,10 +198,7 @@ export default function BroadcastControl() {
       setErrorMessage(error.message || 'Failed to start show');
       
       // Cleanup on error
-      if (mixerRef.current) {
-        await mixerRef.current.destroy();
-        mixerRef.current = null;
-      }
+      await broadcast.destroyMixer();
     } finally {
       setIsStarting(false);
     }
@@ -246,23 +220,24 @@ export default function BroadcastControl() {
       }
 
       // Stop streaming
-      if (encoderRef.current && status.isStreaming) {
+      if (encoderRef.current && isStreaming) {
         await encoderRef.current.stopStreaming();
         await encoderRef.current.destroy();
         encoderRef.current = null;
+        setIsStreaming(false);
         console.log('✅ Streaming stopped');
       }
 
       // Stop recording and upload to S3
-      if (mixerRef.current && status.isRecording) {
+      if (broadcast.mixer && autoRecord) {
         const now = new Date();
-        const showSlug = selectedShow?.slug || 'show';
+        const showSlug = selectedShow?.slug || status.selectedShow?.slug || 'show';
         const dateStr = now.toISOString().split('T')[0]; // 2025-10-21
         const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // 15-30-00
         const filename = `${showSlug}-${dateStr}-${timeStr}.webm`;
         
         // Get recording blob
-        const recordingBlob = await mixerRef.current.stopRecording();
+        const recordingBlob = await broadcast.mixer.stopRecording();
         
         // Upload to S3
         try {
@@ -301,29 +276,28 @@ export default function BroadcastControl() {
         }
       }
 
-      // Destroy mixer
-      if (mixerRef.current) {
-        await mixerRef.current.destroy();
-        mixerRef.current = null;
-        console.log('✅ Mixer cleaned up');
-      }
+      // Destroy mixer (from context)
+      await broadcast.destroyMixer();
+      console.log('✅ Mixer cleaned up');
 
       // End the episode
       await fetch(`/api/episodes/${status.episodeId}/end`, { method: 'PATCH' });
       console.log('✅ Episode ended');
 
-      // Reset status
-      setStatus({
+      // Reset status in context
+      broadcast.setState({
         isLive: false,
         episodeId: null,
+        showId: null,
         showName: '',
         startTime: null,
-        micConnected: false,
-        isRecording: false,
-        isStreaming: false,
-        callersCount: 0,
-        duration: '00:00:00'
+        selectedShow: null
       });
+      
+      // Reset local UI states
+      setIsRecording(false);
+      setIsStreaming(false);
+      setDuration('00:00:00');
 
       console.log('🎉 Show ended successfully!');
 
@@ -393,20 +367,17 @@ export default function BroadcastControl() {
    * Handle volume change for a source
    */
   const handleVolumeChange = (sourceId: string, volume: number) => {
-    if (!mixerRef.current) return;
-    mixerRef.current.setVolume(sourceId, volume);
-    setAudioSources(mixerRef.current.getSources());
+    broadcast.setVolume(sourceId, volume);
   };
 
   /**
    * Handle mute toggle
    */
   const handleMuteToggle = (sourceId: string) => {
-    if (!mixerRef.current) return;
-    const source = mixerRef.current.getSource(sourceId);
+    if (!broadcast.mixer) return;
+    const source = broadcast.mixer.getSource(sourceId);
     if (source) {
-      mixerRef.current.setMuted(sourceId, !source.muted);
-      setAudioSources(mixerRef.current.getSources());
+      broadcast.setMuted(sourceId, !source.muted);
     }
   };
 
@@ -415,36 +386,27 @@ export default function BroadcastControl() {
    */
   const startDurationTimer = () => {
     durationIntervalRef.current = setInterval(() => {
-      setStatus(prev => {
-        if (!prev.startTime) return prev;
+      if (!status.startTime) return;
 
-        const elapsed = Date.now() - prev.startTime.getTime();
-        const hours = Math.floor(elapsed / 3600000);
-        const minutes = Math.floor((elapsed % 3600000) / 60000);
-        const seconds = Math.floor((elapsed % 60000) / 1000);
+      const elapsed = Date.now() - status.startTime.getTime();
+      const hours = Math.floor(elapsed / 3600000);
+      const minutes = Math.floor((elapsed % 3600000) / 60000);
+      const seconds = Math.floor((elapsed % 60000) / 1000);
 
-        return {
-          ...prev,
-          duration: `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-        };
-      });
+      setDuration(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
     }, 1000);
   };
 
   /**
-   * Cleanup on unmount
+   * Cleanup on unmount (don't destroy mixer - it's global!)
    */
   useEffect(() => {
     return () => {
       if (durationIntervalRef.current) {
         clearInterval(durationIntervalRef.current);
       }
-      if (mixerRef.current) {
-        mixerRef.current.destroy();
-      }
-      if (encoderRef.current) {
-        encoderRef.current.destroy();
-      }
+      // Don't destroy mixer - it's managed by context
+      // Don't destroy encoder - handled in END SHOW
     };
   }, []);
 
@@ -573,7 +535,7 @@ export default function BroadcastControl() {
                   <h2 className="text-3xl font-bold">LIVE NOW</h2>
                 </div>
                 <p className="text-xl text-gray-300">{status.showName}</p>
-                <p className="text-2xl font-mono text-green-400 mt-2">{status.duration}</p>
+                <p className="text-2xl font-mono text-green-400 mt-2">{duration}</p>
               </div>
 
               {/* Status Grid */}
@@ -581,26 +543,26 @@ export default function BroadcastControl() {
                 <StatusItem 
                   icon="🎤" 
                   label="Microphone" 
-                  value={status.micConnected ? 'Connected' : 'Disconnected'}
-                  active={status.micConnected}
+                  value={audioSources.some(s => s.type === 'host') ? 'Connected' : 'Disconnected'}
+                  active={audioSources.some(s => s.type === 'host')}
                 />
                 <StatusItem 
                   icon="⏺️" 
                   label="Recording" 
-                  value={status.isRecording ? 'Active' : 'Off'}
-                  active={status.isRecording}
+                  value={isRecording ? 'Active' : 'Off'}
+                  active={isRecording}
                 />
                 <StatusItem 
                   icon="📡" 
                   label="Radio.co Stream" 
-                  value={status.isStreaming ? 'Live' : 'Off'}
-                  active={status.isStreaming}
+                  value={isStreaming ? 'Live' : 'Off'}
+                  active={isStreaming}
                 />
                 <StatusItem 
                   icon="📞" 
-                  label="Callers in Queue" 
-                  value={status.callersCount.toString()}
-                  active={status.callersCount > 0}
+                  label="Callers" 
+                  value={audioSources.filter(s => s.type === 'caller').length.toString()}
+                  active={audioSources.filter(s => s.type === 'caller').length > 0}
                 />
               </div>
 
