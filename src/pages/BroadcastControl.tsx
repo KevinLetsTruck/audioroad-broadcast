@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from 'react';
 import { AudioMixerEngine } from '../services/audioMixerEngine';
 import { StreamEncoder, StreamConfig } from '../services/streamEncoder';
 import VUMeter from '../components/VUMeter';
+import { detectCurrentShow, getShowDisplayName } from '../utils/showScheduler';
 
 interface BroadcastStatus {
   isLive: boolean;
@@ -41,6 +42,11 @@ export default function BroadcastControl() {
   const [audioSources, setAudioSources] = useState<any[]>([]);
   const [levels, setLevels] = useState<Record<string, number>>({});
   
+  // Show selection
+  const [allShows, setAllShows] = useState<any[]>([]);
+  const [selectedShow, setSelectedShow] = useState<any | null>(null);
+  const [showChangeModal, setShowChangeModal] = useState(false);
+  
   // Settings
   const [autoRecord, setAutoRecord] = useState(true);
   const [autoStream, setAutoStream] = useState(true);
@@ -52,6 +58,13 @@ export default function BroadcastControl() {
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   /**
+   * Fetch shows and auto-detect current show on mount
+   */
+  useEffect(() => {
+    fetchShows();
+  }, []);
+
+  /**
    * Check for existing live episode on mount
    */
   useEffect(() => {
@@ -61,6 +74,21 @@ export default function BroadcastControl() {
     const interval = setInterval(checkForLiveEpisode, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  const fetchShows = async () => {
+    try {
+      const response = await fetch('/api/shows');
+      const shows = await response.json();
+      setAllShows(shows);
+      
+      // Auto-detect current show
+      const detected = detectCurrentShow(shows);
+      setSelectedShow(detected);
+      console.log('✅ Auto-selected show:', detected?.name);
+    } catch (error) {
+      console.error('Error fetching shows:', error);
+    }
+  };
 
   const checkForLiveEpisode = async () => {
     try {
@@ -226,9 +254,13 @@ export default function BroadcastControl() {
 
       // Stop recording and download
       if (mixerRef.current && status.isRecording) {
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        await mixerRef.current.downloadRecording(`${status.showName}-${timestamp}.webm`);
-        console.log('✅ Recording saved');
+        const now = new Date();
+        const showSlug = selectedShow?.slug || 'show';
+        const dateStr = now.toISOString().split('T')[0]; // 2025-10-21
+        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // 15-30-00
+        const filename = `${showSlug}-${dateStr}-${timeStr}.webm`;
+        await mixerRef.current.downloadRecording(filename);
+        console.log('✅ Recording saved:', filename);
       }
 
       // Destroy mixer
@@ -267,15 +299,12 @@ export default function BroadcastControl() {
    * Get or create today's episode
    */
   const getOrCreateTodaysEpisode = async () => {
-    // First, get the show
-    const showsRes = await fetch('/api/shows');
-    const shows = await showsRes.json();
-    
-    if (shows.length === 0) {
-      throw new Error('No shows configured. Please create a show first.');
+    // Use selected show
+    if (!selectedShow) {
+      throw new Error('No show selected. Please select a show first.');
     }
 
-    const show = shows[0]; // Use first show
+    const show = selectedShow;
 
     // Check if today's episode exists
     const today = new Date().toISOString().split('T')[0];
@@ -291,20 +320,27 @@ export default function BroadcastControl() {
       return todaysEpisode;
     }
 
-    // Create today's episode
+    // Create today's episode with proper naming
     const now = new Date();
     const endTime = new Date(now.getTime() + 3 * 60 * 60 * 1000); // 3 hours from now
+    
+    // Format date as "Oct 21, 2025"
+    const formattedDate = now.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
 
     const createRes = await fetch('/api/episodes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         showId: show.id,
-        title: `${show.name} - ${now.toLocaleDateString()}`,
+        title: `${show.name} - ${formattedDate}`,
         date: now.toISOString(),
         scheduledStart: now.toISOString(),
         scheduledEnd: endTime.toISOString(),
-        description: 'Auto-created episode'
+        description: `Auto-created episode for ${show.name}`
       })
     });
 
@@ -399,9 +435,31 @@ export default function BroadcastControl() {
                   <p className="text-gray-400">Connect audio mixer to start broadcasting</p>
                 </div>
               ) : (
-                <div className="text-center mb-8">
-                  <h2 className="text-3xl font-bold mb-2">Ready to Broadcast</h2>
-                  <p className="text-gray-400">Click below to start your show</p>
+                <div className="text-center mb-6">
+                  <h2 className="text-3xl font-bold mb-4">Ready to Broadcast</h2>
+                  
+                  {/* Show Selector */}
+                  {selectedShow ? (
+                    <div className="inline-block">
+                      <div className="flex items-center gap-3 bg-gray-900 rounded-lg px-6 py-3 border-2 border-gray-600">
+                        <div className="text-left">
+                          <div className="text-xs text-gray-500 mb-1">Today's Show</div>
+                          <div className="text-xl font-bold" style={{ color: selectedShow.color }}>
+                            {getShowDisplayName(selectedShow)}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setShowChangeModal(true)}
+                          className="ml-4 px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm"
+                          title="Change show"
+                        >
+                          ↻
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-gray-400">Loading shows...</p>
+                  )}
                 </div>
               )}
 
@@ -444,14 +502,16 @@ export default function BroadcastControl() {
               {/* BIG START BUTTON */}
               <button
                 onClick={handleStartShow}
-                disabled={isStarting}
+                disabled={isStarting || !selectedShow}
                 className="w-full py-6 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded-lg font-bold text-2xl transition-all transform hover:scale-105 disabled:scale-100"
               >
                 {isStarting 
                   ? '⏳ Starting...' 
                   : status.episodeId 
                   ? '🎙️ CONNECT MIXER - START BROADCASTING!'
-                  : '🎙️ START SHOW - GO LIVE!'}
+                  : selectedShow
+                  ? `🎙️ START ${selectedShow.name.toUpperCase()} - GO LIVE!`
+                  : '⏳ Loading...'}
               </button>
 
               {errorMessage && (
@@ -609,6 +669,55 @@ export default function BroadcastControl() {
           </>
         )}
       </div>
+
+      {/* Show Change Modal */}
+      {showChangeModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 max-w-2xl w-full mx-4">
+            <h3 className="text-2xl font-bold mb-4">Select Show</h3>
+            <div className="space-y-2 mb-6">
+              {allShows.map((show) => (
+                <button
+                  key={show.id}
+                  onClick={() => {
+                    setSelectedShow(show);
+                    setShowChangeModal(false);
+                    console.log('✅ Show changed to:', show.name);
+                  }}
+                  className={`w-full p-4 rounded-lg text-left transition-all ${
+                    selectedShow?.id === show.id
+                      ? 'bg-gray-700 border-2 border-blue-500'
+                      : 'bg-gray-900 border-2 border-gray-700 hover:border-gray-600'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-bold text-lg" style={{ color: show.color }}>
+                        {show.name}
+                      </div>
+                      <div className="text-sm text-gray-400">
+                        {getShowDisplayName(show)}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {show.description}
+                      </div>
+                    </div>
+                    {selectedShow?.id === show.id && (
+                      <span className="text-green-500 text-2xl">✓</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowChangeModal(false)}
+              className="w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
