@@ -30,10 +30,18 @@ export default function BroadcastControl() {
   const [selectedShow, setSelectedShow] = useState<any | null>(null);
   const [showChangeModal, setShowChangeModal] = useState(false);
   
-  // Settings
-  const [autoRecord, setAutoRecord] = useState(true);
-  const [autoStream, setAutoStream] = useState(true);
-  const [radioCoPassword, setRadioCoPassword] = useState('');
+  // Settings (load from localStorage)
+  const [autoRecord, setAutoRecord] = useState(() => {
+    const saved = localStorage.getItem('autoRecord');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [autoStream, setAutoStream] = useState(() => {
+    const saved = localStorage.getItem('autoStream');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [radioCoPassword, setRadioCoPassword] = useState(() => {
+    return localStorage.getItem('radioCoPassword') || '';
+  });
 
   // Local refs (encoder still local, mixer from context)
   const encoderRef = useRef<StreamEncoder | null>(null);
@@ -43,6 +51,23 @@ export default function BroadcastControl() {
   const status = broadcast.state;
   const audioSources = broadcast.audioSources;
   const levels = broadcast.levels;
+
+  /**
+   * Save settings to localStorage whenever they change
+   */
+  useEffect(() => {
+    localStorage.setItem('autoRecord', autoRecord.toString());
+  }, [autoRecord]);
+
+  useEffect(() => {
+    localStorage.setItem('autoStream', autoStream.toString());
+  }, [autoStream]);
+
+  useEffect(() => {
+    if (radioCoPassword) {
+      localStorage.setItem('radioCoPassword', radioCoPassword);
+    }
+  }, [radioCoPassword]);
 
   /**
    * Fetch shows and auto-detect current show on mount
@@ -503,14 +528,33 @@ export default function BroadcastControl() {
 
                 {autoStream && (
                   <div>
-                    <label className="block text-xs text-gray-400 mb-1">Radio.co Password</label>
-                    <input
-                      type="password"
-                      value={radioCoPassword}
-                      onChange={(e) => setRadioCoPassword(e.target.value)}
-                      placeholder="Enter your Radio.co password"
-                      className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm"
-                    />
+                    <label className="block text-xs text-gray-400 mb-1">
+                      Radio.co Password
+                      {radioCoPassword && (
+                        <span className="ml-2 text-green-500">✓ Saved</span>
+                      )}
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        value={radioCoPassword}
+                        onChange={(e) => setRadioCoPassword(e.target.value)}
+                        placeholder="Enter your Radio.co password"
+                        className="flex-1 px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm"
+                      />
+                      {radioCoPassword && (
+                        <button
+                          onClick={() => {
+                            setRadioCoPassword('');
+                            localStorage.removeItem('radioCoPassword');
+                          }}
+                          className="px-3 py-2 bg-red-600 hover:bg-red-700 rounded text-sm"
+                          title="Clear saved password"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
