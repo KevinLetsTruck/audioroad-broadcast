@@ -32,7 +32,8 @@ export default function BroadcastMixer({ episodeId }: BroadcastMixerProps) {
     port: 5568,
     password: '',
     streamName: 'AudioRoad Network LIVE',
-    genre: 'Talk',
+    genre: 'Trucking',
+    url: 'http://audioroad.letstruck.com',
     bitrate: 256
   });
 
@@ -341,6 +342,26 @@ export default function BroadcastMixer({ episodeId }: BroadcastMixerProps) {
                     onChange={(e) => setStreamConfig({ ...streamConfig, password: e.target.value })}
                     className="w-full px-2 py-1 bg-gray-900 border border-gray-600 rounded text-sm"
                     placeholder="Enter your Radio.co password"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs text-gray-400 mb-1">Stream URL</label>
+                  <input
+                    type="text"
+                    value={streamConfig.url}
+                    onChange={(e) => setStreamConfig({ ...streamConfig, url: e.target.value })}
+                    className="w-full px-2 py-1 bg-gray-900 border border-gray-600 rounded text-sm"
+                    placeholder="http://audioroad.letstruck.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Genre</label>
+                  <input
+                    type="text"
+                    value={streamConfig.genre}
+                    onChange={(e) => setStreamConfig({ ...streamConfig, genre: e.target.value })}
+                    className="w-full px-2 py-1 bg-gray-900 border border-gray-600 rounded text-sm"
+                    placeholder="Trucking"
                   />
                 </div>
                 <div>

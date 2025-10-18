@@ -1,11 +1,12 @@
 /**
  * Stream Encoder
  * 
- * Handles encoding audio to MP3 and streaming to Radio.co/Shoutcast server
+ * Handles encoding audio to MP3 and streaming to Radio.co via backend WebSocket
  */
 
 // @ts-ignore - lamejs doesn't have types
 import lamejs from 'lamejs';
+import { io, Socket } from 'socket.io-client';
 
 export interface StreamConfig {
   serverUrl: string;
@@ -14,6 +15,7 @@ export interface StreamConfig {
   mountPoint?: string;
   streamName?: string;
   genre?: string;
+  url?: string;
   bitrate: number; // 128 or 256
 }
 
@@ -35,7 +37,7 @@ export class StreamEncoder {
   private processorNode: ScriptProcessorNode | null = null;
   private bytesStreamed = 0;
   private startTime = 0;
-  private ws: WebSocket | null = null;
+  private socket: Socket | null = null;
 
   /**
    * Initialize encoder with configuration
@@ -158,59 +160,82 @@ export class StreamEncoder {
   }
 
   /**
-   * Connect to Radio.co/Shoutcast server
+   * Connect to Radio.co via backend WebSocket
    */
   private async connectToServer(): Promise<void> {
     if (!this.config) return;
 
-    // For Radio.co, we'll use their HTTP API
-    // This is a simplified version - Radio.co may require specific headers
-    // In production, you might need a backend proxy to handle Icecast protocol
-    
-    const serverUrl = `${this.config.serverUrl}:${this.config.port}`;
-    console.log(`🔌 Connecting to ${serverUrl}...`);
+    return new Promise((resolve, reject) => {
+      console.log(`🔌 Connecting to Radio.co via backend...`);
 
-    // Note: Direct streaming to Icecast/Shoutcast from browser is challenging
-    // due to CORS and authentication requirements. 
-    // For production, consider:
-    // 1. Using a backend proxy
-    // 2. Using Radio.co's WebRTC/RTMP endpoints if available
-    // 3. Or streaming via WebSocket to your own server that forwards to Radio.co
+      // Connect to our backend Socket.IO server
+      this.socket = io();
 
-    // For now, we'll prepare for WebSocket connection to a backend proxy
-    this.isConnected = true;
-    console.log('✅ Connected to streaming server');
+      this.socket.on('connect', () => {
+        console.log('✅ Connected to backend');
+
+        // Request to start streaming to Radio.co
+        this.socket!.emit('stream:start', this.config, (response: any) => {
+          if (response.success) {
+            console.log('✅ Backend connected to Radio.co!');
+            this.isConnected = true;
+            resolve();
+          } else {
+            console.error('❌ Failed to connect to Radio.co:', response.error);
+            this.isConnected = false;
+            reject(new Error(response.error));
+          }
+        });
+      });
+
+      this.socket.on('stream:connected', () => {
+        console.log('🎙️ Stream to Radio.co active');
+        this.isConnected = true;
+      });
+
+      this.socket.on('stream:disconnected', () => {
+        console.warn('⚠️ Disconnected from Radio.co');
+        this.isConnected = false;
+      });
+
+      this.socket.on('stream:error', (error: any) => {
+        console.error('❌ Stream error:', error.message);
+        this.isConnected = false;
+      });
+
+      this.socket.on('disconnect', () => {
+        console.warn('⚠️ Backend connection lost');
+        this.isConnected = false;
+      });
+    });
   }
 
   /**
    * Disconnect from server
    */
   private disconnectFromServer(): void {
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
+    if (this.socket) {
+      this.socket.emit('stream:stop');
+      this.socket.disconnect();
+      this.socket = null;
     }
     this.isConnected = false;
   }
 
   /**
-   * Send encoded MP3 data to server
+   * Send encoded MP3 data to backend WebSocket
    */
-  private sendToServer(_mp3Data: Int8Array | Uint8Array): void {
-    if (!this.isConnected) return;
+  private sendToServer(mp3Data: Int8Array | Uint8Array): void {
+    if (!this.isConnected || !this.socket) return;
 
-    // In a real implementation, this would send data via:
-    // 1. WebSocket to backend proxy
-    // 2. HTTP POST chunks to Radio.co API
-    // 3. RTMP stream if supported
+    // Convert to ArrayBuffer for transmission
+    const buffer = mp3Data.buffer.slice(
+      mp3Data.byteOffset,
+      mp3Data.byteOffset + mp3Data.byteLength
+    );
 
-    // For now, we'll log that data is being "sent"
-    // You'll need to implement the actual transmission based on Radio.co's API
-    
-    // Example WebSocket send:
-    // if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-    //   this.ws.send(_mp3Data.buffer);
-    // }
+    // Send to backend via Socket.IO
+    this.socket.emit('stream:audio-data', buffer);
   }
 
   /**

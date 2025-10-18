@@ -21,6 +21,7 @@ import chatRoutes from './routes/chat.js';
 
 // Import services
 import { initializeSocketHandlers } from './services/socketService.js';
+import { initializeStreamSocketHandlers } from './services/streamSocketService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,6 +42,7 @@ const io = new SocketIOServer(httpServer, {
 
 // Initialize socket handlers
 initializeSocketHandlers(io);
+initializeStreamSocketHandlers(io);
 
 // Make io available to routes
 app.set('io', io);
