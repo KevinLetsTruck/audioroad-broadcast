@@ -1,11 +1,12 @@
 import { useState } from 'react'
+import BroadcastControl from './pages/BroadcastControl'
 import HostDashboard from './pages/HostDashboard'
 import ScreeningRoom from './pages/ScreeningRoom'
 import CallNow from './pages/CallNow'
 import ShowSetup from './pages/ShowSetup'
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<'host' | 'screener' | 'callnow' | 'setup'>('setup')
+  const [currentPage, setCurrentPage] = useState<'broadcast' | 'host' | 'screener' | 'callnow' | 'setup'>('broadcast')
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -16,6 +17,16 @@ function App() {
             🎙️ AudioRoad Network
           </h1>
           <div className="flex gap-4">
+            <button
+              onClick={() => setCurrentPage('broadcast')}
+              className={`px-4 py-2 rounded font-bold ${
+                currentPage === 'broadcast'
+                  ? 'bg-green-600 text-white'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              🎙️ Broadcast Control
+            </button>
             <button
               onClick={() => setCurrentPage('setup')}
               className={`px-4 py-2 rounded ${
@@ -62,6 +73,7 @@ function App() {
 
       {/* Page Content */}
       <main>
+        {currentPage === 'broadcast' && <BroadcastControl />}
         {currentPage === 'setup' && <ShowSetup />}
         {currentPage === 'host' && <HostDashboard />}
         {currentPage === 'screener' && <ScreeningRoom />}
