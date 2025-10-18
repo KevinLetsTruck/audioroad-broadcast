@@ -104,24 +104,31 @@ export default function BroadcastControl() {
 
   const checkForLiveEpisode = async () => {
     try {
+      // Don't check if we're already running a show!
+      if (status.isLive) {
+        console.log('📡 [CHECK] Already live, skipping check');
+        return;
+      }
+      
       const response = await fetch('/api/episodes?status=live');
       const episodes = await response.json();
       
-      if (episodes.length > 0 && !status.isLive) {
+      if (episodes.length > 0) {
         const liveEpisode = episodes[0];
-        console.log('📡 Found existing live episode:', liveEpisode.title);
+        console.log('📡 [CHECK] Found existing live episode:', liveEpisode.title);
         
-        // Show that episode is live (but don't auto-start mixer)
-        broadcast.setState({
-          ...status,
-          episodeId: liveEpisode.id,
-          showName: liveEpisode.title,
-          startTime: liveEpisode.actualStart ? new Date(liveEpisode.actualStart) : new Date(),
-          // Don't set isLive to true unless mixer is also running
-        });
-        
-        if (liveEpisode.actualStart) {
-          startDurationTimer();
+        // Only update if it's different from current state
+        if (status.episodeId !== liveEpisode.id) {
+          console.log('📡 [CHECK] Updating to show existing episode');
+          broadcast.setState({
+            ...status,
+            episodeId: liveEpisode.id,
+            showId: liveEpisode.showId,
+            showName: liveEpisode.title,
+            startTime: liveEpisode.actualStart ? new Date(liveEpisode.actualStart) : new Date(),
+            isLive: false, // Don't auto-mark as live
+            selectedShow: null
+          });
         }
       }
     } catch (error) {
