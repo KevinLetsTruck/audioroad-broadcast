@@ -5,7 +5,7 @@
  * Ensures mixer persists when navigating between pages
  */
 
-import { createContext, useContext, useState, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, ReactNode } from 'react';
 import { AudioMixerEngine, AudioSource } from '../services/audioMixerEngine';
 import { StreamEncoder } from '../services/streamEncoder';
 
@@ -50,9 +50,8 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
 
   const [audioSources, setAudioSources] = useState<AudioSource[]>([]);
   const [levels, setLevels] = useState<Record<string, number>>({});
-
-  const mixerRef = useRef<AudioMixerEngine | null>(null);
-  const encoderRef = useRef<StreamEncoder | null>(null);
+  const [mixer, setMixer] = useState<AudioMixerEngine | null>(null);
+  const [encoder, setEncoder] = useState<StreamEncoder | null>(null);
   
   // Wrapper for setState with logging
   const setStateWithLogging = (newState: BroadcastState) => {
@@ -64,68 +63,72 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
   };
 
   const initializeMixer = async () => {
-    if (mixerRef.current) return; // Already initialized
+    if (mixer) {
+      console.log('⚠️ [CONTEXT] Mixer already initialized');
+      return; // Already initialized
+    }
 
-    const mixer = new AudioMixerEngine({
+    console.log('🎚️ [CONTEXT] Creating new mixer...');
+    const newMixer = new AudioMixerEngine({
       sampleRate: 48000,
       bitrate: 256,
       outputChannels: 2
     });
 
-    await mixer.initialize();
-    mixerRef.current = mixer;
+    await newMixer.initialize();
+    setMixer(newMixer); // Use state instead of ref!
 
     // Set up level monitoring
-    mixer.onLevelUpdate((sourceId, level) => {
+    newMixer.onLevelUpdate((sourceId, level) => {
       setLevels(prev => ({ ...prev, [sourceId]: level }));
     });
 
     // Update sources
-    setAudioSources(mixer.getSources());
+    setAudioSources(newMixer.getSources());
 
-    console.log('✅ Global mixer initialized');
+    console.log('✅ [CONTEXT] Global mixer initialized and stored in state');
   };
 
   const destroyMixer = async () => {
     console.log('🧹 [CONTEXT] destroyMixer called');
     console.trace('Destroy mixer called from:'); // Show stack trace
     
-    if (mixerRef.current) {
-      await mixerRef.current.destroy();
-      mixerRef.current = null;
+    if (mixer) {
+      await mixer.destroy();
+      setMixer(null);
     }
-    if (encoderRef.current) {
-      await encoderRef.current.destroy();
-      encoderRef.current = null;
+    if (encoder) {
+      await encoder.destroy();
+      setEncoder(null);
     }
     setAudioSources([]);
     setLevels({});
     console.log('✅ [CONTEXT] Mixer destroyed');
   };
 
-  const setVolume = (sourceId: string, volume: number) => {
-    if (!mixerRef.current) return;
-    mixerRef.current.setVolume(sourceId, volume);
-    setAudioSources(mixerRef.current.getSources());
+  const setVolumeFunc = (sourceId: string, volume: number) => {
+    if (!mixer) return;
+    mixer.setVolume(sourceId, volume);
+    setAudioSources(mixer.getSources());
   };
 
-  const setMuted = (sourceId: string, muted: boolean) => {
-    if (!mixerRef.current) return;
-    mixerRef.current.setMuted(sourceId, muted);
-    setAudioSources(mixerRef.current.getSources());
+  const setMutedFunc = (sourceId: string, muted: boolean) => {
+    if (!mixer) return;
+    mixer.setMuted(sourceId, muted);
+    setAudioSources(mixer.getSources());
   };
 
   const value: BroadcastContextType = {
     state,
     setState: setStateWithLogging,
-    mixer: mixerRef.current,
-    encoder: encoderRef.current,
+    mixer,
+    encoder,
     audioSources,
     levels,
     initializeMixer,
     destroyMixer,
-    setVolume,
-    setMuted
+    setVolume: setVolumeFunc,
+    setMuted: setMutedFunc
   };
 
   return (
