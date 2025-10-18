@@ -17,18 +17,27 @@ router.get('/config/:showId', async (req, res) => {
   try {
     const { showId } = req.params;
 
-    const config = await prisma.broadcastConfig.findUnique({
-      where: { showId }
-    });
+    // Check if table exists (migration might not have run yet)
+    try {
+      const config = await prisma.broadcastConfig.findUnique({
+        where: { showId }
+      });
 
-    if (!config) {
-      return res.status(404).json({ error: 'Configuration not found' });
+      if (!config) {
+        return res.status(404).json({ error: 'Configuration not found' });
+      }
+
+      // Don't send the password to the client
+      const { password, ...safeConfig } = config;
+
+      res.json(safeConfig);
+    } catch (dbError: any) {
+      if (dbError.code === 'P2021' || dbError.message?.includes('does not exist')) {
+        // Table doesn't exist yet - migration pending
+        return res.status(503).json({ error: 'Broadcast configuration not yet available - migration pending' });
+      }
+      throw dbError;
     }
-
-    // Don't send the password to the client
-    const { password, ...safeConfig } = config;
-
-    res.json(safeConfig);
   } catch (error) {
     console.error('Error fetching broadcast config:', error);
     res.status(500).json({ error: 'Failed to fetch configuration' });
