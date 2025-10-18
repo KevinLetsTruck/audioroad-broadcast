@@ -52,6 +52,44 @@ export default function BroadcastControl() {
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   /**
+   * Check for existing live episode on mount
+   */
+  useEffect(() => {
+    checkForLiveEpisode();
+    
+    // Poll every 10 seconds
+    const interval = setInterval(checkForLiveEpisode, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const checkForLiveEpisode = async () => {
+    try {
+      const response = await fetch('/api/episodes?status=live');
+      const episodes = await response.json();
+      
+      if (episodes.length > 0 && !status.isLive) {
+        const liveEpisode = episodes[0];
+        console.log('📡 Found existing live episode:', liveEpisode.title);
+        
+        // Show that episode is live (but don't auto-start mixer)
+        setStatus(prev => ({
+          ...prev,
+          episodeId: liveEpisode.id,
+          showName: liveEpisode.title,
+          startTime: liveEpisode.actualStart ? new Date(liveEpisode.actualStart) : new Date(),
+          // Don't set isLive to true unless mixer is also running
+        }));
+        
+        if (liveEpisode.actualStart) {
+          startDurationTimer();
+        }
+      }
+    } catch (error) {
+      console.error('Error checking for live episode:', error);
+    }
+  };
+
+  /**
    * Main "START SHOW" button handler
    * Does EVERYTHING automatically
    */
@@ -62,13 +100,21 @@ export default function BroadcastControl() {
     try {
       console.log('🎙️ Starting broadcast...');
 
-      // Step 1: Get or create today's show and episode
-      const episode = await getOrCreateTodaysEpisode();
-      console.log('✅ Episode ready:', episode.id);
-
-      // Step 2: Start the episode (go live)
-      await fetch(`/api/episodes/${episode.id}/start`, { method: 'PATCH' });
-      console.log('✅ Episode started');
+      // Step 1: Get or create today's episode (use existing if available)
+      let episode;
+      if (status.episodeId) {
+        // Episode already exists and is live
+        const res = await fetch(`/api/episodes/${status.episodeId}`);
+        episode = await res.json();
+        console.log('✅ Using existing episode:', episode.id);
+      } else {
+        episode = await getOrCreateTodaysEpisode();
+        console.log('✅ Episode ready:', episode.id);
+        
+        // Start the episode (go live)
+        await fetch(`/api/episodes/${episode.id}/start`, { method: 'PATCH' });
+        console.log('✅ Episode started');
+      }
 
       // Step 3: Initialize audio mixer
       const mixer = new AudioMixerEngine({
@@ -342,10 +388,22 @@ export default function BroadcastControl() {
           {!status.isLive ? (
             /* PRE-SHOW STATE */
             <>
-              <div className="text-center mb-8">
-                <h2 className="text-3xl font-bold mb-2">Ready to Broadcast</h2>
-                <p className="text-gray-400">Click below to start your show</p>
-              </div>
+              {status.episodeId ? (
+                /* Episode exists but mixer not connected */
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center gap-2 mb-2">
+                    <span className="w-3 h-3 bg-orange-500 rounded-full animate-pulse"></span>
+                    <h2 className="text-3xl font-bold">Episode Live</h2>
+                  </div>
+                  <p className="text-xl text-gray-300 mb-2">{status.showName}</p>
+                  <p className="text-gray-400">Connect audio mixer to start broadcasting</p>
+                </div>
+              ) : (
+                <div className="text-center mb-8">
+                  <h2 className="text-3xl font-bold mb-2">Ready to Broadcast</h2>
+                  <p className="text-gray-400">Click below to start your show</p>
+                </div>
+              )}
 
               {/* Settings */}
               <div className="bg-gray-900 rounded-lg p-4 mb-6 space-y-3">
@@ -389,7 +447,11 @@ export default function BroadcastControl() {
                 disabled={isStarting}
                 className="w-full py-6 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded-lg font-bold text-2xl transition-all transform hover:scale-105 disabled:scale-100"
               >
-                {isStarting ? '⏳ Starting...' : '🎙️ START SHOW - GO LIVE!'}
+                {isStarting 
+                  ? '⏳ Starting...' 
+                  : status.episodeId 
+                  ? '🎙️ CONNECT MIXER - START BROADCASTING!'
+                  : '🎙️ START SHOW - GO LIVE!'}
               </button>
 
               {errorMessage && (
@@ -399,7 +461,9 @@ export default function BroadcastControl() {
               )}
 
               <p className="text-center text-xs text-gray-500 mt-4">
-                This will auto-create today's episode, connect your mic, and start broadcasting
+                {status.episodeId 
+                  ? 'Episode is running. This will connect your mic and start the audio mixer.'
+                  : 'This will auto-create today\'s episode, connect your mic, and start broadcasting'}
               </p>
             </>
           ) : (
