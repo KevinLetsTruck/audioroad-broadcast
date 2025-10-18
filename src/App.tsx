@@ -2,7 +2,7 @@ import { useState } from 'react'
 import HostDashboard from './pages/HostDashboard'
 import ScreeningRoom from './pages/ScreeningRoom'
 import CallNow from './pages/CallNow'
-import ShowSetupMock from './pages/ShowSetupMock'
+import ShowSetup from './pages/ShowSetup'
 
 function App() {
   const [currentPage, setCurrentPage] = useState<'host' | 'screener' | 'callnow' | 'setup'>('setup')
@@ -62,7 +62,7 @@ function App() {
 
       {/* Page Content */}
       <main>
-        {currentPage === 'setup' && <ShowSetupMock />}
+        {currentPage === 'setup' && <ShowSetup />}
         {currentPage === 'host' && <HostDashboard />}
         {currentPage === 'screener' && <ScreeningRoom />}
         {currentPage === 'callnow' && <CallNow />}
