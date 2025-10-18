@@ -224,17 +224,20 @@ export default function BroadcastControl() {
       }
 
       // Update status in context (persists across pages!)
+      const startTime = new Date();
       broadcast.setState({
         isLive: true,
         episodeId: episode.id,
         showId: episode.showId,
         showName: episode.title || 'Live Show',
-        startTime: new Date(),
+        startTime: startTime,
         selectedShow: selectedShow
       });
 
       // Start duration timer
+      console.log('🎙️ [START] Step 8: Starting duration timer...');
       startDurationTimer();
+      console.log('✅ [START] Duration timer started');
 
       console.log('🎉 SHOW STARTED! You are LIVE!');
 
@@ -285,63 +288,44 @@ export default function BroadcastControl() {
         console.log('✅ Streaming stopped');
       }
 
-      // Stop recording and upload to S3
-      if (broadcast.mixer && autoRecord) {
-        const now = new Date();
-        const showSlug = selectedShow?.slug || status.selectedShow?.slug || 'show';
-        const dateStr = now.toISOString().split('T')[0]; // 2025-10-21
-        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // 15-30-00
-        const filename = `${showSlug}-${dateStr}-${timeStr}.webm`;
-        
-        // Get recording blob
-        const recordingBlob = await broadcast.mixer.stopRecording();
-        
-        // Upload to S3
+      // Stop recording and download (S3 upload optional for now)
+      if (broadcast.mixer && isRecording) {
         try {
-          const formData = new FormData();
-          formData.append('recording', recordingBlob, filename);
-          formData.append('episodeId', status.episodeId);
-          formData.append('showSlug', showSlug);
-
-          const uploadRes = await fetch('/api/recordings/upload', {
-            method: 'POST',
-            body: formData
-          });
-
-          if (uploadRes.ok) {
-            const { url } = await uploadRes.json();
-            console.log('✅ Recording uploaded to S3:', url);
-          } else {
-            console.warn('⚠️ Failed to upload recording, downloading locally instead');
-            // Fallback: download locally
-            const url = URL.createObjectURL(recordingBlob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.click();
-            URL.revokeObjectURL(url);
-          }
-        } catch (error) {
-          console.error('❌ Error uploading recording:', error);
-          // Fallback: download locally
-          const url = URL.createObjectURL(recordingBlob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = filename;
-          a.click();
-          URL.revokeObjectURL(url);
+          const now = new Date();
+          const showSlug = selectedShow?.slug || status.selectedShow?.slug || 'show';
+          const dateStr = now.toISOString().split('T')[0]; // 2025-10-21
+          const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // 15-30-00
+          const filename = `${showSlug}-${dateStr}-${timeStr}.webm`;
+          
+          console.log('📴 [END] Stopping recording...');
+          await broadcast.mixer.downloadRecording(filename);
+          console.log('✅ [END] Recording downloaded:', filename);
+        } catch (recordError) {
+          console.error('❌ [END] Error with recording:', recordError);
         }
       }
 
       // Destroy mixer (from context)
+      console.log('📴 [END] Destroying mixer...');
       await broadcast.destroyMixer();
-      console.log('✅ Mixer cleaned up');
+      console.log('✅ [END] Mixer cleaned up');
 
-      // End the episode
-      await fetch(`/api/episodes/${status.episodeId}/end`, { method: 'PATCH' });
-      console.log('✅ Episode ended');
+      // End the episode (even if it fails, continue cleanup)
+      try {
+        console.log('📴 [END] Ending episode in database...');
+        const endRes = await fetch(`/api/episodes/${status.episodeId}/end`, { method: 'PATCH' });
+        if (endRes.ok) {
+          console.log('✅ [END] Episode ended in database');
+        } else {
+          const errorData = await endRes.json().catch(() => ({}));
+          console.warn('⚠️ [END] Episode end failed:', errorData);
+        }
+      } catch (endError) {
+        console.warn('⚠️ [END] Error ending episode:', endError);
+      }
 
       // Reset status in context
+      console.log('📴 [END] Resetting state...');
       broadcast.setState({
         isLive: false,
         episodeId: null,
@@ -356,7 +340,7 @@ export default function BroadcastControl() {
       setIsStreaming(false);
       setDuration('00:00:00');
 
-      console.log('🎉 Show ended successfully!');
+      console.log('🎉 [END] Show ended successfully!');
 
     } catch (error) {
       console.error('❌ Error ending show:', error);

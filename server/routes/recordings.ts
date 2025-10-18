@@ -31,7 +31,7 @@ const s3Client = new S3Client({
 });
 
 /**
- * POST /api/recordings/upload - Upload recording to S3
+ * POST /api/recordings/upload - Upload recording to S3 (optional)
  */
 router.post('/upload', upload.single('recording'), async (req: Request, res: Response) => {
   try {
@@ -49,40 +49,80 @@ router.post('/upload', upload.single('recording'), async (req: Request, res: Res
     const timestamp = Date.now();
     const filename = `recordings/${showSlug || 'show'}/${timestamp}-${file.originalname}`;
 
+    // Check if S3 is configured
+    const s3Configured = process.env.S3_BUCKET_NAME && 
+                        (process.env.AWS_ACCESS_KEY_ID || process.env.AWS_REGION);
+
+    if (!s3Configured) {
+      console.log('⚠️ S3 not configured, skipping upload');
+      // Still update episode with a placeholder
+      await prisma.episode.update({
+        where: { id: episodeId },
+        data: {
+          recordingUrl: `local://${filename}` // Placeholder
+        }
+      });
+
+      return res.json({
+        success: true,
+        url: null,
+        message: 'S3 not configured, recording not uploaded',
+        filename,
+        size: file.size
+      });
+    }
+
     console.log(`📤 Uploading recording to S3: ${filename}`);
 
-    // Upload to S3
-    const upload = new Upload({
-      client: s3Client,
-      params: {
-        Bucket: process.env.S3_BUCKET_NAME || 'audioroad-recordings',
-        Key: filename,
-        Body: file.buffer,
-        ContentType: file.mimetype,
-        // Make files publicly accessible (or use signed URLs)
-        ACL: 'public-read'
-      }
-    });
+    try {
+      // Upload to S3
+      const uploadTask = new Upload({
+        client: s3Client,
+        params: {
+          Bucket: process.env.S3_BUCKET_NAME,
+          Key: filename,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+          ACL: 'public-read'
+        }
+      });
 
-    const result = await upload.done();
-    const s3Url = `https://${process.env.S3_BUCKET_NAME || 'audioroad-recordings'}.s3.amazonaws.com/${filename}`;
+      await uploadTask.done();
+      const s3Url = `https://${process.env.S3_BUCKET_NAME}.s3.amazonaws.com/${filename}`;
 
-    console.log(`✅ Recording uploaded: ${s3Url}`);
+      console.log(`✅ Recording uploaded: ${s3Url}`);
 
-    // Update episode with recording URL
-    await prisma.episode.update({
-      where: { id: episodeId },
-      data: {
-        recordingUrl: s3Url
-      }
-    });
+      // Update episode with recording URL
+      await prisma.episode.update({
+        where: { id: episodeId },
+        data: {
+          recordingUrl: s3Url
+        }
+      });
 
-    res.json({
-      success: true,
-      url: s3Url,
-      filename,
-      size: file.size
-    });
+      res.json({
+        success: true,
+        url: s3Url,
+        filename,
+        size: file.size
+      });
+    } catch (s3Error) {
+      console.error('❌ S3 upload failed:', s3Error);
+      // Still save a placeholder
+      await prisma.episode.update({
+        where: { id: episodeId },
+        data: {
+          recordingUrl: `error://${filename}`
+        }
+      });
+      
+      res.json({
+        success: false,
+        error: 'S3 upload failed',
+        filename,
+        size: file.size
+      });
+    }
 
   } catch (error) {
     console.error('❌ Error uploading recording:', error);
