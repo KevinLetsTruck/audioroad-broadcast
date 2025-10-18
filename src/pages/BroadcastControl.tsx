@@ -252,15 +252,52 @@ export default function BroadcastControl() {
         console.log('✅ Streaming stopped');
       }
 
-      // Stop recording and download
+      // Stop recording and upload to S3
       if (mixerRef.current && status.isRecording) {
         const now = new Date();
         const showSlug = selectedShow?.slug || 'show';
         const dateStr = now.toISOString().split('T')[0]; // 2025-10-21
         const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // 15-30-00
         const filename = `${showSlug}-${dateStr}-${timeStr}.webm`;
-        await mixerRef.current.downloadRecording(filename);
-        console.log('✅ Recording saved:', filename);
+        
+        // Get recording blob
+        const recordingBlob = await mixerRef.current.stopRecording();
+        
+        // Upload to S3
+        try {
+          const formData = new FormData();
+          formData.append('recording', recordingBlob, filename);
+          formData.append('episodeId', status.episodeId);
+          formData.append('showSlug', showSlug);
+
+          const uploadRes = await fetch('/api/recordings/upload', {
+            method: 'POST',
+            body: formData
+          });
+
+          if (uploadRes.ok) {
+            const { url } = await uploadRes.json();
+            console.log('✅ Recording uploaded to S3:', url);
+          } else {
+            console.warn('⚠️ Failed to upload recording, downloading locally instead');
+            // Fallback: download locally
+            const url = URL.createObjectURL(recordingBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+          }
+        } catch (error) {
+          console.error('❌ Error uploading recording:', error);
+          // Fallback: download locally
+          const url = URL.createObjectURL(recordingBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          a.click();
+          URL.revokeObjectURL(url);
+        }
       }
 
       // Destroy mixer

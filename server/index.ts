@@ -17,6 +17,7 @@ import analysisRoutes from './routes/analysis.js';
 import audioAssetRoutes from './routes/audio-assets.js';
 import clipRoutes from './routes/clips.js';
 import chatRoutes from './routes/chat.js';
+import recordingsRoutes from './routes/recordings.js';
 // import broadcastRoutes from './routes/broadcast.js'; // Temporarily disabled until migration runs
 
 // Import services
@@ -90,6 +91,7 @@ app.use('/api/analysis', apiLimiter, analysisRoutes);
 app.use('/api/audio-assets', apiLimiter, audioAssetRoutes);
 app.use('/api/clips', apiLimiter, clipRoutes);
 app.use('/api/chat', apiLimiter, chatRoutes);
+app.use('/api/recordings', apiLimiter, recordingsRoutes);
 // app.use('/api/broadcast', apiLimiter, broadcastRoutes); // Temporarily disabled until migration runs
 
 // Health check endpoint
