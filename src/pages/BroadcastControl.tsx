@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { AudioMixerEngine } from '../services/audioMixerEngine';
 import { StreamEncoder, StreamConfig } from '../services/streamEncoder';
 import VUMeter from '../components/VUMeter';
@@ -683,25 +684,25 @@ export default function BroadcastControl() {
         {status.isLive && (
           <>
             <div className="grid grid-cols-2 gap-4">
-              <a
-                href="/host-dashboard"
+              <Link
+                to="/host-dashboard"
                 className="block p-4 bg-gray-800 rounded-lg text-center hover:bg-gray-700 transition-colors"
               >
                 <div className="text-2xl mb-2">📊</div>
                 <div className="text-sm">Full Dashboard</div>
                 <div className="text-xs text-gray-500 mt-1">View calls & documents</div>
-              </a>
-              <a
-                href="/screening-room"
+              </Link>
+              <Link
+                to="/screening-room"
                 className="block p-4 bg-gray-800 rounded-lg text-center hover:bg-gray-700 transition-colors"
               >
                 <div className="text-2xl mb-2">🔍</div>
                 <div className="text-sm">Screening Room</div>
                 <div className="text-xs text-gray-500 mt-1">Screen incoming calls</div>
-              </a>
+              </Link>
             </div>
             <p className="text-center text-xs text-gray-500 mt-4">
-              💡 Tip: Audio controls are above. Need advanced mixer features? Visit the Full Dashboard → Mixer tab.
+              💡 Tip: Audio controls are above. Mixer stays connected when you switch pages!
             </p>
           </>
         )}

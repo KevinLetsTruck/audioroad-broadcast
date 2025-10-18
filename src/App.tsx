@@ -1,12 +1,13 @@
-import { useState } from 'react'
+import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom'
+import { BroadcastProvider } from './contexts/BroadcastContext'
 import BroadcastControl from './pages/BroadcastControl'
 import HostDashboard from './pages/HostDashboard'
 import ScreeningRoom from './pages/ScreeningRoom'
 import CallNow from './pages/CallNow'
 import Recordings from './pages/Recordings'
 
-function App() {
-  const [currentPage, setCurrentPage] = useState<'broadcast' | 'host' | 'screener' | 'callnow' | 'recordings'>('broadcast')
+function AppContent() {
+  const location = useLocation()
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -17,69 +18,81 @@ function App() {
             🎙️ AudioRoad Network
           </h1>
           <div className="flex gap-4">
-            <button
-              onClick={() => setCurrentPage('broadcast')}
+            <Link
+              to="/"
               className={`px-4 py-2 rounded font-bold ${
-                currentPage === 'broadcast'
+                location.pathname === '/'
                   ? 'bg-green-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
               🎙️ Broadcast Control
-            </button>
-            <button
-              onClick={() => setCurrentPage('host')}
+            </Link>
+            <Link
+              to="/host-dashboard"
               className={`px-4 py-2 rounded ${
-                currentPage === 'host'
+                location.pathname === '/host-dashboard'
                   ? 'bg-primary-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
               Host Dashboard
-            </button>
-            <button
-              onClick={() => setCurrentPage('recordings')}
+            </Link>
+            <Link
+              to="/recordings"
               className={`px-4 py-2 rounded ${
-                currentPage === 'recordings'
+                location.pathname === '/recordings'
                   ? 'bg-primary-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
               📁 Recordings
-            </button>
-            <button
-              onClick={() => setCurrentPage('screener')}
+            </Link>
+            <Link
+              to="/screening-room"
               className={`px-4 py-2 rounded ${
-                currentPage === 'screener'
+                location.pathname === '/screening-room'
                   ? 'bg-primary-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
               Screening Room
-            </button>
-            <button
-              onClick={() => setCurrentPage('callnow')}
+            </Link>
+            <Link
+              to="/call-now"
               className={`px-4 py-2 rounded ${
-                currentPage === 'callnow'
+                location.pathname === '/call-now'
                   ? 'bg-primary-600 text-white'
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
               📞 Call Now
-            </button>
+            </Link>
           </div>
         </div>
       </nav>
 
       {/* Page Content */}
       <main>
-        {currentPage === 'broadcast' && <BroadcastControl />}
-        {currentPage === 'host' && <HostDashboard />}
-        {currentPage === 'recordings' && <Recordings />}
-        {currentPage === 'screener' && <ScreeningRoom />}
-        {currentPage === 'callnow' && <CallNow />}
+        <Routes>
+          <Route path="/" element={<BroadcastControl />} />
+          <Route path="/host-dashboard" element={<HostDashboard />} />
+          <Route path="/recordings" element={<Recordings />} />
+          <Route path="/screening-room" element={<ScreeningRoom />} />
+          <Route path="/call-now" element={<CallNow />} />
+        </Routes>
       </main>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <BroadcastProvider>
+        <AppContent />
+      </BroadcastProvider>
+    </BrowserRouter>
   )
 }
 
