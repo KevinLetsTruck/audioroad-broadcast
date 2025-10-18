@@ -78,14 +78,23 @@ export default function BroadcastControl() {
 
   /**
    * Check for existing live episode on mount
+   * Stop polling when show is live
    */
   useEffect(() => {
+    if (status.isLive) {
+      console.log('📡 [CHECK] Show is live, stopping polling');
+      return; // Don't poll when live
+    }
+    
     checkForLiveEpisode();
     
-    // Poll every 10 seconds
+    // Poll every 10 seconds (only when not live)
     const interval = setInterval(checkForLiveEpisode, 10000);
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      console.log('📡 [CHECK] Clearing polling interval');
+      clearInterval(interval);
+    };
+  }, [status.isLive]); // Re-run when isLive changes
 
   const fetchShows = async () => {
     try {
