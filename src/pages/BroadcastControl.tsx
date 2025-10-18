@@ -173,8 +173,13 @@ export default function BroadcastControl() {
         console.log('✅ Episode started');
       }
 
-      // Step 3: Initialize audio mixer (use global context)
-      console.log('🎙️ [START] Step 3: Initializing mixer...');
+      // Step 3: Initialize Twilio device (for calls)
+      console.log('🎙️ [START] Step 3: Initializing Twilio...');
+      await broadcast.initializeTwilio(`host-${Date.now()}`);
+      console.log('✅ [START] Twilio initialized');
+
+      // Step 4: Initialize audio mixer (use global context)
+      console.log('🎙️ [START] Step 4: Initializing mixer...');
       const mixerInstance = await broadcast.initializeMixer();
       console.log('✅ [START] Mixer initialized, instance:', !!mixerInstance);
 
