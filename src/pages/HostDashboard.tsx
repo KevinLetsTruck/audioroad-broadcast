@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import ChatPanel from '../components/ChatPanel';
 import { useTwilioCall } from '../hooks/useTwilioCall';
+import { useBroadcast } from '../contexts/BroadcastContext';
 
 export default function HostDashboard() {
+  const broadcast = useBroadcast(); // Access global mixer
+  
   const [activeEpisode, setActiveEpisode] = useState<any>(null);
   const [onAirCall, setOnAirCall] = useState<any>(null); // Currently on-air
   const [isLive, setIsLive] = useState(false);
@@ -12,22 +15,23 @@ export default function HostDashboard() {
   const [activeTab, setActiveTab] = useState<'calls' | 'documents'>('calls');
   const [allDocuments, setAllDocuments] = useState<any[]>([]);
   
-  // Volume state
-  const [volumes, setVolumes] = useState({
-    host: 80,
-    cohost: 0,
-    callers: {} as Record<string, number>
-  });
-  const [muted, setMuted] = useState({
-    host: false,
-    cohost: true,
-    callers: {} as Record<string, boolean>
-  });
+  // Helper to get volume from mixer or default
+  const getCallerVolume = (callId: string) => {
+    const source = broadcast.audioSources.find(s => s.id === `caller-${callId}`);
+    return source?.volume ?? 75;
+  };
+  
+  // Helper to get muted state from mixer or default
+  const getCallerMuted = (callId: string) => {
+    const source = broadcast.audioSources.find(s => s.id === `caller-${callId}`);
+    return source?.muted ?? false;
+  };
 
   // Twilio Device for host
   const {
     isReady: hostReady,
-    makeCall: connectToConference
+    makeCall: connectToConference,
+    getAudioStream
   } = useTwilioCall({
     identity: hostIdentity,
     onCallConnected: () => {
@@ -347,31 +351,43 @@ export default function HostDashboard() {
             <div className="space-y-3">
             
             {/* Host Mic Card */}
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
-                  </svg>
-                  <span className="text-sm font-semibold">Host Mic</span>
-                  <span className="text-xs text-gray-500">Vol: {volumes.host}%</span>
+            {broadcast.audioSources.find(s => s.type === 'host') && (
+              <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
+                    </svg>
+                    <span className="text-sm font-semibold">Host Mic</span>
+                    <span className="text-xs text-gray-500">Vol: {broadcast.audioSources.find(s => s.type === 'host')?.volume ?? 80}%</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const hostSource = broadcast.audioSources.find(s => s.type === 'host');
+                      if (hostSource) {
+                        broadcast.setMuted(hostSource.id, !hostSource.muted);
+                      }
+                    }}
+                    className={`px-2 py-1 rounded text-xs font-semibold ${broadcast.audioSources.find(s => s.type === 'host')?.muted ? 'bg-red-600' : 'bg-gray-700'}`}
+                  >
+                    {broadcast.audioSources.find(s => s.type === 'host')?.muted ? 'Unmute' : 'Mute'}
+                  </button>
                 </div>
-                <button
-                  onClick={() => setMuted({ ...muted, host: !muted.host })}
-                  className={`px-2 py-1 rounded text-xs font-semibold ${muted.host ? 'bg-red-600' : 'bg-gray-700'}`}
-                >
-                  {muted.host ? 'Unmute' : 'Mute'}
-                </button>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="100" 
+                  value={broadcast.audioSources.find(s => s.type === 'host')?.volume ?? 80}
+                  onChange={(e) => {
+                    const hostSource = broadcast.audioSources.find(s => s.type === 'host');
+                    if (hostSource) {
+                      broadcast.setVolume(hostSource.id, parseInt(e.target.value));
+                    }
+                  }}
+                  className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                />
               </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="100" 
-                value={volumes.host}
-                onChange={(e) => setVolumes({ ...volumes, host: parseInt(e.target.value) })}
-                className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-              />
-            </div>
+            )}
 
             {/* Co-host Card */}
             <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 opacity-60">
@@ -389,9 +405,9 @@ export default function HostDashboard() {
             {/* Caller Cards */}
             {approvedCalls.map((call) => {
               const isOnAir = onAirCall && onAirCall.id === call.id;
-              // Initialize volume at 75% and unmuted for new callers
-              const callVolume = volumes.callers[call.id] ?? 75;
-              const callMuted = muted.callers[call.id] ?? false;
+              // Get volume from mixer
+              const callVolume = getCallerVolume(call.id);
+              const callMuted = getCallerMuted(call.id);
               
               return (
                 <div
@@ -415,10 +431,9 @@ export default function HostDashboard() {
                       {isOnAir ? (
                         <>
                           <button
-                            onClick={() => setMuted({ 
-                              ...muted, 
-                              callers: { ...muted.callers, [call.id]: !callMuted }
-                            })}
+                            onClick={() => {
+                              broadcast.setMuted(`caller-${call.id}`, !callMuted);
+                            }}
                             className={`px-2 py-1 rounded text-xs font-semibold ${callMuted ? 'bg-red-600' : 'bg-gray-700'}`}
                           >
                             {callMuted ? 'Unmute' : 'Mute'}
@@ -436,15 +451,6 @@ export default function HostDashboard() {
                         <button
                           onClick={async () => {
                             setOnAirCall(call);
-                            // Initialize caller volume to 75% when taking call
-                            setVolumes({
-                              ...volumes,
-                              callers: { ...volumes.callers, [call.id]: 75 }
-                            });
-                            setMuted({
-                              ...muted,
-                              callers: { ...muted.callers, [call.id]: false }
-                            });
                             
                             if (hostReady && activeEpisode) {
                               try {
@@ -453,6 +459,16 @@ export default function HostDashboard() {
                                   episodeId: activeEpisode.id,
                                   role: 'host'
                                 });
+                                
+                                // Add caller to mixer if mixer is running
+                                if (broadcast.mixer) {
+                                  const audioStream = getAudioStream();
+                                  if (audioStream) {
+                                    const callerName = call.caller?.name || 'Caller';
+                                    broadcast.mixer.addCallerAudio(call.id, callerName, audioStream);
+                                    console.log('🎚️ Added caller to mixer:', callerName);
+                                  }
+                                }
                               } catch (error) {
                                 console.error('Error connecting:', error);
                               }
@@ -475,10 +491,9 @@ export default function HostDashboard() {
                         min="0" 
                         max="100" 
                         value={callVolume}
-                        onChange={(e) => setVolumes({
-                          ...volumes,
-                          callers: { ...volumes.callers, [call.id]: parseInt(e.target.value) }
-                        })}
+                        onChange={(e) => {
+                          broadcast.setVolume(`caller-${call.id}`, parseInt(e.target.value));
+                        }}
                         className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                       />
                       <span className="text-xs text-gray-500 w-8 text-right">{callVolume}%</span>
