@@ -419,6 +419,52 @@ model ShowMetrics {
 }
 
 // ============================================
+// BROADCASTING & STREAMING
+// ============================================
+
+model BroadcastConfig {
+  id          String    @id @default(cuid())
+  showId      String    @unique
+  
+  // Radio.co / Shoutcast server config
+  serverUrl   String    // e.g., "pear.radio.co"
+  port        Int       // e.g., 5568
+  password    String    // Stream password (encrypted in production)
+  mountPoint  String?   // Optional mount point
+  streamName  String?   // Stream display name
+  genre       String?   // Stream genre
+  bitrate     Int       @default(256) // 128 or 256
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([showId])
+}
+
+model BroadcastSession {
+  id              String    @id @default(cuid())
+  episodeId       String
+  
+  // Session timing
+  startTime       DateTime
+  endTime         DateTime?
+  
+  // Streaming stats
+  bytesStreamed   BigInt    @default(0)
+  recordingUrl    String?   // Local recording URL if saved
+  
+  // Connection quality
+  disconnections  Int       @default(0)
+  avgBitrate      Int?      // Average bitrate achieved
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([episodeId])
+  @@index([startTime])
+}
+
+// ============================================
 // SYSTEM LOGS & DEBUGGING
 // ============================================
 

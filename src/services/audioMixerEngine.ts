@@ -1,0 +1,469 @@
+/**
+ * Audio Mixer Engine
+ * 
+ * Core service for mixing multiple audio sources (mic, callers, soundboard)
+ * and outputting to Radio.co stream + local recording.
+ * 
+ * Chrome-optimized using Web Audio API.
+ */
+
+export interface AudioSource {
+  id: string;
+  type: 'host' | 'caller' | 'soundboard' | 'file';
+  label: string;
+  stream?: MediaStream;
+  gainNode?: GainNode;
+  analyserNode?: AnalyserNode;
+  sourceNode?: MediaStreamAudioSourceNode | AudioBufferSourceNode;
+  volume: number; // 0-100
+  muted: boolean;
+}
+
+export interface MixerConfig {
+  sampleRate: number;
+  bitrate: number;
+  outputChannels: number;
+}
+
+type LevelMeterCallback = (sourceId: string, level: number) => void;
+
+export class AudioMixerEngine {
+  private audioContext: AudioContext | null = null;
+  private sources: Map<string, AudioSource> = new Map();
+  private masterGain: GainNode | null = null;
+  private masterAnalyser: AnalyserNode | null = null;
+  private destination: MediaStreamAudioDestinationNode | null = null;
+  private compressor: DynamicsCompressorNode | null = null;
+  
+  // Recording
+  private mediaRecorder: MediaRecorder | null = null;
+  private recordedChunks: Blob[] = [];
+  private isRecording = false;
+  
+  // Monitoring
+  private animationFrameId: number | null = null;
+  private levelMeterCallback: LevelMeterCallback | null = null;
+  
+  // Config
+  private config: MixerConfig = {
+    sampleRate: 48000,
+    bitrate: 256,
+    outputChannels: 2
+  };
+
+  constructor(config?: Partial<MixerConfig>) {
+    if (config) {
+      this.config = { ...this.config, ...config };
+    }
+  }
+
+  /**
+   * Initialize the audio mixer
+   */
+  async initialize(): Promise<void> {
+    try {
+      // Create audio context with optimal settings for Chrome
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+        sampleRate: this.config.sampleRate,
+        latencyHint: 'interactive'
+      });
+
+      // Create master gain node (for master volume control)
+      this.masterGain = this.audioContext.createGain();
+      this.masterGain.gain.value = 1.0;
+
+      // Create compressor to prevent clipping
+      this.compressor = this.audioContext.createDynamicsCompressor();
+      this.compressor.threshold.value = -24;
+      this.compressor.knee.value = 30;
+      this.compressor.ratio.value = 12;
+      this.compressor.attack.value = 0.003;
+      this.compressor.release.value = 0.25;
+
+      // Create master analyser for output VU meter
+      this.masterAnalyser = this.audioContext.createAnalyser();
+      this.masterAnalyser.fftSize = 2048;
+      this.masterAnalyser.smoothingTimeConstant = 0.8;
+
+      // Create destination for output stream
+      this.destination = this.audioContext.createMediaStreamDestination();
+
+      // Connect: masterGain -> compressor -> masterAnalyser -> destination
+      this.masterGain.connect(this.compressor);
+      this.compressor.connect(this.masterAnalyser);
+      this.masterAnalyser.connect(this.destination);
+
+      console.log('🎚️ Audio Mixer initialized');
+      
+      // Start level monitoring
+      this.startLevelMonitoring();
+    } catch (error) {
+      console.error('Failed to initialize audio mixer:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Connect microphone as a source
+   */
+  async connectMicrophone(): Promise<string> {
+    if (!this.audioContext) {
+      throw new Error('Audio context not initialized');
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: false, // We'll handle gain manually
+          sampleRate: this.config.sampleRate
+        }
+      });
+
+      const sourceId = 'host-mic';
+      return this.addSource({
+        id: sourceId,
+        type: 'host',
+        label: 'Host Microphone',
+        stream,
+        volume: 80,
+        muted: false
+      });
+    } catch (error) {
+      console.error('Failed to access microphone:', error);
+      throw new Error('Microphone access denied. Please enable microphone permissions.');
+    }
+  }
+
+  /**
+   * Add a Twilio call audio stream as a source
+   */
+  addCallerAudio(callId: string, callerName: string, stream: MediaStream): string {
+    if (!this.audioContext) {
+      throw new Error('Audio context not initialized');
+    }
+
+    const sourceId = `caller-${callId}`;
+    return this.addSource({
+      id: sourceId,
+      type: 'caller',
+      label: callerName,
+      stream,
+      volume: 75,
+      muted: false
+    });
+  }
+
+  /**
+   * Add any audio source (generic method)
+   */
+  private addSource(config: AudioSource): string {
+    if (!this.audioContext || !this.masterGain) {
+      throw new Error('Audio context not initialized');
+    }
+
+    // Remove existing source if it exists
+    if (this.sources.has(config.id)) {
+      this.removeSource(config.id);
+    }
+
+    // Create audio nodes for this source
+    const gainNode = this.audioContext.createGain();
+    gainNode.gain.value = config.muted ? 0 : config.volume / 100;
+
+    const analyserNode = this.audioContext.createAnalyser();
+    analyserNode.fftSize = 2048;
+    analyserNode.smoothingTimeConstant = 0.8;
+
+    // Create source node from stream
+    let sourceNode: MediaStreamAudioSourceNode | AudioBufferSourceNode;
+    if (config.stream) {
+      sourceNode = this.audioContext.createMediaStreamSource(config.stream);
+    } else {
+      throw new Error('Stream is required for audio source');
+    }
+
+    // Connect: source -> gain -> analyser -> master
+    sourceNode.connect(gainNode);
+    gainNode.connect(analyserNode);
+    analyserNode.connect(this.masterGain);
+
+    // Store source
+    const source: AudioSource = {
+      ...config,
+      gainNode,
+      analyserNode,
+      sourceNode
+    };
+
+    this.sources.set(config.id, source);
+    console.log(`➕ Added audio source: ${config.label} (${config.id})`);
+
+    return config.id;
+  }
+
+  /**
+   * Remove an audio source
+   */
+  removeSource(sourceId: string): void {
+    const source = this.sources.get(sourceId);
+    if (!source) return;
+
+    // Disconnect all nodes
+    try {
+      source.sourceNode?.disconnect();
+      source.gainNode?.disconnect();
+      source.analyserNode?.disconnect();
+
+      // Stop stream tracks if it's a MediaStream
+      if (source.stream) {
+        source.stream.getTracks().forEach(track => track.stop());
+      }
+    } catch (error) {
+      console.warn('Error disconnecting source:', error);
+    }
+
+    this.sources.delete(sourceId);
+    console.log(`➖ Removed audio source: ${sourceId}`);
+  }
+
+  /**
+   * Set volume for a specific source (0-100)
+   */
+  setVolume(sourceId: string, volume: number): void {
+    const source = this.sources.get(sourceId);
+    if (!source || !source.gainNode) return;
+
+    const clampedVolume = Math.max(0, Math.min(100, volume));
+    source.volume = clampedVolume;
+
+    if (!source.muted) {
+      source.gainNode.gain.value = clampedVolume / 100;
+    }
+  }
+
+  /**
+   * Set master output volume (0-100)
+   */
+  setMasterVolume(volume: number): void {
+    if (!this.masterGain) return;
+
+    const clampedVolume = Math.max(0, Math.min(100, volume));
+    this.masterGain.gain.value = clampedVolume / 100;
+  }
+
+  /**
+   * Mute/unmute a source
+   */
+  setMuted(sourceId: string, muted: boolean): void {
+    const source = this.sources.get(sourceId);
+    if (!source || !source.gainNode) return;
+
+    source.muted = muted;
+    source.gainNode.gain.value = muted ? 0 : source.volume / 100;
+  }
+
+  /**
+   * Get audio level for a source (0-100)
+   */
+  getLevel(sourceId: string): number {
+    const source = this.sources.get(sourceId);
+    if (!source || !source.analyserNode) return 0;
+
+    const dataArray = new Uint8Array(source.analyserNode.frequencyBinCount);
+    source.analyserNode.getByteTimeDomainData(dataArray);
+
+    // Calculate RMS (Root Mean Square) level
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) {
+      const normalized = (dataArray[i] - 128) / 128;
+      sum += normalized * normalized;
+    }
+    const rms = Math.sqrt(sum / dataArray.length);
+    return Math.min(100, rms * 100 * 2); // Scale to 0-100
+  }
+
+  /**
+   * Get master output level (0-100)
+   */
+  getMasterLevel(): number {
+    if (!this.masterAnalyser) return 0;
+
+    const dataArray = new Uint8Array(this.masterAnalyser.frequencyBinCount);
+    this.masterAnalyser.getByteTimeDomainData(dataArray);
+
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) {
+      const normalized = (dataArray[i] - 128) / 128;
+      sum += normalized * normalized;
+    }
+    const rms = Math.sqrt(sum / dataArray.length);
+    return Math.min(100, rms * 100 * 2);
+  }
+
+  /**
+   * Start monitoring audio levels
+   */
+  private startLevelMonitoring(): void {
+    const monitor = () => {
+      if (!this.levelMeterCallback) {
+        this.animationFrameId = requestAnimationFrame(monitor);
+        return;
+      }
+
+      // Get levels for all sources
+      this.sources.forEach((source) => {
+        const level = this.getLevel(source.id);
+        this.levelMeterCallback!(source.id, level);
+      });
+
+      // Get master level
+      const masterLevel = this.getMasterLevel();
+      this.levelMeterCallback!('master', masterLevel);
+
+      this.animationFrameId = requestAnimationFrame(monitor);
+    };
+
+    monitor();
+  }
+
+  /**
+   * Set callback for level meter updates
+   */
+  onLevelUpdate(callback: LevelMeterCallback): void {
+    this.levelMeterCallback = callback;
+  }
+
+  /**
+   * Start recording the mixed output
+   */
+  startRecording(): void {
+    if (!this.destination || this.isRecording) return;
+
+    try {
+      const stream = this.destination.stream;
+      
+      // Use highest quality settings
+      const options: MediaRecorderOptions = {
+        mimeType: 'audio/webm;codecs=opus',
+        audioBitsPerSecond: 256000
+      };
+
+      this.mediaRecorder = new MediaRecorder(stream, options);
+      this.recordedChunks = [];
+
+      this.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          this.recordedChunks.push(event.data);
+        }
+      };
+
+      this.mediaRecorder.start(1000); // Collect data every second
+      this.isRecording = true;
+      console.log('🔴 Recording started');
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Stop recording and download the file
+   */
+  stopRecording(): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      if (!this.mediaRecorder || !this.isRecording) {
+        reject(new Error('Not currently recording'));
+        return;
+      }
+
+      this.mediaRecorder.onstop = () => {
+        const blob = new Blob(this.recordedChunks, { type: 'audio/webm' });
+        this.isRecording = false;
+        console.log('⏹️ Recording stopped');
+        resolve(blob);
+      };
+
+      this.mediaRecorder.stop();
+    });
+  }
+
+  /**
+   * Download recording as file
+   */
+  async downloadRecording(filename?: string): Promise<void> {
+    const blob = await this.stopRecording();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || `audioroad-${new Date().toISOString()}.webm`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Get the mixed output stream (for streaming to Radio.co)
+   */
+  getOutputStream(): MediaStream | null {
+    return this.destination?.stream || null;
+  }
+
+  /**
+   * Get all current sources
+   */
+  getSources(): AudioSource[] {
+    return Array.from(this.sources.values());
+  }
+
+  /**
+   * Get a specific source
+   */
+  getSource(sourceId: string): AudioSource | undefined {
+    return this.sources.get(sourceId);
+  }
+
+  /**
+   * Check if recording
+   */
+  getIsRecording(): boolean {
+    return this.isRecording;
+  }
+
+  /**
+   * Clean up and destroy mixer
+   */
+  async destroy(): Promise<void> {
+    // Stop monitoring
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+    }
+
+    // Stop recording if active
+    if (this.isRecording) {
+      try {
+        await this.stopRecording();
+      } catch (error) {
+        console.warn('Error stopping recording:', error);
+      }
+    }
+
+    // Remove all sources
+    this.sources.forEach((_, id) => this.removeSource(id));
+    this.sources.clear();
+
+    // Close audio context
+    if (this.audioContext && this.audioContext.state !== 'closed') {
+      await this.audioContext.close();
+    }
+
+    this.audioContext = null;
+    this.masterGain = null;
+    this.masterAnalyser = null;
+    this.destination = null;
+    this.compressor = null;
+
+    console.log('🧹 Audio Mixer destroyed');
+  }
+}
+

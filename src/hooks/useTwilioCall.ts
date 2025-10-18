@@ -223,6 +223,24 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  /**
+   * Get the remote audio stream from the active call
+   * This allows the mixer to tap into caller audio
+   */
+  const getAudioStream = (): MediaStream | null => {
+    if (!call) return null;
+
+    try {
+      // Get the remote stream from the Twilio call
+      // @ts-ignore - Twilio SDK internal API
+      const remoteStream = call.getRemoteStream();
+      return remoteStream || null;
+    } catch (error) {
+      console.warn('Could not get remote stream:', error);
+      return null;
+    }
+  };
+
   return {
     device,
     call,
@@ -235,7 +253,8 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
     makeCall,
     answerCall,
     hangUp,
-    toggleMute
+    toggleMute,
+    getAudioStream
   };
 }
 

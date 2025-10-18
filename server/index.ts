@@ -17,6 +17,7 @@ import analysisRoutes from './routes/analysis.js';
 import audioAssetRoutes from './routes/audio-assets.js';
 import clipRoutes from './routes/clips.js';
 import chatRoutes from './routes/chat.js';
+import broadcastRoutes from './routes/broadcast.js';
 
 // Import services
 import { initializeSocketHandlers } from './services/socketService.js';
@@ -87,6 +88,7 @@ app.use('/api/analysis', apiLimiter, analysisRoutes);
 app.use('/api/audio-assets', apiLimiter, audioAssetRoutes);
 app.use('/api/clips', apiLimiter, clipRoutes);
 app.use('/api/chat', apiLimiter, chatRoutes);
+app.use('/api/broadcast', apiLimiter, broadcastRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req: Request, res: Response) => {

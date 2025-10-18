@@ -31,6 +31,7 @@
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
     "fluent-ffmpeg": "^2.1.2",
+    "lamejs": "^1.2.1",
     "multer": "^2.0.2",
     "pdf-parse": "^2.4.3",
     "react": "^19.1.1-beta-02802f085b-20240712",

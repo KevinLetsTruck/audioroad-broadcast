@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import ChatPanel from '../components/ChatPanel';
+import BroadcastMixer from '../components/BroadcastMixer';
 import { useTwilioCall } from '../hooks/useTwilioCall';
 
 export default function HostDashboard() {
@@ -9,7 +10,7 @@ export default function HostDashboard() {
   const [isLive, setIsLive] = useState(false);
   const [hostIdentity] = useState(`host-${Date.now()}`);
   const [approvedCalls, setApprovedCalls] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'calls' | 'documents'>('calls');
+  const [activeTab, setActiveTab] = useState<'calls' | 'documents' | 'mixer'>('calls');
   const [allDocuments, setAllDocuments] = useState<any[]>([]);
   
   // Volume state
@@ -318,6 +319,14 @@ export default function HostDashboard() {
             >
               Documents
             </button>
+            <button
+              onClick={() => setActiveTab('mixer')}
+              className={`px-3 py-1 rounded text-xs font-semibold ${
+                activeTab === 'mixer' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              🎚️ Mixer
+            </button>
           </div>
 
           {!isLive && activeEpisode && (
@@ -494,7 +503,7 @@ export default function HostDashboard() {
             })}
 
           </div>
-          ) : (
+          ) : activeTab === 'documents' ? (
             /* Documents Tab - Show AI Analysis */
             <div className="space-y-4">
               <h3 className="text-lg font-semibold mb-4">Caller Documents & AI Analysis</h3>
@@ -576,6 +585,17 @@ export default function HostDashboard() {
                     </div>
                   );
                 })
+              )}
+            </div>
+          ) : (
+            /* Mixer Tab - Audio Mixing & Broadcast Control */
+            <div>
+              {activeEpisode ? (
+                <BroadcastMixer episodeId={activeEpisode.id} />
+              ) : (
+                <div className="text-center py-16 text-gray-400">
+                  <p>Start a live episode to use the mixer</p>
+                </div>
               )}
             </div>
           )}
