@@ -30,7 +30,7 @@ interface BroadcastContextType {
   levels: Record<string, number>;
   
   // Actions
-  initializeMixer: () => Promise<void>;
+  initializeMixer: () => Promise<AudioMixerEngine>;
   destroyMixer: () => Promise<void>;
   setVolume: (sourceId: string, volume: number) => void;
   setMuted: (sourceId: string, muted: boolean) => void;
@@ -62,10 +62,10 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     setState(newState);
   };
 
-  const initializeMixer = async () => {
+  const initializeMixer = async (): Promise<AudioMixerEngine> => {
     if (mixer) {
-      console.log('⚠️ [CONTEXT] Mixer already initialized');
-      return; // Already initialized
+      console.log('⚠️ [CONTEXT] Mixer already initialized, returning existing');
+      return mixer; // Already initialized
     }
 
     console.log('🎚️ [CONTEXT] Creating new mixer...');
@@ -87,6 +87,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     setAudioSources(newMixer.getSources());
 
     console.log('✅ [CONTEXT] Global mixer initialized and stored in state');
+    return newMixer; // Return the mixer instance!
   };
 
   const destroyMixer = async () => {

@@ -134,35 +134,33 @@ export default function BroadcastControl() {
 
       // Step 3: Initialize audio mixer (use global context)
       console.log('🎙️ [START] Step 3: Initializing mixer...');
-      await broadcast.initializeMixer();
-      console.log('✅ [START] Mixer initialized');
+      const mixerInstance = await broadcast.initializeMixer();
+      console.log('✅ [START] Mixer initialized, instance:', !!mixerInstance);
 
       // Set up level monitoring
-      if (broadcast.mixer) {
-        console.log('🎙️ [START] Step 4: Setting up level monitoring...');
-        broadcast.mixer.onLevelUpdate((sourceId, level) => {
-          if (sourceId === 'master') {
-            setMasterLevel(level);
-          }
-        });
+      console.log('🎙️ [START] Step 4: Setting up level monitoring...');
+      mixerInstance.onLevelUpdate((sourceId, level) => {
+        if (sourceId === 'master') {
+          setMasterLevel(level);
+        }
+      });
 
-        // Step 4: Connect microphone
-        console.log('🎙️ [START] Step 5: Connecting microphone...');
-        await broadcast.mixer.connectMicrophone();
-        console.log('✅ [START] Microphone connected');
-      } else {
-        throw new Error('Mixer failed to initialize');
-      }
+      // Step 5: Connect microphone
+      console.log('🎙️ [START] Step 5: Connecting microphone...');
+      await mixerInstance.connectMicrophone();
+      console.log('✅ [START] Microphone connected');
 
-      // Step 5: Start recording (if enabled)
-      if (autoRecord && broadcast.mixer) {
-        broadcast.mixer.startRecording();
+      // Step 6: Start recording (if enabled)
+      if (autoRecord) {
+        console.log('🎙️ [START] Step 6: Starting recording...');
+        mixerInstance.startRecording();
         setIsRecording(true);
-        console.log('✅ Recording started');
+        console.log('✅ [START] Recording started');
       }
 
-      // Step 6: Start Radio.co stream (if enabled and password provided)
-      if (autoStream && radioCoPassword && broadcast.mixer) {
+      // Step 7: Start Radio.co stream (if enabled and password provided)
+      if (autoStream && radioCoPassword) {
+        console.log('🎙️ [START] Step 7: Starting Radio.co stream...');
         const encoder = new StreamEncoder();
         const streamConfig: StreamConfig = {
           serverUrl: 'pear.radio.co',
@@ -175,12 +173,12 @@ export default function BroadcastControl() {
         };
 
         encoder.configure(streamConfig);
-        const outputStream = broadcast.mixer.getOutputStream();
+        const outputStream = mixerInstance.getOutputStream();
         if (outputStream) {
           await encoder.startStreaming(outputStream);
           encoderRef.current = encoder;
           setIsStreaming(true);
-          console.log('✅ Streaming to Radio.co');
+          console.log('✅ [START] Streaming to Radio.co');
         }
       }
 
