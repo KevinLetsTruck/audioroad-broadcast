@@ -3,10 +3,9 @@ import BroadcastControl from './pages/BroadcastControl'
 import HostDashboard from './pages/HostDashboard'
 import ScreeningRoom from './pages/ScreeningRoom'
 import CallNow from './pages/CallNow'
-import ShowSetup from './pages/ShowSetup'
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<'broadcast' | 'host' | 'screener' | 'callnow' | 'setup'>('broadcast')
+  const [currentPage, setCurrentPage] = useState<'broadcast' | 'host' | 'screener' | 'callnow'>('broadcast')
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -26,16 +25,6 @@ function App() {
               }`}
             >
               🎙️ Broadcast Control
-            </button>
-            <button
-              onClick={() => setCurrentPage('setup')}
-              className={`px-4 py-2 rounded ${
-                currentPage === 'setup'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              🎬 Show Setup
             </button>
             <button
               onClick={() => setCurrentPage('host')}
@@ -74,7 +63,6 @@ function App() {
       {/* Page Content */}
       <main>
         {currentPage === 'broadcast' && <BroadcastControl />}
-        {currentPage === 'setup' && <ShowSetup />}
         {currentPage === 'host' && <HostDashboard />}
         {currentPage === 'screener' && <ScreeningRoom />}
         {currentPage === 'callnow' && <CallNow />}
