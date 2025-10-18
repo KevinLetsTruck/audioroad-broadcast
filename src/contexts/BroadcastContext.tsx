@@ -53,6 +53,15 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
 
   const mixerRef = useRef<AudioMixerEngine | null>(null);
   const encoderRef = useRef<StreamEncoder | null>(null);
+  
+  // Wrapper for setState with logging
+  const setStateWithLogging = (newState: BroadcastState) => {
+    console.log('📝 [CONTEXT] State update:', { 
+      from: { isLive: state.isLive, episodeId: state.episodeId },
+      to: { isLive: newState.isLive, episodeId: newState.episodeId }
+    });
+    setState(newState);
+  };
 
   const initializeMixer = async () => {
     if (mixerRef.current) return; // Already initialized
@@ -78,6 +87,9 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
   };
 
   const destroyMixer = async () => {
+    console.log('🧹 [CONTEXT] destroyMixer called');
+    console.trace('Destroy mixer called from:'); // Show stack trace
+    
     if (mixerRef.current) {
       await mixerRef.current.destroy();
       mixerRef.current = null;
@@ -88,6 +100,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     }
     setAudioSources([]);
     setLevels({});
+    console.log('✅ [CONTEXT] Mixer destroyed');
   };
 
   const setVolume = (sourceId: string, volume: number) => {
@@ -104,7 +117,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
 
   const value: BroadcastContextType = {
     state,
-    setState,
+    setState: setStateWithLogging,
     mixer: mixerRef.current,
     encoder: encoderRef.current,
     audioSources,

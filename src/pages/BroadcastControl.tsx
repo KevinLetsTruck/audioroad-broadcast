@@ -113,7 +113,8 @@ export default function BroadcastControl() {
     setErrorMessage('');
 
     try {
-      console.log('🎙️ Starting broadcast...');
+      console.log('🎙️ [START] Beginning broadcast sequence...');
+      console.log('🎙️ [START] Current state:', { isLive: status.isLive, episodeId: status.episodeId });
 
       // Step 1: Get or create today's episode (use existing if available)
       let episode;
@@ -132,11 +133,13 @@ export default function BroadcastControl() {
       }
 
       // Step 3: Initialize audio mixer (use global context)
+      console.log('🎙️ [START] Step 3: Initializing mixer...');
       await broadcast.initializeMixer();
-      console.log('✅ Mixer initialized');
+      console.log('✅ [START] Mixer initialized');
 
       // Set up level monitoring
       if (broadcast.mixer) {
+        console.log('🎙️ [START] Step 4: Setting up level monitoring...');
         broadcast.mixer.onLevelUpdate((sourceId, level) => {
           if (sourceId === 'master') {
             setMasterLevel(level);
@@ -144,8 +147,11 @@ export default function BroadcastControl() {
         });
 
         // Step 4: Connect microphone
+        console.log('🎙️ [START] Step 5: Connecting microphone...');
         await broadcast.mixer.connectMicrophone();
-        console.log('✅ Microphone connected');
+        console.log('✅ [START] Microphone connected');
+      } else {
+        throw new Error('Mixer failed to initialize');
       }
 
       // Step 5: Start recording (if enabled)
@@ -194,13 +200,16 @@ export default function BroadcastControl() {
       console.log('🎉 SHOW STARTED! You are LIVE!');
 
     } catch (error: any) {
-      console.error('❌ Failed to start show:', error);
+      console.error('❌ [START] Failed to start show:', error);
+      console.error('❌ [START] Error stack:', error.stack);
       setErrorMessage(error.message || 'Failed to start show');
       
       // Cleanup on error
+      console.log('🧹 [START] Cleaning up after error...');
       await broadcast.destroyMixer();
     } finally {
       setIsStarting(false);
+      console.log('🏁 [START] Start show sequence finished');
     }
   };
 
@@ -209,10 +218,19 @@ export default function BroadcastControl() {
    * Cleans up EVERYTHING automatically
    */
   const handleEndShow = async () => {
-    if (!status.episodeId) return;
+    if (!status.episodeId) {
+      console.warn('⚠️ [END] No episode to end');
+      return;
+    }
+    
+    if (!status.isLive) {
+      console.warn('⚠️ [END] Not currently live');
+      return;
+    }
 
     try {
-      console.log('📴 Ending show...');
+      console.log('📴 [END] Ending show...');
+      console.log('📴 [END] Episode ID:', status.episodeId);
 
       // Stop duration timer
       if (durationIntervalRef.current) {
