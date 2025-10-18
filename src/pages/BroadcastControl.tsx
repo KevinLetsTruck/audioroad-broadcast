@@ -489,7 +489,26 @@ export default function BroadcastControl() {
                     <h2 className="text-3xl font-bold">Episode Live</h2>
                   </div>
                   <p className="text-xl text-gray-300 mb-2">{status.showName}</p>
-                  <p className="text-gray-400">Connect audio mixer to start broadcasting</p>
+                  <p className="text-gray-400 mb-4">This episode was started earlier</p>
+                  <button
+                    onClick={async () => {
+                      // End the old episode
+                      await fetch(`/api/episodes/${status.episodeId}/end`, { method: 'PATCH' });
+                      // Reset state
+                      broadcast.setState({
+                        isLive: false,
+                        episodeId: null,
+                        showId: null,
+                        showName: '',
+                        startTime: null,
+                        selectedShow: null
+                      });
+                      console.log('✅ Old episode ended');
+                    }}
+                    className="px-6 py-2 bg-red-600 hover:bg-red-700 rounded text-sm font-semibold mb-4"
+                  >
+                    End Old Episode & Start Fresh
+                  </button>
                 </div>
               ) : (
                 <div className="text-center mb-6">
@@ -575,32 +594,32 @@ export default function BroadcastControl() {
                 )}
               </div>
 
-              {/* BIG START BUTTON */}
-              <button
-                onClick={handleStartShow}
-                disabled={isStarting || !selectedShow}
-                className="w-full py-6 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded-lg font-bold text-2xl transition-all transform hover:scale-105 disabled:scale-100"
-              >
-                {isStarting 
-                  ? '⏳ Starting...' 
-                  : status.episodeId 
-                  ? '🎙️ CONNECT MIXER - START BROADCASTING!'
-                  : selectedShow
-                  ? `🎙️ START ${selectedShow.name.toUpperCase()} - GO LIVE!`
-                  : '⏳ Loading...'}
-              </button>
+              {/* BIG START BUTTON - Only show if NO old episode */}
+              {!status.episodeId && (
+                <>
+                  <button
+                    onClick={handleStartShow}
+                    disabled={isStarting || !selectedShow}
+                    className="w-full py-6 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded-lg font-bold text-2xl transition-all transform hover:scale-105 disabled:scale-100"
+                  >
+                    {isStarting 
+                      ? '⏳ Starting...' 
+                      : selectedShow
+                      ? `🎙️ START ${selectedShow.name.toUpperCase()} - GO LIVE!`
+                      : '⏳ Loading...'}
+                  </button>
 
-              {errorMessage && (
-                <div className="mt-4 p-3 bg-red-900/50 border border-red-600 rounded text-sm">
-                  ❌ {errorMessage}
-                </div>
+                  {errorMessage && (
+                    <div className="mt-4 p-3 bg-red-900/50 border border-red-600 rounded text-sm">
+                      ❌ {errorMessage}
+                    </div>
+                  )}
+
+                  <p className="text-center text-xs text-gray-500 mt-4">
+                    This will auto-create today's episode, connect your mic, and start broadcasting
+                  </p>
+                </>
               )}
-
-              <p className="text-center text-xs text-gray-500 mt-4">
-                {status.episodeId 
-                  ? 'Episode is running. This will connect your mic and start the audio mixer.'
-                  : 'This will auto-create today\'s episode, connect your mic, and start broadcasting'}
-              </p>
             </>
           ) : (
             /* LIVE STATE */
