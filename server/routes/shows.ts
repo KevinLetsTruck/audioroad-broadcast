@@ -51,51 +51,51 @@ router.post('/', async (req: Request, res: Response) => {
 router.post('/seed', async (req: Request, res: Response) => {
   try {
     const defaultShows = [
-      {
-        name: 'Industry Insights',
-        slug: 'industry-insights',
-        hostId: 'default-host',
-        hostName: 'AudioRoad Host',
-        description: 'Deep dive into trucking industry trends, regulations, and business insights',
-        schedule: { days: ['monday'], time: '15:00', duration: 180, timezone: 'America/New_York' },
-        color: '#3b82f6'
-      },
-      {
-        name: 'The PowerHour',
-        slug: 'the-powerhour',
-        hostId: 'default-host',
-        hostName: 'AudioRoad Host',
-        description: 'High-energy discussion on trucking business and success strategies',
-        schedule: { days: ['tuesday'], time: '15:00', duration: 180, timezone: 'America/New_York' },
-        color: '#f59e0b'
-      },
-      {
-        name: 'DestinationHealth',
-        slug: 'destinationhealth',
-        hostId: 'default-host',
-        hostName: 'AudioRoad Host',
-        description: 'Health, wellness, and medical topics for professional drivers',
-        schedule: { days: ['wednesday'], time: '15:00', duration: 180, timezone: 'America/New_York' },
-        color: '#10b981'
-      },
-      {
-        name: 'Trucking Technology and Efficiency',
-        slug: 'trucking-tech',
-        hostId: 'default-host',
-        hostName: 'AudioRoad Host',
-        description: 'Latest technology, tools, and efficiency tips for modern trucking',
-        schedule: { days: ['thursday'], time: '15:00', duration: 180, timezone: 'America/New_York' },
-        color: '#8b5cf6'
-      },
-      {
-        name: 'Rolling Toe',
-        slug: 'rolling-toe',
-        hostId: 'rolling-toe-host',
-        hostName: 'Rolling Toe',
-        description: 'Evening conversations with Rolling Toe',
-        schedule: { days: ['thursday'], time: '19:00', duration: 180, timezone: 'America/New_York' },
-        color: '#ef4444'
-      }
+  {
+    name: 'Industry Insights',
+    slug: 'industry-insights',
+    hostId: 'default-host',
+    hostName: 'AudioRoad Host',
+    description: 'Deep dive into trucking industry trends, regulations, and business insights',
+    schedule: { days: ['monday'], time: '08:00', duration: 180, timezone: 'America/Los_Angeles' },
+    color: '#3b82f6'
+  },
+  {
+    name: 'The PowerHour',
+    slug: 'the-powerhour',
+    hostId: 'default-host',
+    hostName: 'AudioRoad Host',
+    description: 'High-energy discussion on trucking business and success strategies',
+    schedule: { days: ['tuesday'], time: '08:00', duration: 180, timezone: 'America/Los_Angeles' },
+    color: '#f59e0b'
+  },
+  {
+    name: 'DestinationHealth',
+    slug: 'destinationhealth',
+    hostId: 'default-host',
+    hostName: 'AudioRoad Host',
+    description: 'Health, wellness, and medical topics for professional drivers',
+    schedule: { days: ['wednesday'], time: '08:00', duration: 180, timezone: 'America/Los_Angeles' },
+    color: '#10b981'
+  },
+  {
+    name: 'Trucking Technology and Efficiency',
+    slug: 'trucking-tech',
+    hostId: 'default-host',
+    hostName: 'AudioRoad Host',
+    description: 'Latest technology, tools, and efficiency tips for modern trucking',
+    schedule: { days: ['thursday'], time: '08:00', duration: 180, timezone: 'America/Los_Angeles' },
+    color: '#8b5cf6'
+  },
+  {
+    name: 'Rolling Toe',
+    slug: 'rolling-toe',
+    hostId: 'rolling-toe-host',
+    hostName: 'Rolling Toe',
+    description: 'Evening conversations with Rolling Toe',
+    schedule: { days: ['thursday'], time: '10:00', duration: 180, timezone: 'America/Los_Angeles' },
+    color: '#ef4444'
+  }
     ];
 
     const created = [];

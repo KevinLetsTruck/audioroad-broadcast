@@ -17,9 +17,9 @@ const shows = [
     description: 'Deep dive into trucking industry trends, regulations, and business insights',
     schedule: {
       days: ['monday'],
-      time: '15:00', // 3 PM
+      time: '08:00', // 8 AM PT
       duration: 180, // 3 hours
-      timezone: 'America/New_York'
+      timezone: 'America/Los_Angeles'
     },
     color: '#3b82f6' // Blue
   },
@@ -31,9 +31,9 @@ const shows = [
     description: 'High-energy discussion on trucking business and success strategies',
     schedule: {
       days: ['tuesday'],
-      time: '15:00',
+      time: '08:00', // 8 AM PT
       duration: 180,
-      timezone: 'America/New_York'
+      timezone: 'America/Los_Angeles'
     },
     color: '#f59e0b' // Amber
   },
@@ -45,9 +45,9 @@ const shows = [
     description: 'Health, wellness, and medical topics for professional drivers',
     schedule: {
       days: ['wednesday'],
-      time: '15:00',
+      time: '08:00', // 8 AM PT
       duration: 180,
-      timezone: 'America/New_York'
+      timezone: 'America/Los_Angeles'
     },
     color: '#10b981' // Green
   },
@@ -59,9 +59,9 @@ const shows = [
     description: 'Latest technology, tools, and efficiency tips for modern trucking',
     schedule: {
       days: ['thursday'],
-      time: '15:00', // 3 PM
+      time: '08:00', // 8 AM PT
       duration: 180,
-      timezone: 'America/New_York'
+      timezone: 'America/Los_Angeles'
     },
     color: '#8b5cf6' // Purple
   },
@@ -73,9 +73,9 @@ const shows = [
     description: 'Evening conversations with Rolling Toe',
     schedule: {
       days: ['thursday'],
-      time: '19:00', // 7 PM
+      time: '10:00', // 10 AM PT
       duration: 180,
-      timezone: 'America/New_York'
+      timezone: 'America/Los_Angeles'
     },
     color: '#ef4444' // Red
   }
