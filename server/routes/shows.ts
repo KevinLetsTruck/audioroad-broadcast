@@ -47,6 +47,19 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
+// Delete a show
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    await prisma.show.delete({
+      where: { id: req.params.id }
+    });
+    res.json({ message: 'Show deleted' });
+  } catch (error) {
+    console.error('Error deleting show:', error);
+    res.status(500).json({ error: 'Failed to delete show' });
+  }
+});
+
 // Seed default shows endpoint
 router.post('/seed', async (req: Request, res: Response) => {
   try {
