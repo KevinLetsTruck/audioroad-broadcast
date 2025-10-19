@@ -203,6 +203,19 @@ export default function BroadcastControl() {
       console.log('🎙️ [START] Step 5: Connecting microphone...');
       await mixerInstance.connectMicrophone();
       console.log('✅ [START] Microphone connected');
+      
+      // IMPORTANT: Update audioSources after mic connects!
+      // This triggers React re-render so UI knows mic is connected
+      setTimeout(() => {
+        if (broadcast.mixer) {
+          const sources = broadcast.mixer.getSources();
+          console.log('🎚️ [START] Updating audio sources in context:', sources.length);
+          // Force update by calling a volume change (triggers state update)
+          sources.forEach(s => {
+            broadcast.setVolume(s.id, s.volume);
+          });
+        }
+      }, 100);
 
       // Step 6: Start recording (if enabled)
       if (autoRecord) {
