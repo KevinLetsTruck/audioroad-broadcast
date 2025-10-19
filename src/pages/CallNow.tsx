@@ -39,6 +39,12 @@ export default function CallNow() {
     onCallDisconnected: () => {
       console.log('📴 Call disconnected');
       setCallState('idle');
+      
+      // Auto-refresh page for clean state (fresh device for next call)
+      setTimeout(() => {
+        console.log('🔄 [CALLNOW] Auto-refreshing for clean state');
+        window.location.reload();
+      }, 2000); // 2 second delay so they see "Call ended" state
     }
   });
 
