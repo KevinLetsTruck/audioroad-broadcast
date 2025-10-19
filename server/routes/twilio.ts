@@ -283,7 +283,47 @@ router.post('/recording-status', async (req: Request, res: Response) => {
 router.post('/conference-status', async (req: Request, res: Response) => {
   try {
     const { ConferenceSid, StatusCallbackEvent, CallSid, FriendlyName } = req.body;
-    console.log('📞 Conference event:', StatusCallbackEvent, 'Conference:', FriendlyName, 'CallSid:', CallSid);
+    console.log('📞 [CONFERENCE] Event:', StatusCallbackEvent, 'Conference:', FriendlyName, 'SID:', ConferenceSid, 'CallSid:', CallSid);
+
+    // When conference starts, store the SID in episode
+    if (StatusCallbackEvent === 'conference-start' && ConferenceSid && FriendlyName) {
+      const episodeId = FriendlyName.replace('episode-', '');
+      console.log('🎙️ [CONFERENCE] Conference started for episode:', episodeId);
+      
+      try {
+        await prisma.episode.update({
+          where: { id: episodeId },
+          data: {
+            twilioConferenceSid: ConferenceSid,
+            conferenceActive: true
+          }
+        });
+        console.log('✅ [CONFERENCE] Episode updated with conference SID');
+      } catch (error) {
+        console.error('❌ [CONFERENCE] Failed to update episode:', error);
+      }
+    }
+
+    // When conference ends, mark it inactive
+    if (StatusCallbackEvent === 'conference-end' && ConferenceSid) {
+      console.log('📴 [CONFERENCE] Conference ended:', ConferenceSid);
+      
+      try {
+        const episode = await prisma.episode.findFirst({
+          where: { twilioConferenceSid: ConferenceSid }
+        });
+        
+        if (episode) {
+          await prisma.episode.update({
+            where: { id: episode.id },
+            data: { conferenceActive: false }
+          });
+          console.log('✅ [CONFERENCE] Episode marked conference inactive');
+        }
+      } catch (error) {
+        console.error('❌ [CONFERENCE] Failed to update episode:', error);
+      }
+    }
 
     // When a participant leaves, check if it's a caller we should mark as completed
     if (StatusCallbackEvent === 'participant-leave' && CallSid) {

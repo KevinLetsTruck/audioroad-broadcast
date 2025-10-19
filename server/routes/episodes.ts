@@ -182,7 +182,9 @@ router.patch('/:id/end', async (req: Request, res: Response) => {
         actualEnd: new Date(),
         duration,
         recordingUrl,
-        transcriptUrl
+        transcriptUrl,
+        conferenceActive: false, // Mark conference as inactive
+        twilioConferenceSid: null // Clear conference SID
       }
     });
 

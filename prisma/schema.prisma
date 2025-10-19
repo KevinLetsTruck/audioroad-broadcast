@@ -74,6 +74,10 @@ model Episode {
   
   status          String    // 'scheduled', 'live', 'completed', 'cancelled', 'archived'
   
+  // Twilio Conference
+  twilioConferenceSid String?  // Active conference SID for this episode
+  conferenceActive    Boolean  @default(false) // Is conference currently active
+  
   // Recordings
   recordingUrl    String?   // Full show recording (S3 URL)
   transcriptUrl   String?   // Full transcript
