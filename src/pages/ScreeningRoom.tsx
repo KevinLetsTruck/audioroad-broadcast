@@ -87,8 +87,11 @@ export default function ScreeningRoom() {
     fetchQueuedCalls();
 
     socket.on('call:incoming', (data) => {
-      console.log('📞 Incoming call received:', data);
-      fetchQueuedCalls(); // Refresh the list
+      console.log('📞 [SCREENER] Incoming call event received:', data);
+      // Refresh immediately
+      fetchQueuedCalls();
+      // And again after 1 second to catch race conditions
+      setTimeout(fetchQueuedCalls, 1000);
     });
 
     socket.on('call:approved', (data) => {
@@ -153,10 +156,10 @@ export default function ScreeningRoom() {
       }
     });
 
-    // Auto-refresh every 5 seconds to catch missed events
+    // Auto-refresh every 2 seconds to catch missed events (more frequent!)
     const refreshInterval = setInterval(() => {
       fetchQueuedCalls();
-    }, 5000);
+    }, 2000);
 
     return () => {
       socket.off('call:incoming');

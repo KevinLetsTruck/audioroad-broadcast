@@ -124,12 +124,18 @@ router.post('/voice', async (req: Request, res: Response) => {
         // Notify screening room via WebSocket
         const io = req.app.get('io');
         if (io) {
+          console.log('📡 [VOICE] Emitting call:incoming to episode:', activeEpisode.id);
+          console.log('📡 [VOICE] Call details:', { callId: call.id, callerId: callerId, status: call.status });
+          
           io.to(`episode:${activeEpisode.id}`).emit('call:incoming', {
             callId: call.id,
             callerId: callerId,
             twilioCallSid: CallSid || call.twilioCallSid
           });
-          console.log('📡 Notified screening room');
+          
+          console.log('✅ [VOICE] WebSocket event emitted');
+        } else {
+          console.warn('⚠️ [VOICE] No Socket.IO instance available!');
         }
       }
     }
