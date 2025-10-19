@@ -220,22 +220,16 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
 
       console.log('✅ [CALL] Twilio call connected');
 
-      // Get audio stream from call
-      // @ts-ignore - Twilio SDK internal API
-      const remoteStream = call.getRemoteStream();
+      // TEMPORARILY DISABLED: Don't try to capture audio stream yet
+      // This was interfering with Twilio's native audio
+      // TODO: Implement proper audio routing without breaking Twilio
       
-      if (!remoteStream) {
-        console.warn('⚠️ [CALL] No remote stream available');
-      }
-
-      // Only add to mixer if this is the HOST (not screener)
-      if (role === 'host' && mixer && remoteStream) {
-        console.log('🎚️ [CALL] Adding to mixer (host call)...');
-        mixer.addCallerAudio(callId, callerName, remoteStream);
-        console.log('✅ [CALL] Added to mixer');
-      } else if (role === 'screener') {
-        console.log('🔍 [CALL] Screener call - not adding to mixer');
-      }
+      // Get audio stream from call (for future mixer integration)
+      // @ts-ignore - Twilio SDK internal API  
+      const remoteStream = null; // Disabled for now: call.getRemoteStream();
+      
+      console.log('⚠️ [CALL] Mixer audio capture DISABLED - using Twilio native audio');
+      console.log('💡 [CALL] Volume controls will be added once audio routing is fixed');
 
       // Store call info
       const callInfo: CallInfo = {
@@ -243,7 +237,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
         callId,
         callerName,
         twilioCall: call,
-        audioStream: remoteStream || null,
+        audioStream: null, // Not capturing yet
         isOnAir: role === 'host',
         connectedAt: new Date()
       };
@@ -255,7 +249,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
         setOnAirCallState(callInfo);
       }
 
-      console.log(`✅ [CALL] ${role} call fully connected`);
+      console.log(`✅ [CALL] ${role} call fully connected (Twilio native audio)`);
 
     } catch (error) {
       console.error('❌ [CALL] Failed to connect:', error);
