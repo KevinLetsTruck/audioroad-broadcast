@@ -161,6 +161,12 @@ model Call {
   // Call status flow
   status          String    // 'incoming', 'queued', 'screening', 'approved', 'on-air', 'completed', 'rejected', 'missed'
   
+  // Participant management (for multi-participant broadcasts)
+  participantState String   @default("hold") // 'screening', 'hold', 'on-air', 'muted'
+  participantRole  String   @default("caller") // 'caller', 'guest', 'co-host'
+  isMutedInConference Boolean @default(true) // Twilio conference mute state
+  isOnHold        Boolean   @default(false) // True hold with music
+  
   // Timestamps
   incomingAt      DateTime  @default(now())
   queuedAt        DateTime?

@@ -1,0 +1,162 @@
+/**
+ * Participant Management Service
+ * 
+ * Controls participant states (on-air, hold, screening) via Twilio API
+ */
+
+import twilio from 'twilio';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+const twilioClient = twilio(
+  process.env.TWILIO_ACCOUNT_SID,
+  process.env.TWILIO_AUTH_TOKEN
+);
+
+export class ParticipantService {
+  /**
+   * Put participant ON AIR (unmute in conference)
+   */
+  static async putOnAir(callId: string): Promise<void> {
+    try {
+      const call = await prisma.call.findUnique({
+        where: { id: callId },
+        include: { episode: true }
+      });
+
+      if (!call || !call.twilioConferenceSid) {
+        throw new Error('Call or conference not found');
+      }
+
+      console.log(`📡 [PARTICIPANT] Putting on air: ${callId}`);
+
+      // Unmute in Twilio conference
+      await twilioClient
+        .conferences(call.twilioConferenceSid)
+        .participants(call.twilioCallSid)
+        .update({
+          muted: false,
+          hold: false
+        });
+
+      // Update database
+      await prisma.call.update({
+        where: { id: callId },
+        data: {
+          participantState: 'on-air',
+          isMutedInConference: false,
+          isOnHold: false,
+          onAirAt: call.onAirAt || new Date() // Set if not already set
+        }
+      });
+
+      console.log(`✅ [PARTICIPANT] ${callId} is now ON AIR`);
+    } catch (error) {
+      console.error(`❌ [PARTICIPANT] Failed to put on air:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Put participant ON HOLD (muted but can hear)
+   */
+  static async putOnHold(callId: string): Promise<void> {
+    try {
+      const call = await prisma.call.findUnique({
+        where: { id: callId }
+      });
+
+      if (!call || !call.twilioConferenceSid) {
+        throw new Error('Call or conference not found');
+      }
+
+      console.log(`⏸️ [PARTICIPANT] Putting on hold: ${callId}`);
+
+      // Mute in Twilio conference (can still hear)
+      await twilioClient
+        .conferences(call.twilioConferenceSid)
+        .participants(call.twilioCallSid)
+        .update({
+          muted: true,
+          hold: false // Not true hold with music, just muted
+        });
+
+      // Update database
+      await prisma.call.update({
+        where: { id: callId },
+        data: {
+          participantState: 'hold',
+          isMutedInConference: true,
+          isOnHold: false
+        }
+      });
+
+      console.log(`✅ [PARTICIPANT] ${callId} is now ON HOLD`);
+    } catch (error) {
+      console.error(`❌ [PARTICIPANT] Failed to put on hold:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Put participant in SCREENING (muted, private with screener)
+   */
+  static async putInScreening(callId: string): Promise<void> {
+    try {
+      const call = await prisma.call.findUnique({
+        where: { id: callId }
+      });
+
+      if (!call) {
+        throw new Error('Call not found');
+      }
+
+      console.log(`🔍 [PARTICIPANT] Moving to screening: ${callId}`);
+
+      // Update database (Twilio handles screening separately)
+      await prisma.call.update({
+        where: { id: callId },
+        data: {
+          participantState: 'screening',
+          status: 'screening'
+        }
+      });
+
+      console.log(`✅ [PARTICIPANT] ${callId} moved to screening`);
+    } catch (error) {
+      console.error(`❌ [PARTICIPANT] Failed to move to screening:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all active participants for an episode
+   */
+  static async getActiveParticipants(episodeId: string) {
+    const participants = await prisma.call.findMany({
+      where: {
+        episodeId,
+        endedAt: null,
+        status: {
+          notIn: ['completed', 'rejected', 'missed']
+        }
+      },
+      include: {
+        caller: true
+      },
+      orderBy: {
+        incomingAt: 'asc'
+      }
+    });
+
+    // Group by state
+    return {
+      onAir: participants.filter(p => p.participantState === 'on-air'),
+      onHold: participants.filter(p => p.participantState === 'hold'),
+      screening: participants.filter(p => p.participantState === 'screening'),
+      all: participants
+    };
+  }
+}
+

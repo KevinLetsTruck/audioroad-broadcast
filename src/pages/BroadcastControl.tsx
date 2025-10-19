@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 import { useBroadcast } from '../contexts/BroadcastContext';
 import { StreamEncoder, StreamConfig } from '../services/streamEncoder';
 import VUMeter from '../components/VUMeter';
+import ParticipantBoard from '../components/ParticipantBoard';
 import { detectCurrentShow, getShowDisplayName } from '../utils/showScheduler';
 
 export default function BroadcastControl() {
@@ -51,7 +52,6 @@ export default function BroadcastControl() {
   // Get state from context
   const status = broadcast.state;
   const audioSources = broadcast.audioSources;
-  const levels = broadcast.levels;
   
   // Debug: log audioSources when they change
   useEffect(() => {
@@ -416,25 +416,7 @@ export default function BroadcastControl() {
     return await createRes.json();
   };
 
-  /**
-   * Handle volume change for a source
-   */
-  const handleVolumeChange = (sourceId: string, volume: number) => {
-    broadcast.setVolume(sourceId, volume);
-  };
-
-  /**
-   * Handle mute toggle
-   */
-  const handleMuteToggle = (sourceId: string) => {
-    if (!broadcast.mixer) return;
-    const source = broadcast.mixer.getSource(sourceId);
-    if (source) {
-      broadcast.setMuted(sourceId, !source.muted);
-    }
-  };
-
-  // Timer is now managed globally in BroadcastContext - no local cleanup needed!
+  // Timer and participant management now handled globally in BroadcastContext!
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -630,58 +612,10 @@ export default function BroadcastControl() {
                 />
               </div>
 
-              {/* Audio Sources (Inline Mixer Controls) */}
-              {audioSources.length > 0 && (
+              {/* Participant Board - Multi-participant control */}
+              {status.episodeId && (
                 <div className="mb-6">
-                  <h3 className="text-sm font-semibold text-gray-400 mb-3">Audio Levels</h3>
-                  <div className="space-y-2">
-                    {audioSources.map((source) => (
-                      <div
-                        key={source.id}
-                        className={`p-3 rounded-lg ${
-                          source.type === 'caller'
-                            ? 'bg-blue-900/30 border border-blue-600'
-                            : 'bg-gray-800 border border-gray-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          {/* Source icon and name */}
-                          <div className="flex-shrink-0 w-32">
-                            <div className="text-sm font-semibold">
-                              {source.type === 'host' && '🎤'} {source.type === 'caller' && '📞'} {source.label}
-                            </div>
-                            <div className="text-xs text-gray-500">{source.volume}%</div>
-                          </div>
-
-                          {/* Mini VU Meter */}
-                          <div className="flex-1">
-                            <VUMeter level={source.muted ? 0 : levels[source.id] || 0} width={200} height={16} showPeakIndicator={false} />
-                          </div>
-
-                          {/* Volume slider */}
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            value={source.volume}
-                            onChange={(e) => handleVolumeChange(source.id, parseInt(e.target.value))}
-                            disabled={source.muted}
-                            className="w-24 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                          />
-
-                          {/* Mute button */}
-                          <button
-                            onClick={() => handleMuteToggle(source.id)}
-                            className={`px-3 py-1 rounded text-xs font-semibold w-16 ${
-                              source.muted ? 'bg-red-600' : 'bg-gray-700'
-                            }`}
-                          >
-                            {source.muted ? '🔇' : '🔊'}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <ParticipantBoard episodeId={status.episodeId} />
                 </div>
               )}
 
