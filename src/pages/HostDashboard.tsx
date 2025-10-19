@@ -105,7 +105,22 @@ export default function HostDashboard() {
     try {
       const response = await fetch(`/api/calls?episodeId=${activeEpisode.id}&status=approved`);
       const calls = await response.json();
-      const activeCalls = calls.filter((call: any) => !call.endedAt);
+      
+      // Filter for truly active calls (not ended, recent)
+      const now = Date.now();
+      const activeCalls = calls.filter((call: any) => {
+        if (call.endedAt) return false; // Already ended
+        if (call.status === 'completed') return false; // Marked completed
+        
+        // Only show calls from last 4 hours (prevent ancient calls showing up)
+        const callTime = new Date(call.incomingAt || call.createdAt).getTime();
+        const age = now - callTime;
+        if (age > 4 * 60 * 60 * 1000) return false; // Older than 4 hours
+        
+        return true;
+      });
+      
+      console.log(`📞 [HOST] Approved calls: ${activeCalls.length} (filtered from ${calls.length} total)`);
       setApprovedCalls(activeCalls);
     } catch (error) {
       console.error('Error fetching approved calls:', error);
@@ -227,12 +242,26 @@ export default function HostDashboard() {
     if (!activeEpisode) return;
     
     try {
+      console.log('📴 [HOST] Ending episode from Host Dashboard');
+      
       const response = await fetch(`/api/episodes/${activeEpisode.id}/end`, {
         method: 'PATCH'
       });
       const episode = await response.json();
       setActiveEpisode(episode);
       setIsLive(false);
+      
+      // IMPORTANT: Update global broadcast state so Broadcast Control knows!
+      broadcast.setState({
+        isLive: false,
+        episodeId: null,
+        showId: null,
+        showName: '',
+        startTime: null,
+        selectedShow: null
+      });
+      
+      console.log('✅ [HOST] Episode ended and global state updated');
     } catch (error) {
       console.error('Error ending episode:', error);
     }
