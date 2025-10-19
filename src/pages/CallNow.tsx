@@ -154,6 +154,11 @@ export default function CallNow() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
+      {/* Version Badge - Confirms new code loaded */}
+      <div className="fixed top-2 right-2 bg-green-600 text-white px-3 py-1 rounded-full text-xs font-bold z-50">
+        v2.1-DEBUG
+      </div>
+      
       <div className="max-w-4xl mx-auto p-8">
         {/* Header */}
         <div className="text-center mb-12">
