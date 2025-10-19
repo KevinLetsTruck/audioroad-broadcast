@@ -20,9 +20,26 @@ export default function ScreeningRoom() {
     notes: ''
   });
 
-  // Check if Twilio device is ready from global context
-  const screenerReady = broadcast.twilioDevice !== null;
+  // Check if Twilio device is ready (use global or initialize if needed)
+  const [localDeviceReady, setLocalDeviceReady] = useState(false);
+  const screenerReady = broadcast.twilioDevice !== null || localDeviceReady;
   const screenerConnected = activeCall !== null;
+  
+  // Initialize Twilio if global device not available
+  useEffect(() => {
+    if (!broadcast.twilioDevice && !localDeviceReady) {
+      console.log('📞 [SCREENER] Global device not available, initializing local device');
+      const identity = `screener-${Date.now()}`;
+      broadcast.initializeTwilio(identity)
+        .then(() => {
+          setLocalDeviceReady(true);
+          console.log('✅ [SCREENER] Twilio device ready');
+        })
+        .catch(err => {
+          console.error('❌ [SCREENER] Failed to initialize Twilio:', err);
+        });
+    }
+  }, [broadcast.twilioDevice]);
 
   useEffect(() => {
     console.log('🚀 ScreeningRoom mounted - initializing...');
