@@ -3,6 +3,7 @@ import { useTwilioCall } from '../hooks/useTwilioCall';
 import DocumentUploadWidget from '../components/DocumentUploadWidget';
 
 export default function CallNow() {
+  // Multi-caller support - v2
   const [showStatus, setShowStatus] = useState<'live' | 'offline'>('offline');
   const [callState, setCallState] = useState<'idle' | 'calling' | 'connected' | 'queued'>('idle');
   const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
