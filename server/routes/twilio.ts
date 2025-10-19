@@ -89,53 +89,38 @@ router.post('/voice', async (req: Request, res: Response) => {
       return res.type('text/xml').send(twiml);
     }
 
-    // Create call record if we have caller info (prevent duplicates)
+    // Create call record if we have caller info
     if (callerId) {
-      // Check for duplicates in last 60 seconds (aggressive)
-      const recentCutoff = new Date(Date.now() - 60000); // 60 seconds ago
+      console.log('📝 [VOICE] Creating call record for callerId:', callerId);
       
-      const existingCall = await prisma.call.findFirst({
-        where: {
-          callerId: callerId,
+      const call = await prisma.call.create({
+        data: {
           episodeId: activeEpisode.id,
-          incomingAt: {
-            gte: recentCutoff
-          }
+          callerId: callerId,
+          twilioCallSid: CallSid || `web-${Date.now()}`,
+          status: 'queued',
+          incomingAt: new Date(),
+          queuedAt: new Date()
         }
       });
 
-      if (existingCall) {
-        console.log('⚠️ Duplicate call prevented! CallerId:', callerId, 'existing call:', existingCall.id);
-      } else {
-        const call = await prisma.call.create({
-          data: {
-            episodeId: activeEpisode.id,
-            callerId: callerId,
-            twilioCallSid: CallSid || `web-${Date.now()}`,
-            status: 'queued',
-            incomingAt: new Date(),
-            queuedAt: new Date()
-          }
+      console.log('✅ Call record created:', call.id, 'CallSid:', CallSid, 'CallerId:', callerId);
+
+      // Notify screening room via WebSocket
+      const io = req.app.get('io');
+      if (io) {
+        console.log('📡 [VOICE] Emitting call:incoming to episode:', activeEpisode.id);
+        console.log('📡 [VOICE] Call details:', { callId: call.id, callerId: callerId, status: call.status });
+        
+        io.to(`episode:${activeEpisode.id}`).emit('call:incoming', {
+          callId: call.id,
+          callerId: callerId,
+          twilioCallSid: CallSid || call.twilioCallSid
         });
-
-        console.log('✅ Call record created:', call.id, 'CallSid:', CallSid, 'CallerId:', callerId);
-
-        // Notify screening room via WebSocket
-        const io = req.app.get('io');
-        if (io) {
-          console.log('📡 [VOICE] Emitting call:incoming to episode:', activeEpisode.id);
-          console.log('📡 [VOICE] Call details:', { callId: call.id, callerId: callerId, status: call.status });
-          
-          io.to(`episode:${activeEpisode.id}`).emit('call:incoming', {
-            callId: call.id,
-            callerId: callerId,
-            twilioCallSid: CallSid || call.twilioCallSid
-          });
-          
-          console.log('✅ [VOICE] WebSocket event emitted');
-        } else {
-          console.warn('⚠️ [VOICE] No Socket.IO instance available!');
-        }
+        
+        console.log('✅ [VOICE] WebSocket event emitted');
+      } else {
+        console.warn('⚠️ [VOICE] No Socket.IO instance available!');
       }
     }
 
