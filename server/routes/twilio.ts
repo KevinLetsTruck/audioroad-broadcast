@@ -49,6 +49,7 @@ router.post('/voice', async (req: Request, res: Response) => {
     // If this is a screener or host connecting, route to conference join
     if ((role === 'screener' || role === 'host') && (callId || episodeId)) {
       let conferenceName = '';
+      let episode = null;
       
       if (callId) {
         const call = await prisma.call.findUnique({
@@ -61,15 +62,21 @@ router.post('/voice', async (req: Request, res: Response) => {
         }
         
         conferenceName = `episode-${call.episodeId}`;
+        episode = call.episode;
       } else if (episodeId) {
         conferenceName = `episode-${episodeId}`;
+        episode = await prisma.episode.findUnique({ where: { id: episodeId } });
       }
 
-      console.log(`🎙️ ${role} joining conference:`, conferenceName);
+      const isConferenceActive = episode?.conferenceActive || false;
+      const startConference = role === 'screener' || isConferenceActive;  // Screener always starts, host starts if active
+      
+      console.log(`🎙️ [${role.toUpperCase()}] Joining conference:`, conferenceName);
+      console.log(`🎙️ [${role.toUpperCase()}] Conference active?`, isConferenceActive, '→ startConferenceOnEnter:', startConference);
 
       const twiml = generateTwiML('conference', { 
         conferenceName,
-        startConferenceOnEnter: role === 'screener',  // Screener starts, host joins existing
+        startConferenceOnEnter: startConference,
         endConferenceOnExit: false,  // DON'T end conference - keep alive for whole episode!
         muted: false
       });
@@ -126,15 +133,21 @@ router.post('/voice', async (req: Request, res: Response) => {
 
     // Put caller in conference (so screener can join later)
     const conferenceName = `episode-${activeEpisode.id}`;
+    
+    // Check if conference is already active
+    const isConferenceActive = activeEpisode.conferenceActive || false;
+    
+    console.log('📞 [VOICE] Conference active?', isConferenceActive);
+    console.log('📞 [VOICE] Sending web caller to conference:', conferenceName);
+    
     const twiml = generateTwiML('conference', { 
       conferenceName,
-      startConferenceOnEnter: false,  // Don't start until screener joins
+      startConferenceOnEnter: isConferenceActive,  // If conference exists, start it; otherwise wait for screener
       endConferenceOnExit: false,     // DON'T end conference - keep it alive for episode!
       waitUrl: '/api/twilio/wait-music',
       muted: true  // 🔇 Join MUTED - host will unmute when ready
     });
     
-    console.log('📞 Sending caller to conference:', conferenceName);
     res.type('text/xml').send(twiml);
 
   } catch (error) {
@@ -202,11 +215,16 @@ router.post('/incoming-call', async (req: Request, res: Response) => {
 
     // Send caller to conference (same as web calls!)
     const conferenceName = `episode-${activeEpisode.id}`;
-    console.log('📞 Sending phone caller to conference:', conferenceName);
+    
+    // Check if conference is already active
+    const isConferenceActive = activeEpisode.conferenceActive || false;
+    
+    console.log('📞 [PHONE] Conference active?', isConferenceActive);
+    console.log('📞 [PHONE] Sending phone caller to conference:', conferenceName);
     
     const twiml = generateTwiML('conference', { 
       conferenceName,
-      startConferenceOnEnter: false,  // Don't start until screener joins
+      startConferenceOnEnter: isConferenceActive,  // If conference exists, start it; otherwise wait for screener
       endConferenceOnExit: false,     // DON'T end conference - keep it alive for episode!
       waitUrl: '/api/twilio/wait-music',
       muted: true  // 🔇 Join MUTED - host will unmute when ready

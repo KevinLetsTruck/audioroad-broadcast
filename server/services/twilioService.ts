@@ -235,18 +235,24 @@ export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', opti
       // Don't say anything - just connect silently
       const dial = twiml.dial();
       
-      // Merge options but FORCE beep to false
-      const conferenceOptions = {
-        ...options,
-        startConferenceOnEnter: options.startConferenceOnEnter !== undefined ? options.startConferenceOnEnter : false,
+      // Merge options but FORCE critical settings
+      const conferenceOptions: any = {
+        startConferenceOnEnter: options.startConferenceOnEnter !== undefined ? options.startConferenceOnEnter : true,  // Default to true
         endConferenceOnExit: false,
-        beep: 'false',  // Twilio wants string 'false' not boolean
+        beep: false,  // NO BEEPS - use boolean not string
+        maxParticipants: 40,  // Support many participants
+        waitUrl: options.waitUrl || undefined,
+        muted: options.muted !== undefined ? options.muted : false,
         statusCallback: `${process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app'}/api/twilio/conference-status`,
         statusCallbackEvent: ['start', 'end', 'join', 'leave'],
         statusCallbackMethod: 'POST'
       };
       
+      console.log('🎙️ [TWIML] Conference options:', JSON.stringify(conferenceOptions, null, 2));
       dial.conference(conferenceOptions, options.conferenceName);
+      
+      const twimlString = twiml.toString();
+      console.log('📄 [TWIML] Generated:', twimlString);
       break;
 
     case 'voicemail':
