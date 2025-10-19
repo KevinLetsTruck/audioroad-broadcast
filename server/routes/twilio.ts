@@ -70,7 +70,7 @@ router.post('/voice', async (req: Request, res: Response) => {
       const twiml = generateTwiML('conference', { 
         conferenceName,
         startConferenceOnEnter: role === 'screener',  // Screener starts, host joins existing
-        endConferenceOnExit: role === 'host',  // End when host leaves
+        endConferenceOnExit: false,  // DON'T end conference - keep alive for whole episode!
         muted: false,
         beep: false  // Boolean false
       });
@@ -145,7 +145,7 @@ router.post('/voice', async (req: Request, res: Response) => {
     const twiml = generateTwiML('conference', { 
       conferenceName,
       startConferenceOnEnter: false,  // Don't start until screener joins
-      endConferenceOnExit: true,      // End conference when caller leaves
+      endConferenceOnExit: false,     // DON'T end conference - keep it alive for episode!
       waitUrl: '/api/twilio/wait-music',
       beep: false,  // Boolean false
       muted: false  // Ensure caller is NOT muted
@@ -224,7 +224,7 @@ router.post('/incoming-call', async (req: Request, res: Response) => {
     const twiml = generateTwiML('conference', { 
       conferenceName,
       startConferenceOnEnter: false,  // Don't start until screener joins
-      endConferenceOnExit: true,      // End conference when caller leaves
+      endConferenceOnExit: false,     // DON'T end conference - keep it alive for episode!
       waitUrl: '/api/twilio/wait-music',
       beep: false,
       muted: false  // Caller should NOT be muted
