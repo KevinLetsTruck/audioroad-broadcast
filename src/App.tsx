@@ -58,16 +58,6 @@ function AppContent() {
             >
               Screening Room
             </Link>
-            <Link
-              to="/call-now"
-              className={`px-4 py-2 rounded ${
-                location.pathname === '/call-now'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              📞 Call Now
-            </Link>
           </div>
         </div>
       </nav>
