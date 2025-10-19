@@ -51,6 +51,7 @@ interface BroadcastContextType {
   destroyMixer: () => Promise<void>;
   setVolume: (sourceId: string, volume: number) => void;
   setMuted: (sourceId: string, muted: boolean) => void;
+  refreshAudioSources: () => void;
   
   // Actions - Calls
   initializeTwilio: (identity: string) => Promise<void>;
@@ -189,6 +190,17 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     if (!mixer) return;
     mixer.setMuted(sourceId, muted);
     setAudioSources(mixer.getSources());
+  };
+
+  /**
+   * Refresh audio sources from mixer (force update)
+   */
+  const refreshAudioSources = () => {
+    if (mixer) {
+      const sources = mixer.getSources();
+      console.log('🔄 [CONTEXT] Refreshing audio sources:', sources.length);
+      setAudioSources([...sources]); // Create new array to trigger React update
+    }
   };
 
   /**
@@ -374,6 +386,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     destroyMixer,
     setVolume: setVolumeFunc,
     setMuted: setMutedFunc,
+    refreshAudioSources,
     initializeTwilio,
     connectToCall,
     disconnectCall,
