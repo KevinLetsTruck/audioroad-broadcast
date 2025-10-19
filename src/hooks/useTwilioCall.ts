@@ -196,8 +196,13 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
   };
 
   const makeCall = async (params: Record<string, string> = {}, retryCount = 0) => {
+    console.log('🔥 [CALL] makeCall() entered! device:', !!device, 'isReady:', isReady, 'params:', params);
+    
     if (!device || !isReady) {
-      console.error('❌ [CALL] Device not ready, state:', device?.state);
+      console.error('❌ [CALL] Device not ready!');
+      console.error('❌ [CALL] - device exists?', !!device);
+      console.error('❌ [CALL] - isReady?', isReady);
+      console.error('❌ [CALL] - device state:', device?.state);
       return;
     }
 
@@ -205,15 +210,18 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
     console.log('🔌 [CALL] Initiating web call...');
     console.log('🔌 [CALL] Params:', params);
     console.log('🔌 [CALL] Device state:', device.state);
+    console.log('🔌 [CALL] About to call device.connect()...');
 
     try {
       const outgoingCall = await device.connect({ params });
       console.log('✅ [CALL] Connection initiated, CallSID:', outgoingCall.parameters.CallSid);
       setCall(outgoingCall);
       setupCallHandlers(outgoingCall);
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ [CALL] Failed to make call:', error);
-      console.error('❌ [CALL] Error details:', JSON.stringify(error, null, 2));
+      console.error('❌ [CALL] Error message:', error?.message);
+      console.error('❌ [CALL] Error code:', error?.code);
+      console.error('❌ [CALL] Error stack:', error?.stack);
       
       // Retry logic - up to 3 attempts
       if (retryCount < 3) {

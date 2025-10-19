@@ -118,23 +118,30 @@ export default function CallNow() {
   }, []);
 
   const handleCallNow = async () => {
+    console.log('🎯 [CALLNOW] Button clicked! isReady:', isReady, 'callerId:', callerId, 'showStatus:', showStatus);
+    
     if (!isReady) {
+      console.error('❌ [CALLNOW] Device not ready!');
       alert('Phone system not ready. Please refresh and try again.');
       return;
     }
 
     if (!callerId) {
+      console.error('❌ [CALLNOW] No caller ID!');
       alert('Setting up caller profile. Please try again in a moment.');
       return;
     }
 
+    console.log('✅ [CALLNOW] All checks passed, initiating call...');
     setCallState('calling');
 
     try {
       // Initiate call with existing caller ID
+      console.log('📞 [CALLNOW] Calling makeCall with params:', { callerId });
       await makeCall({ callerId });
+      console.log('✅ [CALLNOW] makeCall completed');
     } catch (error) {
-      console.error('Error initiating call:', error);
+      console.error('❌ [CALLNOW] Error initiating call:', error);
       setCallState('idle');
       alert('Failed to connect. Please try again.');
     }
