@@ -596,8 +596,8 @@ export default function BroadcastControl() {
                 <StatusItem 
                   icon="🎤" 
                   label="Microphone" 
-                  value={audioSources.some(s => s.type === 'host') ? 'Connected' : 'Disconnected'}
-                  active={audioSources.some(s => s.type === 'host')}
+                  value={broadcast.mixer && audioSources.some(s => s.type === 'host') ? 'Connected' : 'Disconnected'}
+                  active={!!(broadcast.mixer && audioSources.some(s => s.type === 'host'))}
                 />
                 <StatusItem 
                   icon="⏺️" 
