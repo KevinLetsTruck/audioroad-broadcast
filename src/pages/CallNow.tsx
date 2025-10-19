@@ -40,6 +40,10 @@ export default function CallNow() {
       console.log('📴 Call disconnected');
       setCallState('idle');
       
+      // Clear session data for completely fresh start
+      sessionStorage.removeItem('caller-identity');
+      console.log('🧹 [CALLNOW] Cleared session data');
+      
       // Auto-refresh page for clean state (fresh device for next call)
       setTimeout(() => {
         console.log('🔄 [CALLNOW] Auto-refreshing for clean state');
