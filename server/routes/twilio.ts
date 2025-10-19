@@ -211,8 +211,19 @@ router.post('/incoming-call', async (req: Request, res: Response) => {
       phoneNumber: From
     });
 
-    // Return TwiML to queue the call
-    const twiml = generateTwiML('queue', { queueName: `episode-${activeEpisode.id}` });
+    // Send caller to conference (same as web calls!)
+    const conferenceName = `episode-${activeEpisode.id}`;
+    console.log('📞 Sending phone caller to conference:', conferenceName);
+    
+    const twiml = generateTwiML('conference', { 
+      conferenceName,
+      startConferenceOnEnter: false,  // Don't start until screener joins
+      endConferenceOnExit: true,      // End conference when caller leaves
+      waitUrl: '/api/twilio/wait-music',
+      beep: false,
+      muted: false  // Caller should NOT be muted
+    });
+    
     res.type('text/xml').send(twiml);
 
   } catch (error) {
