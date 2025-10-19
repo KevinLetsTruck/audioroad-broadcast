@@ -39,16 +39,6 @@ function AppContent() {
               Host Dashboard
             </Link>
             <Link
-              to="/recordings"
-              className={`px-4 py-2 rounded ${
-                location.pathname === '/recordings'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              📁 Recordings
-            </Link>
-            <Link
               to="/screening-room"
               className={`px-4 py-2 rounded ${
                 location.pathname === '/screening-room'
@@ -57,6 +47,16 @@ function AppContent() {
               }`}
             >
               Screening Room
+            </Link>
+            <Link
+              to="/recordings"
+              className={`px-4 py-2 rounded ${
+                location.pathname === '/recordings'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              📁 Recordings
             </Link>
           </div>
         </div>
