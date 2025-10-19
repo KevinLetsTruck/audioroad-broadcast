@@ -44,17 +44,70 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
   const connectToCall = async (call: any) => {
     try {
       const callerName = call.caller?.name || 'Caller';
-      await broadcast.connectToCall(call.id, callerName, episodeId, 'host');
-      console.log('✅ Connected to:', callerName);
+      
+      // Check if this is the FIRST connection
+      const isFirstConnection = broadcast.activeCalls.size === 0;
+      
+      if (isFirstConnection) {
+        // First participant: Host joins conference WITH them
+        console.log('🎙️ [MULTI] First participant - host joining conference');
+        await broadcast.connectToCall(call.id, callerName, episodeId, 'host');
+        console.log('✅ [MULTI] Host in conference with:', callerName);
+      } else {
+        // Subsequent participants: They're already in conference (from caller side)
+        // Just unmute them in Twilio
+        console.log('📡 [MULTI] Additional participant - unmuting in conference:', callerName);
+        
+        try {
+          const response = await fetch(`/api/participants/${call.id}/on-air`, { method: 'PATCH' });
+          if (response.ok) {
+            console.log('✅ [MULTI] Participant unmuted:', callerName);
+            
+            // Add to local tracking (simulate connected state)
+            broadcast.activeCalls.set(call.id, {
+              id: `call-${call.id}`,
+              callId: call.id,
+              callerName,
+              topic: call.topic,
+              twilioCall: null,
+              audioStream: null,
+              isOnAir: true,
+              connectedAt: new Date()
+            });
+          } else {
+            throw new Error('Failed to unmute participant');
+          }
+        } catch (err) {
+          console.error('Failed to add participant:', err);
+          alert('Failed to add participant to conference');
+        }
+      }
+      
+      fetchQueue();
     } catch (error) {
       console.error('Failed to connect:', error);
-      alert('Failed to connect to caller');
+      alert('Failed to connect to participant');
     }
   };
 
   const disconnectCall = async (callId: string) => {
     try {
-      await broadcast.disconnectCall(callId);
+      console.log('📴 [MULTI] Disconnecting participant:', callId);
+      
+      // If this is the LAST active call, disconnect host too
+      if (broadcast.activeCalls.size === 1) {
+        console.log('📴 [MULTI] Last participant - disconnecting host from conference');
+        await broadcast.disconnectCall(callId);
+      } else {
+        // Multiple participants - just mute/remove this one
+        console.log('⏸️ [MULTI] Other participants still active - muting this one');
+        
+        // Mute them in Twilio
+        await fetch(`/api/participants/${callId}/hold`, { method: 'PATCH' });
+        
+        // Remove from active calls
+        broadcast.activeCalls.delete(callId);
+      }
       
       // Mark as completed in database
       await fetch(`/api/calls/${callId}/complete`, {
@@ -63,6 +116,7 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
         body: JSON.stringify({ airDuration: 0 })
       });
       
+      console.log('✅ [MULTI] Participant disconnected');
       fetchQueue();
     } catch (error) {
       console.error('Failed to disconnect:', error);
