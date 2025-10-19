@@ -6,8 +6,8 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import ChatPanel from '../components/ChatPanel';
+import ParticipantBoard from '../components/ParticipantBoard';
 import { useBroadcast } from '../contexts/BroadcastContext';
 
 export default function HostDashboard() {
@@ -16,6 +16,7 @@ export default function HostDashboard() {
   const [activeEpisode, setActiveEpisode] = useState<any>(null);
   const [isLive, setIsLive] = useState(false);
   const [allDocuments, setAllDocuments] = useState<any[]>([]);
+  const [showDocuments, setShowDocuments] = useState(false);
 
   useEffect(() => {
     fetchActiveEpisode();
@@ -93,10 +94,16 @@ export default function HostDashboard() {
           <h2 className="text-lg font-bold">{activeEpisode?.title || 'Host Dashboard'}</h2>
         </div>
         <div className="flex items-center gap-4">
-          {/* Info Banner */}
-          <div className="bg-blue-900/30 border border-blue-500 rounded px-3 py-2 text-xs">
-            💡 Manage calls in <Link to="/" className="text-blue-400 underline hover:text-blue-300">Broadcast Control</Link>
-          </div>
+          {/* Documents Toggle */}
+          <button
+            onClick={() => setShowDocuments(!showDocuments)}
+            className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded text-sm flex items-center gap-2"
+          >
+            📄 Documents
+            {allDocuments.length > 0 && (
+              <span className="bg-blue-600 rounded-full px-2 py-0.5 text-xs">{allDocuments.length}</span>
+            )}
+          </button>
 
           {isLive && (
             <button
@@ -109,11 +116,37 @@ export default function HostDashboard() {
         </div>
       </div>
 
-      {/* Main Layout: Documents + Chat */}
-      <div className="flex-1 flex">
-        {/* Left: Documents */}
+      {/* Main Layout: Participants + Chat */}
+      <div className="flex-1 flex relative">
+        {/* Left: Participant Board (Call Management) */}
         <div className="flex-1 overflow-y-auto p-4">
-          <h3 className="text-lg font-semibold mb-4">Caller Documents & AI Analysis</h3>
+          <h3 className="text-lg font-semibold mb-4">Call Management</h3>
+          {activeEpisode ? (
+            <ParticipantBoard episodeId={activeEpisode.id} />
+          ) : (
+            <div className="text-center py-16 text-gray-400">
+              <p>No active episode</p>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Chat */}
+        <div className="flex-1 border-l border-gray-700">
+          {activeEpisode && <ChatPanel episodeId={activeEpisode.id} userRole="host" />}
+        </div>
+
+        {/* Documents Slide-Out Panel */}
+        {showDocuments && (
+          <div className="absolute inset-0 bg-gray-900/95 z-50 p-6 overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Caller Documents & AI Analysis</h3>
+              <button
+                onClick={() => setShowDocuments(false)}
+                className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm"
+              >
+                ✕ Close
+              </button>
+            </div>
           
           {allDocuments.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
@@ -184,12 +217,8 @@ export default function HostDashboard() {
               })}
             </div>
           )}
-        </div>
-
-        {/* Right: Chat Sidebar */}
-        <div className="flex-1 border-l border-gray-700">
-          {activeEpisode && <ChatPanel episodeId={activeEpisode.id} userRole="host" />}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
