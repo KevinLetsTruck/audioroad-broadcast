@@ -148,9 +148,10 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
     });
 
     activeCall.on('disconnect', () => {
-      console.log('📴 Call disconnected');
+      console.log('📴 [CALL] Call disconnected');
       
-      // Full cleanup
+      // Reset call state but DON'T destroy device
+      // Device stays alive for next call!
       setIsConnected(false);
       setIsConnecting(false);
       setCall(null);
@@ -161,6 +162,8 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
         clearInterval(durationIntervalRef.current);
         durationIntervalRef.current = undefined;
       }
+
+      console.log('✅ [CALL] Ready for next call (device still active)');
 
       if (onCallDisconnected) onCallDisconnected();
     });
