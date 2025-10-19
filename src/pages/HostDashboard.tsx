@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import ChatPanel from '../components/ChatPanel';
+import SimpleCallManager from '../components/SimpleCallManager';
 import { useBroadcast } from '../contexts/BroadcastContext';
 
 export default function HostDashboard() {
@@ -9,26 +10,10 @@ export default function HostDashboard() {
   const [activeEpisode, setActiveEpisode] = useState<any>(null);
   const [isLive, setIsLive] = useState(false);
   
-  // On-air call comes from global context now
-  const onAirCall = broadcast.onAirCall;
   const [approvedCalls, setApprovedCalls] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'calls' | 'documents'>('calls');
   const [allDocuments, setAllDocuments] = useState<any[]>([]);
   
-  // Helper to get volume from mixer or default
-  const getCallerVolume = (callId: string) => {
-    const source = broadcast.audioSources.find(s => s.id === `caller-${callId}`);
-    return source?.volume ?? 75;
-  };
-  
-  // Helper to get muted state from mixer or default
-  const getCallerMuted = (callId: string) => {
-    const source = broadcast.audioSources.find(s => s.id === `caller-${callId}`);
-    return source?.muted ?? false;
-  };
-
-  // Use global Twilio device from context
-  const hostReady = broadcast.twilioDevice !== null;
 
   useEffect(() => {
     // Fetch active episode from database
@@ -267,40 +252,6 @@ export default function HostDashboard() {
     }
   };
 
-  const handleEndCall = async () => {
-    if (!onAirCall) return;
-
-    if (!confirm('End this call? The caller will be disconnected.')) {
-      return;
-    }
-
-    try {
-      console.log('📴 Ending on-air call:', onAirCall.callId);
-
-      // Disconnect via global context (handles Twilio + mixer cleanup)
-      await broadcast.disconnectCall(onAirCall.callId);
-
-      // End the call in database
-      const response = await fetch(`/api/calls/${onAirCall.callId}/complete`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          airDuration: Math.floor((Date.now() - onAirCall.connectedAt.getTime()) / 1000)
-        })
-      });
-
-      if (response.ok) {
-        console.log('✅ Call ended successfully');
-        // Refresh immediately to clear from list
-        fetchApprovedCalls();
-      } else {
-        console.warn('⚠️ Failed to update call in database');
-      }
-    } catch (error) {
-      console.error('❌ Error ending call:', error);
-      alert('Failed to end call properly. Please try again.');
-    }
-  };
 
   return (
     <div className="h-[calc(100vh-73px)] flex flex-col">
@@ -356,154 +307,16 @@ export default function HostDashboard() {
         {/* Left: Main Content */}
         <div className="flex-1 overflow-y-auto p-4">
           {activeTab === 'calls' ? (
-            <div className="space-y-3">
-            
-            {/* Host Mic Card */}
-            {broadcast.audioSources.find(s => s.type === 'host') && (
-              <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
-                    </svg>
-                    <span className="text-sm font-semibold">Host Mic</span>
-                    <span className="text-xs text-gray-500">Vol: {broadcast.audioSources.find(s => s.type === 'host')?.volume ?? 80}%</span>
-                  </div>
-                  <button
-                    onClick={() => {
-                      const hostSource = broadcast.audioSources.find(s => s.type === 'host');
-                      if (hostSource) {
-                        broadcast.setMuted(hostSource.id, !hostSource.muted);
-                      }
-                    }}
-                    className={`px-2 py-1 rounded text-xs font-semibold ${broadcast.audioSources.find(s => s.type === 'host')?.muted ? 'bg-red-600' : 'bg-gray-700'}`}
-                  >
-                    {broadcast.audioSources.find(s => s.type === 'host')?.muted ? 'Unmute' : 'Mute'}
-                  </button>
+            /* Call Management */
+            <div>
+              {activeEpisode ? (
+                <SimpleCallManager episodeId={activeEpisode.id} />
+              ) : (
+                <div className="text-center py-16 text-gray-400">
+                  <p>No active episode</p>
                 </div>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="100" 
-                  value={broadcast.audioSources.find(s => s.type === 'host')?.volume ?? 80}
-                  onChange={(e) => {
-                    const hostSource = broadcast.audioSources.find(s => s.type === 'host');
-                    if (hostSource) {
-                      broadcast.setVolume(hostSource.id, parseInt(e.target.value));
-                    }
-                  }}
-                  className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                />
-              </div>
-            )}
-
-            {/* Co-host Card */}
-            <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 opacity-60">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <svg className="w-5 h-5 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M7 4a3 3 0 016 0v6a3 3 0 11-6 0V4z" />
-                  </svg>
-                  <span className="text-sm font-semibold">Co-host</span>
-                  <span className="text-xs text-gray-500">Offline</span>
-                </div>
-              </div>
+              )}
             </div>
-
-            {/* Caller Cards */}
-            {approvedCalls.map((call) => {
-              const isOnAir = onAirCall?.callId === call.id;
-              // Get volume from mixer
-              const callVolume = getCallerVolume(call.id);
-              const callMuted = getCallerMuted(call.id);
-              
-              return (
-                <div
-                  key={call.id}
-                  className={`rounded-lg p-3 ${
-                    isOnAir 
-                      ? 'bg-red-900/30 border-2 border-red-500' 
-                      : 'bg-gray-800 border border-gray-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        {isOnAir && <span className="inline-block w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
-                        <span className="text-sm font-semibold">{call.caller?.name || 'Web Caller'}</span>
-                        {isOnAir && <span className="px-2 py-0.5 bg-red-600 rounded text-xs font-bold">LIVE</span>}
-                      </div>
-                      <p className="text-xs text-gray-400">{call.caller?.location || 'Location not provided'}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {isOnAir ? (
-                        <>
-                          <button
-                            onClick={() => {
-                              broadcast.setMuted(`caller-${call.id}`, !callMuted);
-                            }}
-                            className={`px-2 py-1 rounded text-xs font-semibold ${callMuted ? 'bg-red-600' : 'bg-gray-700'}`}
-                          >
-                            {callMuted ? 'Unmute' : 'Mute'}
-                          </button>
-                          <button
-                            onClick={async () => {
-                              await handleEndCall();
-                            }}
-                            className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-semibold"
-                          >
-                            End
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={async () => {
-                            if (hostReady && activeEpisode) {
-                              try {
-                                const callerName = call.caller?.name || 'Web Caller';
-                                await broadcast.connectToCall(call.id, callerName, activeEpisode.id);
-                                console.log('✅ Call connected via global context');
-                              } catch (error) {
-                                console.error('❌ Error connecting to call:', error);
-                                alert('Failed to connect to call');
-                              }
-                            }
-                          }}
-                          className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-semibold"
-                        >
-                          Take Call
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Volume Control */}
-                  {isOnAir && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-xs text-gray-500">Vol:</span>
-                      <input 
-                        type="range" 
-                        min="0" 
-                        max="100" 
-                        value={callVolume}
-                        onChange={(e) => {
-                          broadcast.setVolume(`caller-${call.id}`, parseInt(e.target.value));
-                        }}
-                        className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer"
-                      />
-                      <span className="text-xs text-gray-500 w-8 text-right">{callVolume}%</span>
-                    </div>
-                  )}
-
-                  {/* Topic (if on air) */}
-                  {isOnAir && call.topic && (
-                    <p className="text-xs text-gray-400 mt-2">Topic: {call.topic}</p>
-                  )}
-                </div>
-              );
-            })}
-
-          </div>
           ) : (
             /* Documents Tab - Show AI Analysis */
             <div className="space-y-4">

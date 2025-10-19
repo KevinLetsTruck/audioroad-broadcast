@@ -23,6 +23,7 @@ interface CallInfo {
   id: string;
   callId: string;
   callerName: string;
+  topic?: string;
   twilioCall: Call | null;
   audioStream: MediaStream | null;
   isOnAir: boolean;
