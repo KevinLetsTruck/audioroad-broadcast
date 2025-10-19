@@ -52,6 +52,13 @@ export default function BroadcastControl() {
   const status = broadcast.state;
   const audioSources = broadcast.audioSources;
   const levels = broadcast.levels;
+  
+  // Debug: log audioSources when they change
+  useEffect(() => {
+    if (audioSources.length > 0) {
+      console.log('🎚️ [DEBUG] Audio sources updated:', audioSources.map(s => `${s.type}:${s.id}`));
+    }
+  }, [audioSources]);
 
   /**
    * Save settings to localStorage whenever they change
