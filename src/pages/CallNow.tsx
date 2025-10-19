@@ -8,7 +8,19 @@ export default function CallNow() {
   const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
   const [callerId, setCallerId] = useState<string | null>(null);
   const [isCreatingCaller, setIsCreatingCaller] = useState(false);
-  const [twilioIdentity] = useState(`caller-${Date.now()}`); // Create identity ONCE, not on every render
+  
+  // Use stable identity across page refreshes (store in sessionStorage)
+  const [twilioIdentity] = useState(() => {
+    let identity = sessionStorage.getItem('caller-identity');
+    if (!identity) {
+      identity = `caller-${Date.now()}`;
+      sessionStorage.setItem('caller-identity', identity);
+      console.log('📞 [CALLNOW] Created new caller identity:', identity);
+    } else {
+      console.log('📞 [CALLNOW] Reusing existing identity:', identity);
+    }
+    return identity;
+  });
 
   const {
     isReady,

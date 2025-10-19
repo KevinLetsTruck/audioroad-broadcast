@@ -24,6 +24,8 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
 
     const initDevice = async () => {
       try {
+        console.log('📞 [DEVICE] Initializing for identity:', identity);
+        
         // Get Twilio token from backend
         const response = await fetch('/api/twilio/token', {
           method: 'POST',
@@ -41,7 +43,8 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
         // Create and register device
         twilioDevice = new Device(token, {
           enableImprovedSignalingErrorPrecision: true,
-          logLevel: 'error' // Change from 'warn' to 'error' to reduce console spam
+          logLevel: 'error',
+          edge: 'ashburn' // Use specific edge for better reliability
         });
 
         twilioDevice.on('registered', () => {
