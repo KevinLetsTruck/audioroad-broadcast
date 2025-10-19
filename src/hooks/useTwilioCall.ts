@@ -48,25 +48,32 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
         });
 
         twilioDevice.on('registered', () => {
-          console.log('Twilio Device ready');
+          console.log('✅ [DEVICE] Registered successfully, identity:', identity);
           setIsReady(true);
         });
 
         twilioDevice.on('error', (error) => {
-          console.error('Twilio Device error:', error);
+          console.error('❌ [DEVICE] Error:', error);
           // Set ready to true even with errors so button doesn't stay stuck
           setIsReady(true);
           if (onError) onError(error);
         });
 
         twilioDevice.on('incoming', (incomingCall) => {
-          console.log('Incoming call received');
+          console.log('📞 [DEVICE] Incoming call received');
           setCall(incomingCall);
           setupCallHandlers(incomingCall);
         });
 
+        twilioDevice.on('unregistered', () => {
+          console.log('📴 [DEVICE] Unregistered');
+          setIsReady(false);
+        });
+
+        console.log('📞 [DEVICE] Registering device...');
         await twilioDevice.register();
         setDevice(twilioDevice);
+        console.log('✅ [DEVICE] Device stored');
       } catch (error) {
         console.error('Failed to initialize Twilio Device:', error);
         // Set ready to true even with errors so button doesn't stay stuck
@@ -84,17 +91,33 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
       // Properly destroy device on cleanup - check state first
       if (twilioDevice) {
         const state = twilioDevice.state;
-        console.log('🧹 Cleaning up Twilio Device, current state:', state);
+        console.log('🧹 [DEVICE] Cleaning up, state:', state, 'identity:', identity);
         
         try {
+          // Disconnect any active calls first
+          // @ts-ignore
+          const activeConnections = twilioDevice.calls || [];
+          if (activeConnections.length > 0) {
+            console.log('📴 [DEVICE] Disconnecting active calls:', activeConnections.length);
+            activeConnections.forEach((call: any) => {
+              try {
+                call.disconnect();
+              } catch (e) {
+                console.warn('Error disconnecting call:', e);
+              }
+            });
+          }
+          
+          // Unregister and destroy
           if (state === 'registered' || state === 'registering') {
             twilioDevice.unregister();
           }
           if (state !== 'destroyed') {
             twilioDevice.destroy();
           }
+          console.log('✅ [DEVICE] Cleanup complete');
         } catch (error) {
-          console.log('⚠️ Error during device cleanup:', error);
+          console.log('⚠️ [DEVICE] Error during cleanup:', error);
           // Ignore cleanup errors
         }
       }
@@ -171,20 +194,23 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
 
   const makeCall = async (params: Record<string, string> = {}, retryCount = 0) => {
     if (!device || !isReady) {
-      console.error('Device not ready');
+      console.error('❌ [CALL] Device not ready, state:', device?.state);
       return;
     }
 
     setIsConnecting(true);
-    console.log('🔌 Initiating web call with params:', params);
+    console.log('🔌 [CALL] Initiating web call...');
+    console.log('🔌 [CALL] Params:', params);
+    console.log('🔌 [CALL] Device state:', device.state);
 
     try {
       const outgoingCall = await device.connect({ params });
-      console.log('📞 Call connection initiated');
+      console.log('✅ [CALL] Connection initiated, CallSID:', outgoingCall.parameters.CallSid);
       setCall(outgoingCall);
       setupCallHandlers(outgoingCall);
     } catch (error) {
-      console.error('❌ Failed to make call:', error);
+      console.error('❌ [CALL] Failed to make call:', error);
+      console.error('❌ [CALL] Error details:', JSON.stringify(error, null, 2));
       
       // Retry logic - up to 3 attempts
       if (retryCount < 3) {

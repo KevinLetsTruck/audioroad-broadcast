@@ -59,15 +59,30 @@ export default function CallNow() {
         });
         const caller = await response.json();
         setCallerId(caller.id);
-        console.log('✅ Caller ID created:', caller.id);
+        console.log('✅ [CALLNOW] Caller ID created:', caller.id);
       } catch (error) {
-        console.error('Error creating caller:', error);
+        console.error('❌ [CALLNOW] Error creating caller:', error);
       } finally {
         setIsCreatingCaller(false);
       }
     };
 
     createCaller();
+    
+    // Cleanup on page close
+    const handleBeforeUnload = () => {
+      console.log('👋 [CALLNOW] Page closing - caller leaving');
+      // Hang up if on call
+      if (callState === 'connected' || callState === 'calling') {
+        hangUp();
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, []);
 
   useEffect(() => {
