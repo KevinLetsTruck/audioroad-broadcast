@@ -221,9 +221,8 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
         approvedAt: new Date(),
         screenerNotes,
         topic,
-        priority: priority || 'normal',
-        participantState: 'hold', // Start on hold (muted)
-        isMutedInConference: true
+        priority: priority || 'normal'
+        // Don't set participant state yet - let it use defaults
       },
       include: {
         caller: true

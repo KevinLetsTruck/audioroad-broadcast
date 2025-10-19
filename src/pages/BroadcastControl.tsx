@@ -10,7 +10,6 @@ import { Link } from 'react-router-dom';
 import { useBroadcast } from '../contexts/BroadcastContext';
 import { StreamEncoder, StreamConfig } from '../services/streamEncoder';
 import VUMeter from '../components/VUMeter';
-import ParticipantBoard from '../components/ParticipantBoard';
 import { detectCurrentShow, getShowDisplayName } from '../utils/showScheduler';
 
 export default function BroadcastControl() {
@@ -612,12 +611,8 @@ export default function BroadcastControl() {
                 />
               </div>
 
-              {/* Participant Board - Multi-participant control */}
-              {status.episodeId && (
-                <div className="mb-6">
-                  <ParticipantBoard episodeId={status.episodeId} />
-                </div>
-              )}
+              {/* Participant Board - Coming Soon */}
+              {/* Temporarily disabled while we fix call system */}
 
               {/* Master VU Meter */}
               <div className="mb-6">
