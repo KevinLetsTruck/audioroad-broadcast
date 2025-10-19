@@ -5,6 +5,8 @@ import ChatPanel from '../components/ChatPanel';
 import DocumentUploadWidget from '../components/DocumentUploadWidget';
 
 export default function ScreeningRoom() {
+  const broadcast = useBroadcast(); // Use global broadcast context
+  
   const [socket, setSocket] = useState<Socket | null>(null);
   const [activeEpisode, setActiveEpisode] = useState<any>(null);
   const [incomingCalls, setIncomingCalls] = useState<any[]>([]);
@@ -18,57 +20,9 @@ export default function ScreeningRoom() {
     notes: ''
   });
 
-  // Stable identity for screener (prevents device loop)
-  const [screenerIdentity] = useState(`screener-${Date.now()}`);
-
-  // Twilio Device for screener
-  const {
-    isReady: screenerReady,
-    isConnected: screenerConnected,
-    isMuted,
-    formattedDuration,
-    makeCall: connectToCall,
-    hangUp: endCall,
-    toggleMute
-  } = useTwilioCall({
-    identity: screenerIdentity,
-    onCallConnected: () => {
-      console.log('✅ Screener audio connected to caller!');
-    },
-    onCallDisconnected: () => {
-      console.log('📴 Screener audio disconnected');
-      
-      // Check if this was due to caller hanging up
-      // If activeCall exists but no longer in queue, caller hung up
-      if (activeCall) {
-        setTimeout(() => {
-          // Check if call still exists
-          fetch(`/api/calls/${activeCall.id}`)
-            .then(res => res.json())
-            .then(call => {
-              if (call.status === 'completed' || call.endedAt) {
-                console.log('🔴 Caller hung up - closing screening form');
-                alert('Caller has disconnected');
-                setActiveCall(null);
-                setScreenerNotes({
-                  name: '',
-                  location: '',
-                  topic: '',
-                  truckerType: 'OTR',
-                  priority: 'normal',
-                  notes: ''
-                });
-                fetchQueuedCalls();
-              }
-            })
-            .catch(err => console.error('Error checking call status:', err));
-        }, 1000);
-      }
-    },
-    onError: (error) => {
-      console.error('❌ Screener audio error:', error);
-    }
-  });
+  // Check if Twilio device is ready from global context
+  const screenerReady = broadcast.twilioDevice !== null;
+  const screenerConnected = activeCall !== null;
 
   useEffect(() => {
     console.log('🚀 ScreeningRoom mounted - initializing...');
@@ -138,7 +92,7 @@ export default function ScreeningRoom() {
       fetchQueuedCalls();
     });
 
-    socket.on('call:completed', (data) => {
+    socket.on('call:completed', async (data) => {
       console.log('📴 Call completed:', data);
       
       // If this is the call being screened, close the form
@@ -155,14 +109,14 @@ export default function ScreeningRoom() {
           notes: ''
         });
         if (screenerConnected) {
-          endCall();
+          await broadcast.disconnectCurrentCall();
         }
       }
       
       fetchQueuedCalls(); // Refresh the list
     });
 
-    socket.on('call:hungup', (data) => {
+    socket.on('call:hungup', async (data) => {
       console.log('📴 Caller hung up event:', data);
       
       // Close form if this is active call
@@ -177,7 +131,7 @@ export default function ScreeningRoom() {
           notes: ''
         });
         if (screenerConnected) {
-          endCall();
+          await broadcast.disconnectCurrentCall();
         }
       }
     });
@@ -252,7 +206,7 @@ export default function ScreeningRoom() {
     // Refresh queues to remove this call from "Queued for Host" list
     fetchQueuedCalls();
     
-    // Connect screener's audio to the caller
+    // Connect screener's audio to the caller using global device
     if (!screenerReady) {
       alert('⚠️ Phone system not ready. Please wait a moment and try again.');
       setActiveCall(null);
@@ -261,12 +215,9 @@ export default function ScreeningRoom() {
 
     console.log('🎙️ Connecting screener to caller...');
     try {
-      await connectToCall({ 
-        callId: call.id,
-        callerId: call.callerId,
-        role: 'screener'
-      });
-      console.log('✅ Audio connection initiated');
+      const callerName = call.caller?.name || 'Caller';
+      await broadcast.connectToCall(call.id, callerName, activeEpisode.id, 'screener');
+      console.log('✅ Screener audio connection initiated');
     } catch (error) {
       console.error('❌ Error connecting to caller:', error);
       alert('Failed to connect audio. Please try again.');
@@ -286,7 +237,7 @@ export default function ScreeningRoom() {
       // End screener's audio connection and clear active call state
       if (screenerConnected) {
         console.log('📴 Ending screener audio connection');
-        endCall();
+        await broadcast.disconnectCurrentCall();
       }
       
       const callToApprove = activeCall;
@@ -358,7 +309,7 @@ export default function ScreeningRoom() {
     try {
       // End screener's audio connection first
       if (screenerConnected) {
-        endCall();
+        await broadcast.disconnectCurrentCall();
       }
 
       const callToReject = activeCall;
@@ -435,18 +386,10 @@ export default function ScreeningRoom() {
                     ) : (
                       <span className="inline-block w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
                     )}
-                    <span className="text-sm text-gray-400">{formattedDuration}</span>
+                    <span className="text-sm text-gray-400">
+                      {screenerConnected ? 'Connected' : 'Connecting...'}
+                    </span>
                   </div>
-                  {screenerConnected && (
-                    <button
-                      onClick={toggleMute}
-                      className={`px-3 py-1 rounded text-xs font-semibold ${
-                        isMuted ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'
-                      }`}
-                    >
-                      {isMuted ? 'Unmute' : 'Mute'}
-                    </button>
-          )}
         </div>
 
                 {/* Compact Screening Form - Single Line */}

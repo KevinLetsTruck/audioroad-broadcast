@@ -53,9 +53,10 @@ interface BroadcastContextType {
   
   // Actions - Calls
   initializeTwilio: (identity: string) => Promise<void>;
-  connectToCall: (callId: string, callerName: string, episodeId: string) => Promise<void>;
+  connectToCall: (callId: string, callerName: string, episodeId: string, role?: 'host' | 'screener') => Promise<void>;
   disconnectCall: (callId: string) => Promise<void>;
   setOnAir: (callId: string) => void;
+  disconnectCurrentCall: () => Promise<void>;
 }
 
 const BroadcastContext = createContext<BroadcastContextType | null>(null);
@@ -195,19 +196,19 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
   };
 
   /**
-   * Connect to a call and add to mixer
+   * Connect to a call (host = adds to mixer, screener = just audio)
    */
-  const connectToCall = async (callId: string, callerName: string, episodeId: string) => {
+  const connectToCall = async (callId: string, callerName: string, episodeId: string, role: 'host' | 'screener' = 'host') => {
     if (!twilioDevice) {
       throw new Error('Twilio device not initialized');
     }
 
     try {
-      console.log('📞 [CALL] Connecting to call:', callId, callerName);
+      console.log(`📞 [CALL] Connecting as ${role}:`, callId, callerName);
 
       // Make Twilio call
       const call = await twilioDevice.connect({
-        params: { callId, episodeId, role: 'host' }
+        params: { callId, episodeId, role }
       });
 
       // Wait for call to connect
@@ -227,11 +228,13 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
         console.warn('⚠️ [CALL] No remote stream available');
       }
 
-      // Add to mixer if available
-      if (mixer && remoteStream) {
-        console.log('🎚️ [CALL] Adding to mixer...');
+      // Only add to mixer if this is the HOST (not screener)
+      if (role === 'host' && mixer && remoteStream) {
+        console.log('🎚️ [CALL] Adding to mixer (host call)...');
         mixer.addCallerAudio(callId, callerName, remoteStream);
         console.log('✅ [CALL] Added to mixer');
+      } else if (role === 'screener') {
+        console.log('🔍 [CALL] Screener call - not adding to mixer');
       }
 
       // Store call info
@@ -241,14 +244,18 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
         callerName,
         twilioCall: call,
         audioStream: remoteStream || null,
-        isOnAir: true,
+        isOnAir: role === 'host',
         connectedAt: new Date()
       };
 
       setActiveCalls(prev => new Map(prev).set(callId, callInfo));
-      setOnAirCallState(callInfo);
+      
+      // Only set as on-air if it's the host
+      if (role === 'host') {
+        setOnAirCallState(callInfo);
+      }
 
-      console.log('✅ [CALL] Call fully connected and added to state');
+      console.log(`✅ [CALL] ${role} call fully connected`);
 
     } catch (error) {
       console.error('❌ [CALL] Failed to connect:', error);
@@ -299,6 +306,21 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  /**
+   * Disconnect the most recent active call (for screener)
+   */
+  const disconnectCurrentCall = async () => {
+    // Get the most recent call
+    const calls = Array.from(activeCalls.values());
+    if (calls.length === 0) {
+      console.log('⚠️ [CALL] No active calls to disconnect');
+      return;
+    }
+
+    const mostRecent = calls[calls.length - 1];
+    await disconnectCall(mostRecent.callId);
+  };
+
   const value: BroadcastContextType = {
     state,
     setState: setStateWithLogging,
@@ -316,7 +338,8 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     initializeTwilio,
     connectToCall,
     disconnectCall,
-    setOnAir
+    setOnAir,
+    disconnectCurrentCall
   };
 
   return (

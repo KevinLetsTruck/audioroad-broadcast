@@ -239,9 +239,9 @@ export default function BroadcastControl() {
         selectedShow: selectedShow
       });
 
-      // Start duration timer
+      // Start duration timer (with the startTime we just set)
       console.log('🎙️ [START] Step 8: Starting duration timer...');
-      startDurationTimer();
+      startDurationTimer(startTime);
       console.log('✅ [START] Duration timer started');
 
       console.log('🎉 SHOW STARTED! You are LIVE!');
@@ -428,19 +428,28 @@ export default function BroadcastControl() {
   };
 
   /**
-   * Start duration timer
+   * Start duration timer with specific start time
    */
-  const startDurationTimer = () => {
+  const startDurationTimer = (startTime: Date) => {
+    console.log('⏱️ [TIMER] Starting with time:', startTime);
+    
+    // Clear any existing timer
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+    }
+    
+    // Set up interval to update every second
     durationIntervalRef.current = setInterval(() => {
-      if (!status.startTime) return;
-
-      const elapsed = Date.now() - status.startTime.getTime();
+      const elapsed = Date.now() - startTime.getTime();
       const hours = Math.floor(elapsed / 3600000);
       const minutes = Math.floor((elapsed % 3600000) / 60000);
       const seconds = Math.floor((elapsed % 60000) / 1000);
 
-      setDuration(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+      const formatted = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      setDuration(formatted);
     }, 1000);
+    
+    console.log('✅ [TIMER] Timer running');
   };
 
   /**
