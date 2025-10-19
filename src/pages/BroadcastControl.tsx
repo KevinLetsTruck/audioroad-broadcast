@@ -19,7 +19,9 @@ export default function BroadcastControl() {
   const [isStarting, setIsStarting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [masterLevel, setMasterLevel] = useState(0);
-  const [duration, setDuration] = useState('00:00:00');
+  
+  // Duration from global context (persists across navigation!)
+  const duration = broadcast.duration;
   
   // UI status indicators (local to this page)
   const [isRecording, setIsRecording] = useState(false);
@@ -45,7 +47,6 @@ export default function BroadcastControl() {
 
   // Local refs (encoder still local, mixer from context)
   const encoderRef = useRef<StreamEncoder | null>(null);
-  const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Get state from context
   const status = broadcast.state;
@@ -239,10 +240,8 @@ export default function BroadcastControl() {
         selectedShow: selectedShow
       });
 
-      // Start duration timer (with the startTime we just set)
-      console.log('🎙️ [START] Step 8: Starting duration timer...');
-      startDurationTimer(startTime);
-      console.log('✅ [START] Duration timer started');
+      // Duration timer managed by BroadcastContext now (global!)
+      console.log('✅ [START] Global timer will start automatically');
 
       console.log('🎉 SHOW STARTED! You are LIVE!');
 
@@ -279,10 +278,7 @@ export default function BroadcastControl() {
       console.log('📴 [END] Ending show...');
       console.log('📴 [END] Episode ID:', status.episodeId);
 
-      // Stop duration timer
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-      }
+      // Duration timer stops automatically via context when isLive becomes false
 
       // Stop streaming
       if (encoderRef.current && isStreaming) {
@@ -343,7 +339,7 @@ export default function BroadcastControl() {
       // Reset local UI states
       setIsRecording(false);
       setIsStreaming(false);
-      setDuration('00:00:00');
+      // Duration resets automatically via context
 
       console.log('🎉 [END] Show ended successfully!');
 
@@ -427,43 +423,7 @@ export default function BroadcastControl() {
     }
   };
 
-  /**
-   * Start duration timer with specific start time
-   */
-  const startDurationTimer = (startTime: Date) => {
-    console.log('⏱️ [TIMER] Starting with time:', startTime);
-    
-    // Clear any existing timer
-    if (durationIntervalRef.current) {
-      clearInterval(durationIntervalRef.current);
-    }
-    
-    // Set up interval to update every second
-    durationIntervalRef.current = setInterval(() => {
-      const elapsed = Date.now() - startTime.getTime();
-      const hours = Math.floor(elapsed / 3600000);
-      const minutes = Math.floor((elapsed % 3600000) / 60000);
-      const seconds = Math.floor((elapsed % 60000) / 1000);
-
-      const formatted = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-      setDuration(formatted);
-    }, 1000);
-    
-    console.log('✅ [TIMER] Timer running');
-  };
-
-  /**
-   * Cleanup on unmount (don't destroy mixer - it's global!)
-   */
-  useEffect(() => {
-    return () => {
-      if (durationIntervalRef.current) {
-        clearInterval(durationIntervalRef.current);
-      }
-      // Don't destroy mixer - it's managed by context
-      // Don't destroy encoder - handled in END SHOW
-    };
-  }, []);
+  // Timer is now managed globally in BroadcastContext - no local cleanup needed!
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">

@@ -5,7 +5,7 @@
  * Ensures mixer persists when navigating between pages
  */
 
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { Device, Call } from '@twilio/voice-sdk';
 import { AudioMixerEngine, AudioSource } from '../services/audioMixerEngine';
 import { StreamEncoder } from '../services/streamEncoder';
@@ -33,6 +33,7 @@ interface BroadcastContextType {
   // State
   state: BroadcastState;
   setState: (state: BroadcastState) => void;
+  duration: string; // Global timer
   
   // Mixer
   mixer: AudioMixerEngine | null;
@@ -80,6 +81,8 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
   const [activeCalls, setActiveCalls] = useState<Map<string, CallInfo>>(new Map());
   const [onAirCall, setOnAirCallState] = useState<CallInfo | null>(null);
   const [twilioDevice, setTwilioDevice] = useState<Device | null>(null);
+  const [duration, setDuration] = useState('00:00:00');
+  const durationTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Wrapper for setState with logging
   const setStateWithLogging = (newState: BroadcastState) => {
@@ -89,6 +92,47 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     });
     setState(newState);
   };
+
+  /**
+   * Duration timer - runs globally when live
+   */
+  useEffect(() => {
+    if (state.isLive && state.startTime) {
+      console.log('⏱️ [CONTEXT] Starting global duration timer');
+      
+      // Clear any existing timer
+      if (durationTimerRef.current) {
+        clearInterval(durationTimerRef.current);
+      }
+      
+      // Start new timer
+      durationTimerRef.current = setInterval(() => {
+        const elapsed = Date.now() - state.startTime!.getTime();
+        const hours = Math.floor(elapsed / 3600000);
+        const minutes = Math.floor((elapsed % 3600000) / 60000);
+        const seconds = Math.floor((elapsed % 60000) / 1000);
+        
+        const formatted = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        setDuration(formatted);
+      }, 1000);
+      
+      console.log('✅ [CONTEXT] Global timer running');
+    } else {
+      // Stop timer when not live
+      if (durationTimerRef.current) {
+        console.log('⏹️ [CONTEXT] Stopping duration timer');
+        clearInterval(durationTimerRef.current);
+        durationTimerRef.current = null;
+      }
+      setDuration('00:00:00');
+    }
+    
+    return () => {
+      if (durationTimerRef.current) {
+        clearInterval(durationTimerRef.current);
+      }
+    };
+  }, [state.isLive, state.startTime]);
 
   const initializeMixer = async (): Promise<AudioMixerEngine> => {
     if (mixer) {
@@ -318,6 +362,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
   const value: BroadcastContextType = {
     state,
     setState: setStateWithLogging,
+    duration,
     mixer,
     encoder,
     audioSources,
