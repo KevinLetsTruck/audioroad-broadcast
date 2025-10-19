@@ -52,8 +52,17 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
       if (isFirstConnection) {
         // First participant: Host joins conference WITH them
         console.log('🎙️ [MULTI] First participant - host joining conference');
+        
+        // Connect host to conference
         await broadcast.connectToCall(call.id, callerName, episodeId, 'host');
-        console.log('✅ [MULTI] Host in conference with:', callerName);
+        console.log('✅ [MULTI] Host joined conference');
+        
+        // ALSO unmute the caller and update their state
+        const response = await fetch(`/api/participants/${call.id}/on-air`, { method: 'PATCH' });
+        if (!response.ok) {
+          throw new Error('Failed to unmute first participant');
+        }
+        console.log('✅ [MULTI] First participant unmuted:', callerName);
       } else {
         // Subsequent participants: They're already in conference MUTED
         // Just unmute them in Twilio

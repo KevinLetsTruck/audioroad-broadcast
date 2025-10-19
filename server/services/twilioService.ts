@@ -234,15 +234,19 @@ export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', opti
     case 'conference':
       // Don't say anything - just connect silently
       const dial = twiml.dial();
-      dial.conference({
-        startConferenceOnEnter: false,
+      
+      // Merge options but FORCE beep to false
+      const conferenceOptions = {
+        ...options,
+        startConferenceOnEnter: options.startConferenceOnEnter !== undefined ? options.startConferenceOnEnter : false,
         endConferenceOnExit: false,
-        beep: false,  // Try boolean false again
+        beep: 'false',  // Twilio wants string 'false' not boolean
         statusCallback: `${process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app'}/api/twilio/conference-status`,
         statusCallbackEvent: ['start', 'end', 'join', 'leave'],
-        statusCallbackMethod: 'POST',
-        ...options
-      }, options.conferenceName);
+        statusCallbackMethod: 'POST'
+      };
+      
+      dial.conference(conferenceOptions, options.conferenceName);
       break;
 
     case 'voicemail':

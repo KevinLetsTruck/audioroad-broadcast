@@ -71,8 +71,7 @@ router.post('/voice', async (req: Request, res: Response) => {
         conferenceName,
         startConferenceOnEnter: role === 'screener',  // Screener starts, host joins existing
         endConferenceOnExit: false,  // DON'T end conference - keep alive for whole episode!
-        muted: false,
-        beep: false  // Boolean false
+        muted: false
       });
 
       return res.type('text/xml').send(twiml);
@@ -147,7 +146,6 @@ router.post('/voice', async (req: Request, res: Response) => {
       startConferenceOnEnter: false,  // Don't start until screener joins
       endConferenceOnExit: false,     // DON'T end conference - keep it alive for episode!
       waitUrl: '/api/twilio/wait-music',
-      beep: false,  // Boolean false
       muted: true  // 🔇 Join MUTED - host will unmute when ready
     });
     
@@ -226,7 +224,6 @@ router.post('/incoming-call', async (req: Request, res: Response) => {
       startConferenceOnEnter: false,  // Don't start until screener joins
       endConferenceOnExit: false,     // DON'T end conference - keep it alive for episode!
       waitUrl: '/api/twilio/wait-music',
-      beep: false,
       muted: true  // 🔇 Join MUTED - host will unmute when ready
     });
     
