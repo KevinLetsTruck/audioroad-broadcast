@@ -31,10 +31,10 @@ router.post('/token', (req: Request, res: Response) => {
  */
 router.post('/voice', async (req: Request, res: Response) => {
   try {
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('📞 VOICE ENDPOINT CALLED');
+    const timestamp = new Date().toISOString();
+    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`📞 VOICE ENDPOINT CALLED at ${timestamp}`);
     console.log('Full request body:', JSON.stringify(req.body, null, 2));
-    console.log('Request headers:', JSON.stringify(req.headers, null, 2));
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     const { callerId, CallSid, role, callId, episodeId } = req.body;
@@ -68,11 +68,11 @@ router.post('/voice', async (req: Request, res: Response) => {
         episode = await prisma.episode.findUnique({ where: { id: episodeId } });
       }
 
-      const isConferenceActive = episode?.conferenceActive || false;
-      const startConference = role === 'screener' || isConferenceActive;  // Screener always starts, host starts if active
+      // Screener always starts conference, host joins active one
+      const startConference = role === 'screener' ? true : (episode?.conferenceActive || false);
       
       console.log(`🎙️ [${role.toUpperCase()}] Joining conference:`, conferenceName);
-      console.log(`🎙️ [${role.toUpperCase()}] Conference active?`, isConferenceActive, '→ startConferenceOnEnter:', startConference);
+      console.log(`🎙️ [${role.toUpperCase()}] Role: ${role}, startConferenceOnEnter:`, startConference);
 
       const twiml = generateTwiML('conference', { 
         conferenceName,
@@ -131,19 +131,30 @@ router.post('/voice', async (req: Request, res: Response) => {
       }
     }
 
-    // Put caller in conference (so screener can join later)
+    // Put caller in conference
     const conferenceName = `episode-${activeEpisode.id}`;
     
-    // Check if conference is already active
-    const isConferenceActive = activeEpisode.conferenceActive || false;
+    // Check if there are ANY participants already in this conference
+    const existingParticipants = await prisma.call.count({
+      where: {
+        episodeId: activeEpisode.id,
+        twilioConferenceSid: { not: null },
+        status: { notIn: ['completed', 'rejected'] }
+      }
+    });
     
-    console.log('📞 [VOICE] Conference active?', isConferenceActive);
+    // If there's already someone in the conference, join immediately
+    // Otherwise, wait for screener to start it
+    const startConference = existingParticipants > 0;
+    
+    console.log('📞 [VOICE] Existing participants in conference:', existingParticipants);
+    console.log('📞 [VOICE] startConferenceOnEnter:', startConference);
     console.log('📞 [VOICE] Sending web caller to conference:', conferenceName);
     
     const twiml = generateTwiML('conference', { 
       conferenceName,
-      startConferenceOnEnter: isConferenceActive,  // If conference exists, start it; otherwise wait for screener
-      endConferenceOnExit: false,     // DON'T end conference - keep it alive for episode!
+      startConferenceOnEnter: startConference,  // Join active conference immediately
+      endConferenceOnExit: false,
       waitUrl: '/api/twilio/wait-music',
       muted: true  // 🔇 Join MUTED - host will unmute when ready
     });
@@ -216,16 +227,25 @@ router.post('/incoming-call', async (req: Request, res: Response) => {
     // Send caller to conference (same as web calls!)
     const conferenceName = `episode-${activeEpisode.id}`;
     
-    // Check if conference is already active
-    const isConferenceActive = activeEpisode.conferenceActive || false;
+    // Check if there are ANY participants already in this conference
+    const existingParticipants = await prisma.call.count({
+      where: {
+        episodeId: activeEpisode.id,
+        twilioConferenceSid: { not: null },
+        status: { notIn: ['completed', 'rejected'] }
+      }
+    });
     
-    console.log('📞 [PHONE] Conference active?', isConferenceActive);
+    const startConference = existingParticipants > 0;
+    
+    console.log('📞 [PHONE] Existing participants in conference:', existingParticipants);
+    console.log('📞 [PHONE] startConferenceOnEnter:', startConference);
     console.log('📞 [PHONE] Sending phone caller to conference:', conferenceName);
     
     const twiml = generateTwiML('conference', { 
       conferenceName,
-      startConferenceOnEnter: isConferenceActive,  // If conference exists, start it; otherwise wait for screener
-      endConferenceOnExit: false,     // DON'T end conference - keep it alive for episode!
+      startConferenceOnEnter: startConference,  // Join active conference immediately
+      endConferenceOnExit: false,
       waitUrl: '/api/twilio/wait-music',
       muted: true  // 🔇 Join MUTED - host will unmute when ready
     });
