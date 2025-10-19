@@ -148,7 +148,7 @@ router.post('/voice', async (req: Request, res: Response) => {
       endConferenceOnExit: false,     // DON'T end conference - keep it alive for episode!
       waitUrl: '/api/twilio/wait-music',
       beep: false,  // Boolean false
-      muted: false  // Ensure caller is NOT muted
+      muted: true  // 🔇 Join MUTED - host will unmute when ready
     });
     
     console.log('📞 Sending caller to conference:', conferenceName);
@@ -227,7 +227,7 @@ router.post('/incoming-call', async (req: Request, res: Response) => {
       endConferenceOnExit: false,     // DON'T end conference - keep it alive for episode!
       waitUrl: '/api/twilio/wait-music',
       beep: false,
-      muted: false  // Caller should NOT be muted
+      muted: true  // 🔇 Join MUTED - host will unmute when ready
     });
     
     res.type('text/xml').send(twiml);
@@ -322,6 +322,26 @@ router.post('/conference-status', async (req: Request, res: Response) => {
         }
       } catch (error) {
         console.error('❌ [CONFERENCE] Failed to update episode:', error);
+      }
+    }
+
+    // When a participant joins, store the conference SID on their call
+    if (StatusCallbackEvent === 'participant-join' && CallSid && ConferenceSid) {
+      const call = await prisma.call.findFirst({
+        where: { twilioCallSid: CallSid }
+      });
+
+      if (call && !call.twilioConferenceSid) {
+        console.log(`🎙️ [CONFERENCE] Participant joined, storing conference SID: ${call.id}`);
+        
+        await prisma.call.update({
+          where: { id: call.id },
+          data: {
+            twilioConferenceSid: ConferenceSid
+          }
+        });
+        
+        console.log('✅ [CONFERENCE] Call updated with conference SID');
       }
     }
 

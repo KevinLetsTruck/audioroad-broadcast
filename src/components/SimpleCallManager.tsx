@@ -31,6 +31,7 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
       const now = Date.now();
       const active = calls.filter((c: any) => {
         if (c.endedAt) return false;
+        if (c.status === 'completed') return false;
         const age = now - new Date(c.incomingAt).getTime();
         return age < 4 * 60 * 60 * 1000; // Last 4 hours
       });
@@ -54,36 +55,19 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
         await broadcast.connectToCall(call.id, callerName, episodeId, 'host');
         console.log('✅ [MULTI] Host in conference with:', callerName);
       } else {
-        // Subsequent participants: They're already in conference (from caller side)
+        // Subsequent participants: They're already in conference MUTED
         // Just unmute them in Twilio
         console.log('📡 [MULTI] Additional participant - unmuting in conference:', callerName);
         
-        try {
-          const response = await fetch(`/api/participants/${call.id}/on-air`, { method: 'PATCH' });
-          if (response.ok) {
-            console.log('✅ [MULTI] Participant unmuted:', callerName);
-            
-            // Add to local tracking (simulate connected state)
-            broadcast.activeCalls.set(call.id, {
-              id: `call-${call.id}`,
-              callId: call.id,
-              callerName,
-              topic: call.topic,
-              twilioCall: null,
-              audioStream: null,
-              isOnAir: true,
-              connectedAt: new Date()
-            });
-          } else {
-            throw new Error('Failed to unmute participant');
-          }
-        } catch (err) {
-          console.error('Failed to add participant:', err);
-          alert('Failed to add participant to conference');
+        const response = await fetch(`/api/participants/${call.id}/on-air`, { method: 'PATCH' });
+        if (!response.ok) {
+          throw new Error('Failed to unmute participant');
         }
+        console.log('✅ [MULTI] Participant unmuted:', callerName);
       }
       
-      fetchQueue();
+      // Refresh to show updated state
+      setTimeout(fetchQueue, 500);
     } catch (error) {
       console.error('Failed to connect:', error);
       alert('Failed to connect to participant');
@@ -91,22 +75,24 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
   };
 
   const disconnectCall = async (callId: string) => {
+    if (!confirm('End this call? The caller will be disconnected.')) {
+      return;
+    }
+
     try {
       console.log('📴 [MULTI] Disconnecting participant:', callId);
       
-      // If this is the LAST active call, disconnect host too
-      if (broadcast.activeCalls.size === 1) {
+      // Check how many participants are currently on-air
+      const onAirCalls = queuedCalls.filter(c => c.participantState === 'on-air');
+      
+      if (onAirCalls.length === 1 && broadcast.activeCalls.size > 0) {
+        // This is the last on-air participant - disconnect host too
         console.log('📴 [MULTI] Last participant - disconnecting host from conference');
         await broadcast.disconnectCall(callId);
       } else {
         // Multiple participants - just mute/remove this one
         console.log('⏸️ [MULTI] Other participants still active - muting this one');
-        
-        // Mute them in Twilio
         await fetch(`/api/participants/${callId}/hold`, { method: 'PATCH' });
-        
-        // Remove from active calls
-        broadcast.activeCalls.delete(callId);
       }
       
       // Mark as completed in database
@@ -117,57 +103,60 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
       });
       
       console.log('✅ [MULTI] Participant disconnected');
-      fetchQueue();
+      setTimeout(fetchQueue, 500);
     } catch (error) {
       console.error('Failed to disconnect:', error);
     }
   };
 
-  // Get calls that are NOT yet connected
-  const queue = queuedCalls.filter(c => !broadcast.activeCalls.has(c.id));
-  
-  // Get active calls as array
-  const activeCallsArray = Array.from(broadcast.activeCalls.values());
+  // Separate calls by state
+  const onAirCalls = queuedCalls.filter(c => c.participantState === 'on-air');
+  const queuedNotOnAir = queuedCalls.filter(c => c.participantState !== 'on-air');
 
   return (
     <div className="space-y-4">
       {/* Active Calls - Currently Broadcasting */}
-      {activeCallsArray.length > 0 && (
+      {onAirCalls.length > 0 && (
         <div className="bg-red-900/30 border-2 border-red-500 rounded-lg p-4">
           <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
             <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
-            🎙️ ACTIVE - ON AIR ({activeCallsArray.length})
+            🎙️ ACTIVE - ON AIR ({onAirCalls.length})
           </h3>
           <div className="space-y-2">
-            {activeCallsArray.map((call) => (
-              <div key={call.callId} className="bg-gray-800 rounded p-3 flex items-center justify-between">
-                <div>
-                  <div className="font-semibold">{call.callerName}</div>
-                  {call.topic && <div className="text-sm text-gray-400">{call.topic}</div>}
-                  <div className="text-xs text-gray-500">
-                    Connected: {Math.floor((Date.now() - call.connectedAt.getTime()) / 1000 / 60)} min
+            {onAirCalls.map((call) => {
+              const connectedAt = call.onAirAt || call.connectedAt || call.incomingAt;
+              const minutesConnected = Math.floor((Date.now() - new Date(connectedAt).getTime()) / 1000 / 60);
+              
+              return (
+                <div key={call.id} className="bg-gray-800 rounded p-3 flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold">{call.caller?.name || 'Caller'}</div>
+                    {call.topic && <div className="text-sm text-gray-400">{call.topic}</div>}
+                    <div className="text-xs text-gray-500">
+                      On air: {minutesConnected} min
+                    </div>
                   </div>
+                  <button
+                    onClick={() => disconnectCall(call.id)}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded font-semibold"
+                  >
+                    End Call
+                  </button>
                 </div>
-                <button
-                  onClick={() => disconnectCall(call.callId)}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded font-semibold"
-                >
-                  End Call
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* Queue - Approved, Waiting to Connect */}
-      {queue.length > 0 && (
+      {queuedNotOnAir.length > 0 && (
         <div className="bg-blue-900/30 border-2 border-blue-500 rounded-lg p-4">
           <h3 className="text-lg font-bold mb-3">
-            📋 QUEUE - APPROVED CALLERS ({queue.length})
+            📋 QUEUE - APPROVED CALLERS ({queuedNotOnAir.length})
           </h3>
           <div className="space-y-2">
-            {queue.map((call, index) => (
+            {queuedNotOnAir.map((call, index) => (
               <div key={call.id} className="bg-gray-800 rounded p-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
@@ -191,7 +180,7 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
       )}
 
       {/* Empty State */}
-      {queue.length === 0 && activeCallsArray.length === 0 && (
+      {queuedNotOnAir.length === 0 && onAirCalls.length === 0 && (
         <div className="text-center py-16 text-gray-400">
           <p className="text-xl mb-2">No callers in queue</p>
           <p className="text-sm">Approved callers will appear here</p>
