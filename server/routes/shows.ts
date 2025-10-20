@@ -1,8 +1,16 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import multer from 'multer';
+import { uploadToS3 } from '../services/audioService';
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+// Configure multer for file uploads (memory storage)
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max
+});
 
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -125,6 +133,104 @@ router.post('/seed', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error seeding shows:', error);
     res.status(500).json({ error: 'Failed to seed shows' });
+  }
+});
+
+/**
+ * PATCH /api/shows/:id/opener - Upload show opener audio
+ */
+router.patch('/:id/opener', upload.single('audio'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+
+    // Get show to use slug in filename
+    const show = await prisma.show.findUnique({ where: { id } });
+    if (!show) {
+      return res.status(404).json({ error: 'Show not found' });
+    }
+
+    // Upload to S3
+    const filename = `show-assets/${show.slug}-opener-${Date.now()}.mp3`;
+    const audioUrl = await uploadToS3(req.file.buffer, filename, req.file.mimetype);
+
+    // Update show
+    const updatedShow = await prisma.show.update({
+      where: { id },
+      data: { openerAudioUrl: audioUrl }
+    });
+
+    res.json({ success: true, show: updatedShow, audioUrl });
+  } catch (error) {
+    console.error('Error uploading opener:', error);
+    res.status(500).json({ error: 'Failed to upload opener audio' });
+  }
+});
+
+/**
+ * PATCH /api/shows/:id/ad - Upload show ad audio
+ */
+router.patch('/:id/ad', upload.single('audio'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    if (!req.file) {
+      return res.status(400).json({ error: 'No audio file provided' });
+    }
+
+    // Get show to use slug in filename
+    const show = await prisma.show.findUnique({ where: { id } });
+    if (!show) {
+      return res.status(404).json({ error: 'Show not found' });
+    }
+
+    // Upload to S3
+    const filename = `show-assets/${show.slug}-ad-${Date.now()}.mp3`;
+    const audioUrl = await uploadToS3(req.file.buffer, filename, req.file.mimetype);
+
+    // Update show
+    const updatedShow = await prisma.show.update({
+      where: { id },
+      data: { adAudioUrl: audioUrl }
+    });
+
+    res.json({ success: true, show: updatedShow, audioUrl });
+  } catch (error) {
+    console.error('Error uploading ad:', error);
+    res.status(500).json({ error: 'Failed to upload ad audio' });
+  }
+});
+
+/**
+ * DELETE /api/shows/:id/opener - Remove opener audio
+ */
+router.delete('/:id/opener', async (req: Request, res: Response) => {
+  try {
+    const updatedShow = await prisma.show.update({
+      where: { id: req.params.id },
+      data: { openerAudioUrl: null }
+    });
+    res.json({ success: true, show: updatedShow });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to remove opener' });
+  }
+});
+
+/**
+ * DELETE /api/shows/:id/ad - Remove ad audio
+ */
+router.delete('/:id/ad', async (req: Request, res: Response) => {
+  try {
+    const updatedShow = await prisma.show.update({
+      where: { id: req.params.id },
+      data: { adAudioUrl: null }
+    });
+    res.json({ success: true, show: updatedShow });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to remove ad' });
   }
 });
 

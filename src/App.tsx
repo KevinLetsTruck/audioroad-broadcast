@@ -5,6 +5,7 @@ import HostDashboard from './pages/HostDashboard'
 import ScreeningRoom from './pages/ScreeningRoom'
 import CallNow from './pages/CallNow'
 import Recordings from './pages/Recordings'
+import ShowSettings from './pages/ShowSettings'
 
 function AppContent() {
   const location = useLocation()
@@ -58,6 +59,16 @@ function AppContent() {
             >
               📁 Recordings
             </Link>
+            <Link
+              to="/settings"
+              className={`px-4 py-2 rounded ${
+                location.pathname === '/settings'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              ⚙️ Settings
+            </Link>
           </div>
         </div>
       </nav>
@@ -67,8 +78,9 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<BroadcastControl />} />
           <Route path="/host-dashboard" element={<HostDashboard />} />
-          <Route path="/recordings" element={<Recordings />} />
           <Route path="/screening-room" element={<ScreeningRoom />} />
+          <Route path="/recordings" element={<Recordings />} />
+          <Route path="/settings" element={<ShowSettings />} />
           <Route path="/call-now" element={<CallNow />} />
         </Routes>
       </main>

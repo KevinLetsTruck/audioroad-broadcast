@@ -204,6 +204,54 @@ export class AudioMixerEngine {
   }
 
   /**
+   * Play an audio file through the mixer (for openers, ads, etc.)
+   */
+  async playAudioFile(url: string): Promise<void> {
+    if (!this.audioContext || !this.masterGain) {
+      throw new Error('Audio context not initialized');
+    }
+
+    console.log('🎵 [MIXER] Loading audio file:', url);
+
+    try {
+      // Fetch audio file
+      const response = await fetch(url);
+      const arrayBuffer = await response.arrayBuffer();
+      
+      // Decode audio
+      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+      console.log('✅ [MIXER] Audio decoded, duration:', audioBuffer.duration, 'seconds');
+
+      // Create buffer source
+      const source = this.audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+
+      // Create gain node for this playback
+      const gainNode = this.audioContext.createGain();
+      gainNode.gain.value = 1.0; // Full volume
+
+      // Connect: source -> gain -> master
+      source.connect(gainNode);
+      gainNode.connect(this.masterGain);
+
+      // Play and wait for completion
+      return new Promise((resolve) => {
+        source.onended = () => {
+          console.log('✅ [MIXER] Audio playback completed');
+          gainNode.disconnect();
+          resolve();
+        };
+
+        source.start(0);
+        console.log('▶️ [MIXER] Audio playing...');
+      });
+    } catch (error) {
+      console.error('❌ [MIXER] Failed to play audio file:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Remove an audio source
    */
   removeSource(sourceId: string): void {

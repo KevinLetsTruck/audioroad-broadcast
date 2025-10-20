@@ -256,6 +256,19 @@ export default function BroadcastControl() {
 
       console.log('🎉 SHOW STARTED! You are LIVE!');
 
+      // AUTOMATICALLY play opener if show has one
+      if (selectedShow?.openerAudioUrl && mixerInstance) {
+        console.log('🎵 [START] Show has opener - playing automatically...');
+        try {
+          // Play opener through mixer (broadcasts to listeners)
+          await mixerInstance.playAudioFile(selectedShow.openerAudioUrl);
+          console.log('✅ [START] Opener played successfully');
+        } catch (openerError) {
+          console.error('⚠️ [START] Failed to play opener:', openerError);
+          // Don't fail the whole start if opener fails
+        }
+      }
+
     } catch (error: any) {
       console.error('❌ [START] Failed to start show:', error);
       console.error('❌ [START] Error stack:', error.stack);
@@ -285,9 +298,23 @@ export default function BroadcastControl() {
       return;
     }
 
+    setIsEnding(true);
+
     try {
       console.log('📴 [END] Ending show...');
       console.log('📴 [END] Episode ID:', status.episodeId);
+
+      // AUTOMATICALLY play ad if show has one
+      if (selectedShow?.adAudioUrl && broadcast.mixer) {
+        console.log('📢 [END] Show has ad - playing automatically...');
+        try {
+          await broadcast.mixer.playAudioFile(selectedShow.adAudioUrl);
+          console.log('✅ [END] Ad played successfully');
+        } catch (adError) {
+          console.error('⚠️ [END] Failed to play ad:', adError);
+          // Continue with ending even if ad fails
+        }
+      }
 
       // Duration timer stops automatically via context when isLive becomes false
 

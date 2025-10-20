@@ -47,6 +47,10 @@ model Show {
   logoUrl     String?
   color       String?   // Hex color for UI theming
   
+  // Show Audio Assets
+  openerAudioUrl String?  // S3 URL for show opener/bumper (plays automatically on START SHOW)
+  adAudioUrl     String?  // S3 URL for end-of-show commercial (plays automatically on END SHOW)
+  
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
