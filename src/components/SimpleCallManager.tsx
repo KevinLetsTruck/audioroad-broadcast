@@ -15,6 +15,8 @@ interface SimpleCallManagerProps {
 export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps) {
   const broadcast = useBroadcast();
   const [queuedCalls, setQueuedCalls] = useState<any[]>([]);
+  const [connecting, setConnecting] = useState<string | null>(null);
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
 
   useEffect(() => {
     fetchQueue();
@@ -43,6 +45,7 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
   };
 
   const connectToCall = async (call: any) => {
+    setConnecting(call.id);
     try {
       const callerName = call.caller?.name || 'Caller';
       const isFirstConnection = broadcast.activeCalls.size === 0;
@@ -69,7 +72,9 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
       setTimeout(fetchQueue, 500);
     } catch (error) {
       console.error('Failed to connect:', error);
-      alert('Failed to connect to participant');
+      alert('Failed to connect to participant. Please try again.');
+    } finally {
+      setConnecting(null);
     }
   };
 
@@ -78,6 +83,7 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
       return;
     }
 
+    setDisconnecting(callId);
     try {
       // Check how many participants are currently on-air
       const onAirCalls = queuedCalls.filter(c => c.participantState === 'on-air');
@@ -100,6 +106,9 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
       setTimeout(fetchQueue, 500);
     } catch (error) {
       console.error('Failed to disconnect:', error);
+      alert('Failed to end call. Please try again.');
+    } finally {
+      setDisconnecting(null);
     }
   };
 
@@ -130,12 +139,13 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
                       On air: {minutesConnected} min
                     </div>
                   </div>
-                  <button
-                    onClick={() => disconnectCall(call.id)}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded font-semibold"
-                  >
-                    End Call
-                  </button>
+                <button
+                  onClick={() => disconnectCall(call.id)}
+                  disabled={disconnecting === call.id}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded font-semibold transition-colors"
+                >
+                  {disconnecting === call.id ? 'Ending...' : 'End Call'}
+                </button>
                 </div>
               );
             })}
@@ -150,25 +160,32 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
             📋 QUEUE - APPROVED CALLERS ({queuedNotOnAir.length})
           </h3>
           <div className="space-y-2">
-            {queuedNotOnAir.map((call, index) => (
-              <div key={call.id} className="bg-gray-800 rounded p-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
-                    {index + 1}
-                  </span>
-                  <div>
-                    <div className="font-semibold">{call.caller?.name || 'Unknown'}</div>
-                    {call.topic && <div className="text-sm text-gray-400">{call.topic}</div>}
+            {queuedNotOnAir.map((call, index) => {
+              const approvedAt = call.approvedAt || call.incomingAt;
+              const waitingMinutes = Math.floor((Date.now() - new Date(approvedAt).getTime()) / 1000 / 60);
+              
+              return (
+                <div key={call.id} className="bg-gray-800 rounded p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+                      {index + 1}
+                    </span>
+                    <div>
+                      <div className="font-semibold">{call.caller?.name || 'Unknown'}</div>
+                      {call.topic && <div className="text-sm text-gray-400">{call.topic}</div>}
+                      <div className="text-xs text-gray-500">Waiting: {waitingMinutes} min</div>
+                    </div>
                   </div>
-                </div>
                 <button
                   onClick={() => connectToCall(call)}
-                  className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded font-semibold"
+                  disabled={connecting === call.id}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded font-semibold transition-colors"
                 >
-                  Connect
+                  {connecting === call.id ? 'Connecting...' : 'Connect'}
                 </button>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -176,8 +193,10 @@ export default function SimpleCallManager({ episodeId }: SimpleCallManagerProps)
       {/* Empty State */}
       {queuedNotOnAir.length === 0 && onAirCalls.length === 0 && (
         <div className="text-center py-16 text-gray-400">
-          <p className="text-xl mb-2">No callers in queue</p>
-          <p className="text-sm">Approved callers will appear here</p>
+          <div className="text-6xl mb-4">📞</div>
+          <p className="text-xl mb-2 font-semibold">No Callers Yet</p>
+          <p className="text-sm">Approved callers will appear here automatically</p>
+          <p className="text-xs mt-2 text-gray-500">Screener approves calls in the Screening Room tab</p>
         </div>
       )}
     </div>
