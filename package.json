@@ -7,9 +7,10 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "tsx watch server/index.ts",
-    "build": "prisma generate && prisma migrate deploy && tsc && vite build && tsc -p server/tsconfig.json",
+    "build": "prisma generate && tsc && vite build && tsc -p server/tsconfig.json",
     "build:server": "tsc -p server/tsconfig.json",
-    "start": "node dist/server/index.js",
+    "start": "bash start.sh",
+    "start:simple": "node dist/server/index.js",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "prisma:generate": "prisma generate",
