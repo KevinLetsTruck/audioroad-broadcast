@@ -101,10 +101,17 @@ Before going live:
 
 ## 🐛 Troubleshooting
 
+**Deployment stuck in loop / keeps initializing:**
+- This is usually because the database migration isn't running
+- The build script now includes `prisma migrate deploy` to fix this
+- Check Railway logs for specific errors
+- Make sure DATABASE_URL environment variable is set correctly
+
 **Build fails:**
 - Check Railway logs
 - Verify all environment variables are set
-- Make sure Prisma migrations ran
+- Make sure Prisma migrations ran (should happen automatically now)
+- If stuck, cancel the deployment and push a new commit
 
 **Calls don't connect:**
 - Verify Twilio webhook URL is correct
@@ -112,8 +119,9 @@ Before going live:
 - Test with a test call first
 
 **Database errors:**
-- Run migrations: Railway should auto-migrate
+- Run migrations: Railway should auto-migrate via the build script
 - Check DATABASE_URL is correct
+- Verify Postgres addon is properly connected
 
 ---
 
