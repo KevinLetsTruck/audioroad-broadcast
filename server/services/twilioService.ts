@@ -237,10 +237,10 @@ export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', opti
       
       // Merge options but FORCE critical settings
       const conferenceOptions: any = {
-        startConferenceOnEnter: options.startConferenceOnEnter !== undefined ? options.startConferenceOnEnter : true,  // Default to true
+        startConferenceOnEnter: options.startConferenceOnEnter !== undefined ? options.startConferenceOnEnter : true,
         endConferenceOnExit: false,
-        beep: false,  // NO BEEPS - use boolean not string
-        maxParticipants: 40,  // Support many participants
+        beep: false,  // No beeps
+        maxParticipants: 40,
         waitUrl: options.waitUrl || undefined,
         muted: options.muted !== undefined ? options.muted : false,
         statusCallback: `${process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app'}/api/twilio/conference-status`,
@@ -248,11 +248,7 @@ export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', opti
         statusCallbackMethod: 'POST'
       };
       
-      console.log('🎙️ [TWIML] Conference options:', JSON.stringify(conferenceOptions, null, 2));
       dial.conference(conferenceOptions, options.conferenceName);
-      
-      const twimlString = twiml.toString();
-      console.log('📄 [TWIML] Generated:', twimlString);
       break;
 
     case 'voicemail':

@@ -3,7 +3,6 @@ import { useTwilioCall } from '../hooks/useTwilioCall';
 import DocumentUploadWidget from '../components/DocumentUploadWidget';
 
 export default function CallNow() {
-  // Multi-caller support - v2
   const [showStatus, setShowStatus] = useState<'live' | 'offline'>('offline');
   const [callState, setCallState] = useState<'idle' | 'calling' | 'connected' | 'queued'>('idle');
   const [uploadedDocs, setUploadedDocs] = useState<any[]>([]);
@@ -119,30 +118,23 @@ export default function CallNow() {
   }, []);
 
   const handleCallNow = async () => {
-    console.log('🎯 [CALLNOW] Button clicked! isReady:', isReady, 'callerId:', callerId, 'showStatus:', showStatus);
-    
     if (!isReady) {
-      console.error('❌ [CALLNOW] Device not ready!');
       alert('Phone system not ready. Please refresh and try again.');
       return;
     }
 
     if (!callerId) {
-      console.error('❌ [CALLNOW] No caller ID!');
       alert('Setting up caller profile. Please try again in a moment.');
       return;
     }
 
-    console.log('✅ [CALLNOW] All checks passed, initiating call...');
     setCallState('calling');
 
     try {
       // Initiate call with existing caller ID
-      console.log('📞 [CALLNOW] Calling makeCall with params:', { callerId });
       await makeCall({ callerId });
-      console.log('✅ [CALLNOW] makeCall completed');
     } catch (error) {
-      console.error('❌ [CALLNOW] Error initiating call:', error);
+      console.error('Error initiating call:', error);
       setCallState('idle');
       alert('Failed to connect. Please try again.');
     }
@@ -154,11 +146,6 @@ export default function CallNow() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
-      {/* Version Badge - Confirms new code loaded */}
-      <div className="fixed top-2 right-2 bg-green-600 text-white px-3 py-1 rounded-full text-xs font-bold z-50">
-        v2.1-DEBUG
-      </div>
-      
       <div className="max-w-4xl mx-auto p-8">
         {/* Header */}
         <div className="text-center mb-12">

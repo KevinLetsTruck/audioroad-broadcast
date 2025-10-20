@@ -31,11 +31,7 @@ router.post('/token', (req: Request, res: Response) => {
  */
 router.post('/voice', async (req: Request, res: Response) => {
   try {
-    const timestamp = new Date().toISOString();
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`📞 VOICE ENDPOINT CALLED at ${timestamp}`);
-    console.log('Full request body:', JSON.stringify(req.body, null, 2));
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📞 VOICE ENDPOINT CALLED');
     
     const { callerId, CallSid, role, callId, episodeId } = req.body;
     
@@ -71,8 +67,7 @@ router.post('/voice', async (req: Request, res: Response) => {
       // Screener always starts conference, host joins active one
       const startConference = role === 'screener' ? true : (episode?.conferenceActive || false);
       
-      console.log(`🎙️ [${role.toUpperCase()}] Joining conference:`, conferenceName);
-      console.log(`🎙️ [${role.toUpperCase()}] Role: ${role}, startConferenceOnEnter:`, startConference);
+      console.log(`🎙️ ${role} joining conference:`, conferenceName);
 
       const twiml = generateTwiML('conference', { 
         conferenceName,
@@ -143,13 +138,8 @@ router.post('/voice', async (req: Request, res: Response) => {
       }
     });
     
-    // If there's already someone in the conference, join immediately
-    // Otherwise, wait for screener to start it
     const startConference = existingParticipants > 0;
-    
-    console.log('📞 [VOICE] Existing participants in conference:', existingParticipants);
-    console.log('📞 [VOICE] startConferenceOnEnter:', startConference);
-    console.log('📞 [VOICE] Sending web caller to conference:', conferenceName);
+    console.log('📞 Sending web caller to conference:', conferenceName, '(participants:', existingParticipants, ')');
     
     const twiml = generateTwiML('conference', { 
       conferenceName,
@@ -237,10 +227,7 @@ router.post('/incoming-call', async (req: Request, res: Response) => {
     });
     
     const startConference = existingParticipants > 0;
-    
-    console.log('📞 [PHONE] Existing participants in conference:', existingParticipants);
-    console.log('📞 [PHONE] startConferenceOnEnter:', startConference);
-    console.log('📞 [PHONE] Sending phone caller to conference:', conferenceName);
+    console.log('📞 Sending phone caller to conference:', conferenceName, '(participants:', existingParticipants, ')');
     
     const twiml = generateTwiML('conference', { 
       conferenceName,
