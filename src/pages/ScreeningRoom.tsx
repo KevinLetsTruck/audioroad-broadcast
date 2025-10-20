@@ -11,6 +11,8 @@ export default function ScreeningRoom() {
   const [activeEpisode, setActiveEpisode] = useState<any>(null);
   const [incomingCalls, setIncomingCalls] = useState<any[]>([]);
   const [activeCall, setActiveCall] = useState<any>(null);
+  const [approving, setApproving] = useState(false);
+  const [rejecting, setRejecting] = useState(false);
   const [screenerNotes, setScreenerNotes] = useState({
     name: '',
     location: '',
@@ -253,6 +255,7 @@ export default function ScreeningRoom() {
       return;
     }
 
+    setApproving(true);
     try {
       // End screener's audio connection and clear active call state
       if (screenerConnected) {
@@ -316,6 +319,8 @@ export default function ScreeningRoom() {
     } catch (error) {
       console.error('❌ Error approving call:', error);
       alert('❌ Failed to approve call. Please try again.');
+    } finally {
+      setApproving(false);
     }
   };
 
@@ -326,7 +331,8 @@ export default function ScreeningRoom() {
       return;
     }
 
-    try {
+    setRejecting(true);
+    try{
       // End screener's audio connection first
       if (screenerConnected) {
         await broadcast.disconnectCurrentCall();
@@ -363,7 +369,9 @@ export default function ScreeningRoom() {
       fetchQueuedCalls();
     } catch (error) {
       console.error('Error rejecting call:', error);
-      alert('Error rejecting call - check console');
+      alert('Failed to reject call. Please try again.');
+    } finally {
+      setRejecting(false);
     }
   };
 
@@ -453,16 +461,17 @@ export default function ScreeningRoom() {
                 <div className="flex gap-2">
                   <button
                     onClick={handleApproveAndQueue}
-                    disabled={!screenerNotes.name || !screenerNotes.topic}
-                    className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-sm font-semibold"
+                    disabled={!screenerNotes.name || !screenerNotes.topic || approving || rejecting}
+                    className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-sm font-semibold transition-colors"
                   >
-                    ✓ Approve
+                    {approving ? '⏳ Approving...' : '✓ Approve'}
                   </button>
                   <button
                     onClick={handleRejectCall}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-sm font-semibold"
+                    disabled={approving || rejecting}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-sm font-semibold transition-colors"
                   >
-                    ✗ Reject
+                    {rejecting ? '⏳ Rejecting...' : '✗ Reject'}
                   </button>
                 </div>
               </div>
