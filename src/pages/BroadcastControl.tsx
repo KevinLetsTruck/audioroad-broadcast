@@ -17,6 +17,7 @@ export default function BroadcastControl() {
   const broadcast = useBroadcast();
   
   const [isStarting, setIsStarting] = useState(false);
+  const [isEnding, setIsEnding] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [masterLevel, setMasterLevel] = useState(0);
   
@@ -355,7 +356,9 @@ export default function BroadcastControl() {
 
     } catch (error) {
       console.error('❌ Error ending show:', error);
-      setErrorMessage('Error ending show');
+      setErrorMessage('Error ending show. Please try again.');
+    } finally {
+      setIsEnding(false);
     }
   };
 
@@ -623,13 +626,14 @@ export default function BroadcastControl() {
               {/* BIG END BUTTON */}
               <button
                 onClick={handleEndShow}
-                className="w-full py-6 bg-red-600 hover:bg-red-700 rounded-lg font-bold text-2xl transition-all"
+                disabled={isEnding}
+                className="w-full py-6 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-bold text-2xl transition-all"
               >
-                ⏹️ END SHOW
+                {isEnding ? '⏳ Ending Show...' : '⏹️ END SHOW'}
               </button>
 
               <p className="text-center text-xs text-gray-500 mt-4">
-                This will stop streaming, save your recording, and end the episode
+                {isEnding ? 'Stopping streaming and saving recording...' : 'This will stop streaming, save your recording, and end the episode'}
               </p>
             </>
           )}
