@@ -88,12 +88,15 @@ export class AudioMixerEngine {
       // Create destination for output stream
       this.destination = this.audioContext.createMediaStreamDestination();
 
-      // Connect: masterGain -> compressor -> masterAnalyser -> destination
+      // Connect: masterGain -> compressor -> masterAnalyser -> destination (for stream)
       this.masterGain.connect(this.compressor);
       this.compressor.connect(this.masterAnalyser);
       this.masterAnalyser.connect(this.destination);
+      
+      // ALSO connect to speakers so you can hear it locally!
+      this.masterAnalyser.connect(this.audioContext.destination);
 
-      console.log('🎚️ Audio Mixer initialized');
+      console.log('🎚️ Audio Mixer initialized (output: stream + speakers)');
       
       // Start level monitoring
       this.startLevelMonitoring();

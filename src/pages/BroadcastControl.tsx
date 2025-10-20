@@ -18,6 +18,8 @@ export default function BroadcastControl() {
   
   const [isStarting, setIsStarting] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
+  const [playingOpener, setPlayingOpener] = useState(false);
+  const [playingAd, setPlayingAd] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [masterLevel, setMasterLevel] = useState(0);
   
@@ -259,13 +261,16 @@ export default function BroadcastControl() {
       // AUTOMATICALLY play opener if show has one
       if (selectedShow?.openerAudioUrl && mixerInstance) {
         console.log('🎵 [START] Show has opener - playing automatically...');
+        setPlayingOpener(true);
         try {
-          // Play opener through mixer (broadcasts to listeners)
+          // Play opener through mixer (broadcasts to listeners AND your speakers!)
           await mixerInstance.playAudioFile(selectedShow.openerAudioUrl);
           console.log('✅ [START] Opener played successfully');
         } catch (openerError) {
           console.error('⚠️ [START] Failed to play opener:', openerError);
           // Don't fail the whole start if opener fails
+        } finally {
+          setPlayingOpener(false);
         }
       }
 
@@ -307,12 +312,15 @@ export default function BroadcastControl() {
       // AUTOMATICALLY play ad if show has one
       if (selectedShow?.adAudioUrl && broadcast.mixer) {
         console.log('📢 [END] Show has ad - playing automatically...');
+        setPlayingAd(true);
         try {
           await broadcast.mixer.playAudioFile(selectedShow.adAudioUrl);
           console.log('✅ [END] Ad played successfully');
         } catch (adError) {
           console.error('⚠️ [END] Failed to play ad:', adError);
           // Continue with ending even if ad fails
+        } finally {
+          setPlayingAd(false);
         }
       }
 
@@ -641,8 +649,20 @@ export default function BroadcastControl() {
                 />
               </div>
 
-              {/* Participant Board - Coming Soon */}
-              {/* Temporarily disabled while we fix call system */}
+              {/* Audio Playback Indicator */}
+              {(playingOpener || playingAd) && (
+                <div className="mb-6 p-4 bg-purple-900/30 border-2 border-purple-500 rounded-lg animate-pulse">
+                  <div className="flex items-center justify-center gap-3">
+                    <span className="text-3xl">🎵</span>
+                    <div className="text-center">
+                      <div className="font-bold text-lg">
+                        {playingOpener ? 'Playing Show Opener...' : 'Playing Ad...'}
+                      </div>
+                      <div className="text-sm text-gray-400">Audio broadcasting now</div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Master VU Meter */}
               <div className="mb-6">
