@@ -108,20 +108,31 @@ export class AudioMixerEngine {
 
   /**
    * Connect microphone as a source
+   * @param deviceId - Optional specific device ID to use
    */
-  async connectMicrophone(): Promise<string> {
+  async connectMicrophone(deviceId?: string): Promise<string> {
     if (!this.audioContext) {
       throw new Error('Audio context not initialized');
     }
 
     try {
+      const audioConstraints: MediaTrackConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: false, // We'll handle gain manually
+        sampleRate: this.config.sampleRate
+      };
+
+      // If specific device requested, add deviceId constraint
+      if (deviceId && deviceId !== 'default') {
+        audioConstraints.deviceId = { exact: deviceId };
+        console.log('🎤 Using specific microphone:', deviceId);
+      } else {
+        console.log('🎤 Using default microphone');
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: false, // We'll handle gain manually
-          sampleRate: this.config.sampleRate
-        }
+        audio: audioConstraints
       });
 
       const sourceId = 'host-mic';

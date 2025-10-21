@@ -23,6 +23,15 @@ export default function BroadcastControl() {
   const [errorMessage, setErrorMessage] = useState('');
   const [masterLevel, setMasterLevel] = useState(0);
   
+  // Audio device selection
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedMicId, setSelectedMicId] = useState<string>(() => 
+    localStorage.getItem('selectedMicId') || 'default'
+  );
+  const [selectedSpeakerId, setSelectedSpeakerId] = useState<string>(() =>
+    localStorage.getItem('selectedSpeakerId') || 'default'
+  );
+  
   // Duration from global context (persists across navigation!)
   const duration = broadcast.duration;
   
@@ -84,7 +93,28 @@ export default function BroadcastControl() {
    */
   useEffect(() => {
     fetchShows();
+    enumerateAudioDevices();
   }, []);
+
+  // Enumerate available audio input/output devices
+  const enumerateAudioDevices = async () => {
+    try {
+      // Request permission first to get device labels
+      await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+        .then(stream => stream.getTracks().forEach(track => track.stop()));
+      
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setAudioDevices(devices);
+      
+      const audioInputs = devices.filter(d => d.kind === 'audioinput');
+      const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
+      
+      console.log('🎤 Found', audioInputs.length, 'microphones');
+      console.log('🔊 Found', audioOutputs.length, 'speakers');
+    } catch (error) {
+      console.error('Failed to enumerate devices:', error);
+    }
+  };
 
   /**
    * Check for existing live episode on mount
@@ -201,9 +231,10 @@ export default function BroadcastControl() {
         }
       });
 
-      // Step 5: Connect microphone
+      // Step 5: Connect microphone (using selected device)
       console.log('🎙️ [START] Step 5: Connecting microphone...');
-      await mixerInstance.connectMicrophone();
+      console.log('🎙️ [START] Selected mic ID:', selectedMicId);
+      await mixerInstance.connectMicrophone(selectedMicId);
       console.log('✅ [START] Microphone connected');
       
       // IMPORTANT: Refresh audio sources so UI updates!
@@ -526,6 +557,62 @@ export default function BroadcastControl() {
                   )}
                 </div>
               )}
+
+              {/* Audio Device Selection */}
+              <div className="bg-gray-900 rounded-lg p-4 mb-6 space-y-3">
+                <h3 className="font-semibold mb-3 text-sm text-gray-400">Audio Devices</h3>
+                
+                {/* Microphone Selection */}
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Microphone</label>
+                  <select
+                    value={selectedMicId}
+                    onChange={(e) => {
+                      setSelectedMicId(e.target.value);
+                      localStorage.setItem('selectedMicId', e.target.value);
+                      console.log('🎤 Microphone changed to:', e.target.value);
+                    }}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm"
+                  >
+                    <option value="default">Default Microphone</option>
+                    {audioDevices
+                      .filter(d => d.kind === 'audioinput')
+                      .map(device => (
+                        <option key={device.deviceId} value={device.deviceId}>
+                          {device.label || `Microphone ${device.deviceId.slice(0, 8)}...`}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                {/* Speaker Selection */}
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Speakers/Headphones</label>
+                  <select
+                    value={selectedSpeakerId}
+                    onChange={(e) => {
+                      setSelectedSpeakerId(e.target.value);
+                      localStorage.setItem('selectedSpeakerId', e.target.value);
+                      console.log('🔊 Speaker changed to:', e.target.value);
+                    }}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm"
+                  >
+                    <option value="default">Default Speakers</option>
+                    {audioDevices
+                      .filter(d => d.kind === 'audiooutput')
+                      .map(device => (
+                        <option key={device.deviceId} value={device.deviceId}>
+                          {device.label || `Speakers ${device.deviceId.slice(0, 8)}...`}
+                        </option>
+                      ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {audioDevices.filter(d => d.kind === 'audiooutput').length === 0 
+                      ? '⚠️ Speaker selection not supported in this browser' 
+                      : 'Select where you want to hear the show'}
+                  </p>
+                </div>
+              </div>
 
               {/* Settings */}
               <div className="bg-gray-900 rounded-lg p-4 mb-6 space-y-3">
