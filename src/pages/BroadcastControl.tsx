@@ -355,6 +355,28 @@ export default function BroadcastControl() {
         }
       }
 
+      // Disconnect all active calls first
+      if (broadcast.activeCalls.size > 0) {
+        console.log('📞 [END] Disconnecting', broadcast.activeCalls.size, 'active calls...');
+        const callIds = Array.from(broadcast.activeCalls.keys());
+        
+        for (const callId of callIds) {
+          try {
+            await broadcast.disconnectCall(callId);
+            
+            // Also mark call as completed in database
+            await fetch(`/api/calls/${callId}/complete`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ airDuration: 0 })
+            });
+          } catch (callError) {
+            console.error('⚠️ [END] Failed to disconnect call:', callId, callError);
+          }
+        }
+        console.log('✅ [END] All calls disconnected');
+      }
+
       // Duration timer stops automatically via context when isLive becomes false
 
       // Stop streaming
