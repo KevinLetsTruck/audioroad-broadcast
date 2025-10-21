@@ -57,6 +57,12 @@ router.post('/sms-reply', async (req: Request, res: Response) => {
   try {
     console.log(`📱 Sending SMS reply to ${to}: ${message}`);
     
+    // Check if Twilio client is configured
+    if (!twilioClient) {
+      console.error('❌ Twilio client not configured');
+      return res.status(500).json({ error: 'SMS service not configured' });
+    }
+    
     // Send SMS via Twilio
     const sms = await twilioClient.messages.create({
       body: message,
