@@ -63,10 +63,11 @@ router.post('/sms-reply', async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'SMS service not configured' });
     }
     
-    // Send SMS via Twilio
+    // Send SMS via Twilio (use SMS-enabled number for replies)
+    const smsNumber = process.env.TWILIO_SMS_NUMBER || process.env.TWILIO_PHONE_NUMBER;
     const sms = await twilioClient.messages.create({
       body: message,
-      from: process.env.TWILIO_PHONE_NUMBER,
+      from: smsNumber,
       to: to
     });
     
