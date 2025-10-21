@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { twilioClient } from '../services/twilioService.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -44,6 +45,53 @@ router.post('/', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error sending chat message:', error);
     res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+/**
+ * POST /api/chat/sms-reply - Send SMS reply to team member
+ */
+router.post('/sms-reply', async (req: Request, res: Response) => {
+  const { to, message, episodeId } = req.body;
+  
+  try {
+    console.log(`📱 Sending SMS reply to ${to}: ${message}`);
+    
+    // Send SMS via Twilio
+    const sms = await twilioClient.messages.create({
+      body: message,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: to
+    });
+    
+    console.log('✅ SMS sent, SID:', sms.sid);
+    
+    // Save reply as chat message
+    const chatMessage = await prisma.chatMessage.create({
+      data: {
+        episodeId,
+        senderId: 'host',
+        senderName: 'Host',
+        senderRole: 'host',
+        messageType: 'sms',
+        message: `→ ${message}`,
+        recipientId: to,
+        twilioSid: sms.sid
+      }
+    });
+    
+    // Broadcast to chat so you see your own reply
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`episode:${episodeId}`).emit('chat:message', chatMessage);
+      console.log('📡 SMS reply broadcast via WebSocket');
+    }
+    
+    res.json({ success: true, message: chatMessage });
+    
+  } catch (error) {
+    console.error('❌ Error sending SMS reply:', error);
+    res.status(500).json({ error: 'Failed to send SMS' });
   }
 });
 

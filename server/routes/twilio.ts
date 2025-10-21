@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { generateAccessToken, generateTwiML } from '../services/twilioService.js';
+import { generateAccessToken, generateTwiML, twilioClient } from '../services/twilioService.js';
 import { processRecording } from '../services/audioService.js';
 
 const router = express.Router();
@@ -434,6 +434,68 @@ router.post('/screener-connect', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error connecting screener:', error);
     res.status(500).json({ error: 'Failed to connect screener' });
+  }
+});
+
+/**
+ * POST /api/twilio/sms - Handle incoming SMS messages (Team messages)
+ */
+router.post('/sms', async (req: Request, res: Response) => {
+  const { From, Body, MessageSid } = req.body;
+  
+  try {
+    console.log(`📱 SMS received from ${From}: ${Body}`);
+    
+    // Get active episode
+    const activeEpisode = await prisma.episode.findFirst({
+      where: { status: 'live' },
+      orderBy: { actualStart: 'desc' }
+    });
+    
+    if (!activeEpisode) {
+      // No show live, send auto-reply
+      console.log('⚠️ No live show - sending auto-reply');
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+        <Response>
+          <Message>No show currently broadcasting. Check schedule at audioroad.com</Message>
+        </Response>`;
+      return res.type('text/xml').send(twiml);
+    }
+    
+    // Create chat message from SMS
+    const chatMessage = await prisma.chatMessage.create({
+      data: {
+        episodeId: activeEpisode.id,
+        senderId: From,
+        senderName: `Team (${From.slice(-4)})`, // Show last 4 digits
+        senderRole: 'producer',
+        messageType: 'sms',
+        message: Body,
+        twilioSid: MessageSid
+      }
+    });
+    
+    console.log('✅ Chat message created from SMS:', chatMessage.id);
+    
+    // Broadcast via WebSocket so host sees it immediately
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`episode:${activeEpisode.id}`).emit('chat:message', chatMessage);
+      console.log('📡 SMS message broadcast via WebSocket');
+    }
+    
+    // Send confirmation reply
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+        <Message>Message received! Host will see it on-air. 🎙️</Message>
+      </Response>`;
+    res.type('text/xml').send(twiml);
+    
+  } catch (error) {
+    console.error('❌ Error handling SMS:', error);
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response></Response>`;
+    res.type('text/xml').send(twiml);
   }
 });
 

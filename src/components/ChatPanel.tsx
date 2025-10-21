@@ -12,6 +12,9 @@ interface ChatMessage {
   senderName: string;
   senderRole: string;
   message: string;
+  messageType?: string;
+  twilioSid?: string;
+  recipientId?: string;
   attachmentUrl?: string;
   attachmentName?: string;
   createdAt: Date;
@@ -22,6 +25,8 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
   const [newMessage, setNewMessage] = useState('');
   const [, setSocket] = useState<Socket | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [smsReply, setSmsReply] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -157,11 +162,34 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
     }
   };
 
+  const handleSendSmsReply = async () => {
+    if (!smsReply.trim() || !replyingTo) return;
+    
+    try {
+      await fetch('/api/chat/sms-reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: replyingTo.senderId,
+          message: smsReply,
+          episodeId
+        })
+      });
+      
+      setSmsReply('');
+      setReplyingTo(null);
+    } catch (error) {
+      console.error('Failed to send SMS reply:', error);
+      alert('Failed to send SMS reply');
+    }
+  };
+
   const getRoleColor = (role: string) => {
     switch (role) {
       case 'host': return 'text-red-400';
       case 'co-host': return 'text-orange-400';
       case 'screener': return 'text-blue-400';
+      case 'producer': return 'text-purple-400';
       case 'caller': return 'text-green-400';
       default: return 'text-gray-400';
     }
@@ -180,6 +208,11 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
               <span className={`font-semibold text-sm ${getRoleColor(msg.senderRole)}`}>
                 {msg.senderName}
               </span>
+              {msg.messageType === 'sms' && (
+                <span className="inline-flex items-center gap-1 text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">
+                  📱 SMS
+                </span>
+              )}
               <span className="text-xs text-gray-500">
                 {new Date(msg.createdAt).toLocaleTimeString()}
               </span>
@@ -202,12 +235,57 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
                 </a>
               )
             )}
+            {msg.messageType === 'sms' && msg.senderId !== 'host' && (
+              <button
+                onClick={() => setReplyingTo(msg)}
+                className="mt-2 text-xs text-blue-400 hover:text-blue-300 underline"
+              >
+                Reply via SMS
+              </button>
+            )}
           </div>
         ))}
         <div ref={messagesEndRef} />
       </div>
 
       <form onSubmit={sendMessage} className="p-4 border-t border-gray-700">
+        {replyingTo && (
+          <div className="mb-3 p-3 bg-gray-800/50 border border-gray-700 rounded">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs text-gray-400">
+                📱 Replying to: <span className="text-blue-400">{replyingTo.senderName}</span>
+              </div>
+              <button
+                onClick={() => setReplyingTo(null)}
+                className="text-xs text-gray-500 hover:text-gray-300"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={smsReply}
+                onChange={(e) => setSmsReply(e.target.value)}
+                placeholder="Type SMS reply..."
+                className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSendSmsReply();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleSendSmsReply}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium"
+              >
+                Send SMS
+              </button>
+            </div>
+          </div>
+        )}
         <div className="flex gap-2 mb-2">
           <input
             type="text"
