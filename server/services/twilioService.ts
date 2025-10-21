@@ -287,5 +287,7 @@ export async function sendSMS(to: string, message: string) {
   }
 }
 
+// Export client as both named and default export for flexibility
+export const twilioClient = client;
 export default client;
 
