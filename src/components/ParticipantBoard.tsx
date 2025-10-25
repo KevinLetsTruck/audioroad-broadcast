@@ -99,6 +99,28 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
     }
   };
 
+  const muteParticipant = async (callId: string) => {
+    try {
+      console.log('🔇 Muting participant:', callId);
+      await fetch(`/api/participants/${callId}/mute`, { method: 'PATCH' });
+      fetchParticipants();
+    } catch (error) {
+      console.error('Error muting participant:', error);
+      alert('Failed to mute participant');
+    }
+  };
+
+  const unmuteParticipant = async (callId: string) => {
+    try {
+      console.log('🔊 Unmuting participant:', callId);
+      await fetch(`/api/participants/${callId}/unmute`, { method: 'PATCH' });
+      fetchParticipants();
+    } catch (error) {
+      console.error('Error unmuting participant:', error);
+      alert('Failed to unmute participant');
+    }
+  };
+
   const endCall = async (callId: string) => {
     if (!confirm('End this call?')) return;
     
@@ -143,12 +165,36 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
                   <div className="flex items-center gap-2">
                     <span className="text-xl">{getRoleIcon(p.participantRole)}</span>
                     <div>
-                      <div className="font-semibold">{p.caller?.name || 'Unknown'}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">{p.caller?.name || 'Unknown'}</span>
+                        {p.isMutedInConference && (
+                          <span className="text-xs text-gray-400" title="Muted">
+                            🔇
+                          </span>
+                        )}
+                      </div>
                       {p.topic && <div className="text-xs text-gray-400">{p.topic}</div>}
                     </div>
                   </div>
                 </div>
                 <div className="flex gap-2">
+                  {p.isMutedInConference ? (
+                    <button
+                      onClick={() => unmuteParticipant(p.id)}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-semibold"
+                      title="Unmute participant"
+                    >
+                      🔊 Unmute
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => muteParticipant(p.id)}
+                      className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-xs font-semibold"
+                      title="Mute participant"
+                    >
+                      🔇 Mute
+                    </button>
+                  )}
                   <button
                     onClick={() => putOnHold(p.id)}
                     className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs font-semibold"
@@ -157,7 +203,7 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
                   </button>
                   <button
                     onClick={() => endCall(p.id)}
-                    className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-semibold"
+                    className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-semibold"
                   >
                     End
                   </button>

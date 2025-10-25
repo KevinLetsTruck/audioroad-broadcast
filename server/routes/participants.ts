@@ -80,5 +80,43 @@ router.patch('/:callId/screening', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * PATCH /api/participants/:callId/mute - Mute participant in conference
+ */
+router.patch('/:callId/mute', async (req: Request, res: Response) => {
+  try {
+    const { callId } = req.params;
+    await ParticipantService.muteParticipant(callId);
+    
+    // Emit WebSocket event
+    const io = req.app.get('io');
+    io.emit('participant:mute-changed', { callId, muted: true });
+    
+    res.json({ success: true, muted: true });
+  } catch (error) {
+    console.error('Error muting participant:', error);
+    res.status(500).json({ error: 'Failed to mute participant' });
+  }
+});
+
+/**
+ * PATCH /api/participants/:callId/unmute - Unmute participant in conference
+ */
+router.patch('/:callId/unmute', async (req: Request, res: Response) => {
+  try {
+    const { callId } = req.params;
+    await ParticipantService.unmuteParticipant(callId);
+    
+    // Emit WebSocket event
+    const io = req.app.get('io');
+    io.emit('participant:mute-changed', { callId, muted: false });
+    
+    res.json({ success: true, muted: false });
+  } catch (error) {
+    console.error('Error unmuting participant:', error);
+    res.status(500).json({ error: 'Failed to unmute participant' });
+  }
+});
+
 export default router;
 

@@ -131,6 +131,82 @@ export class ParticipantService {
   }
 
   /**
+   * Mute participant in conference
+   */
+  static async muteParticipant(callId: string): Promise<void> {
+    try {
+      const call = await prisma.call.findUnique({
+        where: { id: callId }
+      });
+
+      if (!call || !call.twilioConferenceSid) {
+        throw new Error('Call or conference not found');
+      }
+
+      console.log(`🔇 [PARTICIPANT] Muting: ${callId}`);
+
+      // Mute in Twilio conference
+      await twilioClient
+        .conferences(call.twilioConferenceSid)
+        .participants(call.twilioCallSid)
+        .update({
+          muted: true
+        });
+
+      // Update database
+      await prisma.call.update({
+        where: { id: callId },
+        data: {
+          isMutedInConference: true
+        }
+      });
+
+      console.log(`✅ [PARTICIPANT] ${callId} is now MUTED`);
+    } catch (error) {
+      console.error(`❌ [PARTICIPANT] Failed to mute:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Unmute participant in conference
+   */
+  static async unmuteParticipant(callId: string): Promise<void> {
+    try {
+      const call = await prisma.call.findUnique({
+        where: { id: callId }
+      });
+
+      if (!call || !call.twilioConferenceSid) {
+        throw new Error('Call or conference not found');
+      }
+
+      console.log(`🔊 [PARTICIPANT] Unmuting: ${callId}`);
+
+      // Unmute in Twilio conference
+      await twilioClient
+        .conferences(call.twilioConferenceSid)
+        .participants(call.twilioCallSid)
+        .update({
+          muted: false
+        });
+
+      // Update database
+      await prisma.call.update({
+        where: { id: callId },
+        data: {
+          isMutedInConference: false
+        }
+      });
+
+      console.log(`✅ [PARTICIPANT] ${callId} is now UNMUTED`);
+    } catch (error) {
+      console.error(`❌ [PARTICIPANT] Failed to unmute:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all active participants for an episode
    */
   static async getActiveParticipants(episodeId: string) {

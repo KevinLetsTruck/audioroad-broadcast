@@ -10,6 +10,7 @@ import { Link } from 'react-router-dom';
 import { useBroadcast } from '../contexts/BroadcastContext';
 import { StreamEncoder, StreamConfig } from '../services/streamEncoder';
 import VUMeter from '../components/VUMeter';
+import ParticipantBoard from '../components/ParticipantBoard';
 import { detectCurrentShow, getShowDisplayName } from '../utils/showScheduler';
 
 export default function BroadcastControl() {
@@ -778,6 +779,17 @@ export default function BroadcastControl() {
                 <label className="block text-sm text-gray-400 mb-2">Master Output Level</label>
                 <VUMeter level={masterLevel} width={600} height={40} />
               </div>
+
+              {/* Multi-Caller Participant Management */}
+              {status.episodeId && (
+                <div className="mb-6">
+                  <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <span>👥</span>
+                    <span>Active Participants</span>
+                  </h2>
+                  <ParticipantBoard episodeId={status.episodeId} />
+                </div>
+              )}
 
               {/* BIG END BUTTON */}
               <button

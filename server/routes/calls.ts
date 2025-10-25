@@ -214,6 +214,7 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
   try {
     const { screenerNotes, topic, priority } = req.body;
 
+    // Update call to approved status and set conference info
     const call = await prisma.call.update({
       where: { id: req.params.id },
       data: {
@@ -221,16 +222,35 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
         approvedAt: new Date(),
         screenerNotes,
         topic,
-        priority: priority || 'normal'
-        // Don't set participant state yet - let it use defaults
+        priority: priority || 'normal',
+        // Set participant state to HOLD (muted, can hear show)
+        participantState: 'hold',
+        // Set conference SID (episode-based conference)
+        twilioConferenceSid: `episode-${req.body.episodeId || 'unknown'}`,
+        // Initially muted in conference
+        isMutedInConference: true,
+        isOnHold: false
       },
       include: {
-        caller: true
+        caller: true,
+        episode: true
       }
     });
 
+    // If we have episode info, use proper conference name
+    if (call.episode) {
+      await prisma.call.update({
+        where: { id: req.params.id },
+        data: {
+          twilioConferenceSid: `episode-${call.episode.id}`
+        }
+      });
+    }
+
     const io = req.app.get('io');
     emitToEpisode(io, call.episodeId, 'call:approved', call);
+
+    console.log(`✅ Call approved: ${call.id} - Participant state set to HOLD`);
 
     res.json(call);
   } catch (error) {
