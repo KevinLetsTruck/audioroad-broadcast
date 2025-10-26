@@ -42,16 +42,52 @@ export class ParticipantService {
       console.log(`   CallSid: ${call.twilioCallSid}`);
 
       try {
-        // Unmute in Twilio conference
-        await twilioClient
+        // First, check if conference exists and list participants
+        const conference = await twilioClient
           .conferences(call.twilioConferenceSid)
-          .participants(call.twilioCallSid)
-          .update({
-            muted: false,
-            hold: false
+          .fetch()
+          .catch((err) => {
+            console.log(`⚠️ [CONFERENCE] Conference not found, it will be created when participant joins`);
+            return null;
           });
-        
-        console.log(`✅ [TWILIO] Successfully unmuted participant in conference`);
+
+        if (conference) {
+          console.log(`📞 [CONFERENCE] Found conference: ${conference.friendlyName}, Status: ${conference.status}`);
+          
+          // List all participants to find the right one
+          const participants = await twilioClient
+            .conferences(call.twilioConferenceSid)
+            .participants
+            .list();
+          
+          console.log(`👥 [CONFERENCE] ${participants.length} participants in conference`);
+          participants.forEach((p: any) => {
+            console.log(`   - ${p.callSid}: ${p.muted ? 'MUTED' : 'UNMUTED'}`);
+          });
+          
+          // Find participant by CallSid
+          const participant = participants.find((p: any) => p.callSid === call.twilioCallSid);
+          
+          if (!participant) {
+            throw new Error(`Participant ${call.twilioCallSid} not found in conference ${call.twilioConferenceSid}`);
+          }
+          
+          console.log(`✅ [CONFERENCE] Found participant: ${participant.callSid}`);
+          
+          // Unmute the participant using their call SID
+          await twilioClient
+            .conferences(call.twilioConferenceSid)
+            .participants(call.twilioCallSid)
+            .update({
+              muted: false,
+              hold: false
+            });
+          
+          console.log(`✅ [TWILIO] Successfully unmuted participant in conference`);
+        } else {
+          console.warn(`⚠️ [CONFERENCE] Conference doesn't exist yet - participant will be unmuted when they join`);
+          // Just update database state - they'll be unmuted when conference is created
+        }
       } catch (twilioError: any) {
         console.error(`❌ [TWILIO] Conference API error:`, twilioError.message);
         console.error(`   Status: ${twilioError.status}, Code: ${twilioError.code}`);
