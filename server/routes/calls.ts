@@ -350,15 +350,31 @@ router.patch('/:id/complete', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Call not found' });
     }
 
-    // End the Twilio call to hang up the caller
-    if (call.twilioCallSid && call.twilioCallSid.startsWith('CA')) {
+    // Remove participant from conference (if in one)
+    if (call.twilioConferenceSid && call.twilioCallSid) {
+      try {
+        const { removeFromConference } = await import('../services/conferenceService.js');
+        await removeFromConference(call.twilioCallSid, call.episodeId);
+        console.log('📴 Removed participant from conference:', call.twilioCallSid);
+      } catch (confError) {
+        console.error('⚠️ Error removing from conference:', confError);
+        // Fallback: try to end the call directly
+        try {
+          const { endCall } = await import('../services/twilioService.js');
+          await endCall(call.twilioCallSid);
+          console.log('📴 Ended Twilio call directly:', call.twilioCallSid);
+        } catch (twilioError) {
+          console.error('⚠️ Error ending Twilio call:', twilioError);
+        }
+      }
+    } else if (call.twilioCallSid && call.twilioCallSid.startsWith('CA')) {
+      // Not in conference, end call directly
       try {
         const { endCall } = await import('../services/twilioService.js');
         await endCall(call.twilioCallSid);
         console.log('📴 Ended Twilio call via host:', call.twilioCallSid);
       } catch (twilioError) {
         console.error('⚠️ Error ending Twilio call:', twilioError);
-        // Continue anyway
       }
     }
 

@@ -127,14 +127,21 @@ export class ParticipantService {
 
       console.log(`⏸️ [PARTICIPANT] Putting on hold: ${callId}`);
 
-      // Mute in Twilio conference (can still hear)
-      await twilioClient
-        .conferences(call.twilioConferenceSid)
-        .participants(call.twilioCallSid)
-        .update({
-          muted: true,
-          hold: false // Not true hold with music, just muted
-        });
+      try {
+        // Mute in Twilio conference (can still hear)
+        await twilioClient
+          .conferences(call.twilioConferenceSid)
+          .participants(call.twilioCallSid)
+          .update({
+            muted: true,
+            hold: false // Not true hold with music, just muted
+          });
+        
+        console.log(`✅ [TWILIO] Successfully muted participant`);
+      } catch (twilioError: any) {
+        console.error(`❌ [TWILIO] Failed to mute in conference:`, twilioError.message);
+        throw twilioError;
+      }
 
       // Update database
       await prisma.call.update({
@@ -199,13 +206,20 @@ export class ParticipantService {
 
       console.log(`🔇 [PARTICIPANT] Muting: ${callId}`);
 
-      // Mute in Twilio conference
-      await twilioClient
-        .conferences(call.twilioConferenceSid)
-        .participants(call.twilioCallSid)
-        .update({
-          muted: true
-        });
+      try {
+        // Mute in Twilio conference
+        await twilioClient
+          .conferences(call.twilioConferenceSid)
+          .participants(call.twilioCallSid)
+          .update({
+            muted: true
+          });
+        
+        console.log(`✅ [TWILIO] Successfully muted participant`);
+      } catch (twilioError: any) {
+        console.error(`❌ [TWILIO] Failed to mute:`, twilioError.message);
+        throw twilioError;
+      }
 
       // Update database
       await prisma.call.update({
@@ -237,13 +251,20 @@ export class ParticipantService {
 
       console.log(`🔊 [PARTICIPANT] Unmuting: ${callId}`);
 
-      // Unmute in Twilio conference
-      await twilioClient
-        .conferences(call.twilioConferenceSid)
-        .participants(call.twilioCallSid)
-        .update({
-          muted: false
-        });
+      try {
+        // Unmute in Twilio conference
+        await twilioClient
+          .conferences(call.twilioConferenceSid)
+          .participants(call.twilioCallSid)
+          .update({
+            muted: false
+          });
+        
+        console.log(`✅ [TWILIO] Successfully unmuted participant`);
+      } catch (twilioError: any) {
+        console.error(`❌ [TWILIO] Failed to unmute:`, twilioError.message);
+        throw twilioError;
+      }
 
       // Update database
       await prisma.call.update({

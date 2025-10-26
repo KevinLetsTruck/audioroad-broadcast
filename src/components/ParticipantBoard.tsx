@@ -122,14 +122,16 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
   };
 
   const endCall = async (callId: string) => {
-    if (!confirm('End this call?')) return;
+    if (!confirm('End this call? The participant will be disconnected.')) return;
     
     try {
+      console.log('📴 Ending call:', callId);
       await fetch(`/api/calls/${callId}/complete`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ airDuration: 0 })
       });
+      console.log('✅ Call ended successfully');
       fetchParticipants();
     } catch (error) {
       console.error('Error ending call:', error);
