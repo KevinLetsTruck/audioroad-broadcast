@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import ChatPanel from '../components/ChatPanel';
-import SimpleCallManager from '../components/SimpleCallManager';
+import ParticipantBoard from '../components/ParticipantBoard';
 import { useBroadcast } from '../contexts/BroadcastContext';
 
 export default function HostDashboard() {
@@ -310,7 +310,7 @@ export default function HostDashboard() {
             /* Call Management */
             <div>
               {activeEpisode ? (
-                <SimpleCallManager episodeId={activeEpisode.id} />
+                <ParticipantBoard episodeId={activeEpisode.id} />
               ) : (
                 <div className="text-center py-16 text-gray-400">
                   <p>No active episode</p>
