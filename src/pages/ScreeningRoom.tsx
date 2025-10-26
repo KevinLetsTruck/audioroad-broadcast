@@ -257,13 +257,18 @@ export default function ScreeningRoom() {
 
     setApproving(true);
     try {
-      // End screener's audio connection and clear active call state
-      if (screenerConnected) {
-        console.log('📴 Ending screener audio connection');
-        await broadcast.disconnectCurrentCall();
-      }
-      
       const callToApprove = activeCall;
+      
+      // NOTE: In conference mode, DON'T disconnect the call!
+      // The caller stays in the conference (muted in HOLD state)
+      // Only disconnect screener's local audio connection
+      if (screenerConnected) {
+        console.log('📴 Screener ending local connection (caller stays in conference)');
+        // Disconnect only the screener's Twilio Device connection
+        if (broadcast.twilioDevice) {
+          broadcast.twilioDevice.disconnectAll();
+        }
+      }
       
       // Clear active call FIRST to trigger document widget unmount
       setActiveCall(null);
