@@ -25,20 +25,38 @@ export class ParticipantService {
         include: { episode: true }
       });
 
-      if (!call || !call.twilioConferenceSid) {
-        throw new Error('Call or conference not found');
+      if (!call) {
+        throw new Error(`Call ${callId} not found`);
+      }
+
+      if (!call.twilioConferenceSid) {
+        throw new Error(`Call ${callId} has no conference SID`);
+      }
+
+      if (!call.twilioCallSid) {
+        throw new Error(`Call ${callId} has no Twilio CallSid`);
       }
 
       console.log(`📡 [PARTICIPANT] Putting on air: ${callId}`);
+      console.log(`   Conference: ${call.twilioConferenceSid}`);
+      console.log(`   CallSid: ${call.twilioCallSid}`);
 
-      // Unmute in Twilio conference
-      await twilioClient
-        .conferences(call.twilioConferenceSid)
-        .participants(call.twilioCallSid)
-        .update({
-          muted: false,
-          hold: false
-        });
+      try {
+        // Unmute in Twilio conference
+        await twilioClient
+          .conferences(call.twilioConferenceSid)
+          .participants(call.twilioCallSid)
+          .update({
+            muted: false,
+            hold: false
+          });
+        
+        console.log(`✅ [TWILIO] Successfully unmuted participant in conference`);
+      } catch (twilioError: any) {
+        console.error(`❌ [TWILIO] Conference API error:`, twilioError.message);
+        console.error(`   Status: ${twilioError.status}, Code: ${twilioError.code}`);
+        throw new Error(`Twilio conference error: ${twilioError.message}`);
+      }
 
       // Update database
       await prisma.call.update({
