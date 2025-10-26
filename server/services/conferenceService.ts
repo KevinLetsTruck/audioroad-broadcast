@@ -7,37 +7,24 @@ const prisma = new PrismaClient();
 
 /**
  * Create conference for an episode
+ * Note: Twilio conferences are created dynamically when first participant joins
+ * This function returns the conference name that will be used
  */
 export async function createEpisodeConference(episodeId: string) {
-  if (!client) throw new Error('Twilio not configured');
   const conferenceName = `episode-${episodeId}`;
   
-  try {
-    // Simplified for MVP
-    return {
-      sid: `CF${Date.now()}`,
-      friendlyName: conferenceName
-    } as any;
-    
-    /* Original code - enable when Twilio fully configured:
-    const conference = await client.conferences.create({
-      friendlyName: conferenceName,
-      statusCallback: `${process.env.APP_URL}/api/twilio/conference-status`,
-      statusCallbackMethod: 'POST',
-      statusCallbackEvent: ['start', 'end', 'join', 'leave', 'mute', 'hold'],
-      record: 'record-from-start',
-      recordingStatusCallback: `${process.env.APP_URL}/api/twilio/recording-status`,
-      recordingChannels: 'dual',
-      trim: 'trim-silence',
-    });
-
-    console.log('Conference created:', conferenceName);
-    return conference;
-    */
-  } catch (error) {
-    console.error('Error creating conference:', error);
-    throw error;
-  }
+  console.log(`📞 [CONFERENCE] Conference will be created on first join: ${conferenceName}`);
+  
+  // Twilio conferences are created automatically when first participant joins via TwiML
+  // We just return the conference name/SID that will be used
+  return {
+    sid: conferenceName,
+    friendlyName: conferenceName,
+    status: 'pending' // Will be 'in-progress' once first participant joins
+  };
+  
+  // Note: Conferences are managed via TwiML <Conference> verb in voice webhooks
+  // The actual Twilio conference object is created server-side automatically
 }
 
 /**

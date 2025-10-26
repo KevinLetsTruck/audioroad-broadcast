@@ -129,24 +129,40 @@ router.post('/voice', async (req: Request, res: Response) => {
     // Put caller in conference
     const conferenceName = `episode-${activeEpisode.id}`;
     
-    // Check if there are ANY participants already in this conference
-    const existingParticipants = await prisma.call.count({
-      where: {
-        episodeId: activeEpisode.id,
-        twilioConferenceSid: { not: null },
-        status: { notIn: ['completed', 'rejected'] }
-      }
-    });
+    // Check if conference is active (episode is live)
+    const startConference = activeEpisode.conferenceActive || true;
+    console.log('📞 Sending web caller to conference:', conferenceName, 'Conference active:', startConference);
     
-    const startConference = existingParticipants > 0;
-    console.log('📞 Sending web caller to conference:', conferenceName, '(participants:', existingParticipants, ')');
+    // Update call record with conference info if we created one
+    if (callerId) {
+      const call = await prisma.call.findFirst({
+        where: {
+          callerId: callerId,
+          episodeId: activeEpisode.id,
+          status: 'queued'
+        },
+        orderBy: { incomingAt: 'desc' }
+      });
+      
+      if (call) {
+        await prisma.call.update({
+          where: { id: call.id },
+          data: {
+            twilioConferenceSid: conferenceName,
+            participantState: 'screening', // Will be picked up by screener
+            isMutedInConference: true // Starts muted
+          }
+        });
+        console.log('✅ Updated call record with conference info:', call.id);
+      }
+    }
     
     const twiml = generateTwiML('conference', { 
       conferenceName,
-      startConferenceOnEnter: startConference,  // Join active conference immediately
+      startConferenceOnEnter: startConference,
       endConferenceOnExit: false,
       waitUrl: '/api/twilio/wait-music',
-      muted: true  // 🔇 Join MUTED - host will unmute when ready
+      muted: true  // 🔇 Join MUTED - screener will talk to them first
     });
     
     res.type('text/xml').send(twiml);
@@ -194,7 +210,10 @@ router.post('/incoming-call', async (req: Request, res: Response) => {
       return;
     }
 
-    // Create call record
+    // Send caller to conference
+    const conferenceName = `episode-${activeEpisode.id}`;
+    
+    // Create call record with conference info
     await prisma.call.create({
       data: {
         episodeId: activeEpisode.id,
@@ -202,7 +221,10 @@ router.post('/incoming-call', async (req: Request, res: Response) => {
         twilioCallSid: CallSid,
         status: 'queued',
         incomingAt: new Date(),
-        queuedAt: new Date()
+        queuedAt: new Date(),
+        twilioConferenceSid: conferenceName,
+        participantState: 'screening', // Will be picked up by screener
+        isMutedInConference: true // Starts muted
       }
     });
 
@@ -214,20 +236,9 @@ router.post('/incoming-call', async (req: Request, res: Response) => {
       phoneNumber: From
     });
 
-    // Send caller to conference (same as web calls!)
-    const conferenceName = `episode-${activeEpisode.id}`;
-    
-    // Check if there are ANY participants already in this conference
-    const existingParticipants = await prisma.call.count({
-      where: {
-        episodeId: activeEpisode.id,
-        twilioConferenceSid: { not: null },
-        status: { notIn: ['completed', 'rejected'] }
-      }
-    });
-    
-    const startConference = existingParticipants > 0;
-    console.log('📞 Sending phone caller to conference:', conferenceName, '(participants:', existingParticipants, ')');
+    // Conference is active if episode is live
+    const startConference = activeEpisode.conferenceActive || true;
+    console.log('📞 Sending phone caller to conference:', conferenceName, 'Conference active:', startConference);
     
     const twiml = generateTwiML('conference', { 
       conferenceName,

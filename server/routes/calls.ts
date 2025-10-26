@@ -214,7 +214,17 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
   try {
     const { screenerNotes, topic, priority } = req.body;
 
-    // Update call to approved status and set conference info
+    // Get existing call to preserve conference info
+    const existingCall = await prisma.call.findUnique({
+      where: { id: req.params.id },
+      include: { episode: true }
+    });
+
+    if (!existingCall) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    // Update call to approved status
     const call = await prisma.call.update({
       where: { id: req.params.id },
       data: {
@@ -225,9 +235,9 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
         priority: priority || 'normal',
         // Set participant state to HOLD (muted, can hear show)
         participantState: 'hold',
-        // Set conference SID (episode-based conference)
-        twilioConferenceSid: `episode-${req.body.episodeId || 'unknown'}`,
-        // Initially muted in conference
+        // Preserve existing conference SID or set it if missing
+        twilioConferenceSid: existingCall.twilioConferenceSid || `episode-${existingCall.episodeId}`,
+        // Keep muted in conference
         isMutedInConference: true,
         isOnHold: false
       },
@@ -237,20 +247,10 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       }
     });
 
-    // If we have episode info, use proper conference name
-    if (call.episode) {
-      await prisma.call.update({
-        where: { id: req.params.id },
-        data: {
-          twilioConferenceSid: `episode-${call.episode.id}`
-        }
-      });
-    }
-
     const io = req.app.get('io');
     emitToEpisode(io, call.episodeId, 'call:approved', call);
 
-    console.log(`✅ Call approved: ${call.id} - Participant state set to HOLD`);
+    console.log(`✅ Call approved: ${call.id} - Participant in HOLD state (conference: ${call.twilioConferenceSid})`);
 
     res.json(call);
   } catch (error) {

@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { createEpisodeConference } from '../services/conferenceService.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -140,13 +141,35 @@ router.patch('/:id', async (req: Request, res: Response) => {
  */
 router.patch('/:id/start', async (req: Request, res: Response) => {
   try {
+    // Update episode status
     const episode = await prisma.episode.update({
       where: { id: req.params.id },
       data: {
         status: 'live',
-        actualStart: new Date()
+        actualStart: new Date(),
+        conferenceActive: true
       }
     });
+
+    console.log(`🎙️ [EPISODE] Starting episode: ${episode.id}`);
+
+    // Create Twilio conference for this episode
+    try {
+      const conference = await createEpisodeConference(episode.id);
+      console.log(`📞 [CONFERENCE] Created conference: ${conference.friendlyName || conference.sid}`);
+      
+      // Store conference SID
+      await prisma.episode.update({
+        where: { id: episode.id },
+        data: {
+          twilioConferenceSid: conference.sid || `episode-${episode.id}`
+        }
+      });
+    } catch (confError) {
+      console.error('⚠️ [CONFERENCE] Failed to create conference (will retry on first call):', confError);
+      // Don't fail the whole request if conference creation fails
+      // Conference will be created automatically when first call joins
+    }
 
     const io = req.app.get('io');
     io.to(`episode:${episode.id}`).emit('episode:start', episode);
