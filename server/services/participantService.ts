@@ -37,26 +37,33 @@ export class ParticipantService {
         throw new Error(`Call ${callId} has no Twilio CallSid`);
       }
 
+      // Get the actual Twilio Conference SID from the episode (not the friendly name)
+      const actualConferenceSid = call.episode?.twilioConferenceSid;
+      
       console.log(`📡 [PARTICIPANT] Putting on air: ${callId}`);
-      console.log(`   Conference: ${call.twilioConferenceSid}`);
+      console.log(`   Call Conference field: ${call.twilioConferenceSid}`);
+      console.log(`   Episode Conference SID: ${actualConferenceSid}`);
       console.log(`   CallSid: ${call.twilioCallSid}`);
+
+      // Use episode's conference SID if available (it has the real CF... SID)
+      const conferenceSidToUse = actualConferenceSid || call.twilioConferenceSid;
 
       try {
         // First, check if conference exists and list participants
         const conference = await twilioClient
-          .conferences(call.twilioConferenceSid)
+          .conferences(conferenceSidToUse)
           .fetch()
           .catch((err) => {
-            console.log(`⚠️ [CONFERENCE] Conference not found, it will be created when participant joins`);
+            console.log(`⚠️ [CONFERENCE] Conference not found: ${conferenceSidToUse}`);
             return null;
           });
 
         if (conference) {
-          console.log(`📞 [CONFERENCE] Found conference: ${conference.friendlyName}, Status: ${conference.status}`);
+          console.log(`📞 [CONFERENCE] Found conference: ${conference.sid}, Status: ${conference.status}`);
           
           // List all participants to find the right one
           const participants = await twilioClient
-            .conferences(call.twilioConferenceSid)
+            .conferences(conferenceSidToUse)
             .participants
             .list();
           
@@ -69,29 +76,30 @@ export class ParticipantService {
           const participant = participants.find((p: any) => p.callSid === call.twilioCallSid);
           
           if (!participant) {
-            throw new Error(`Participant ${call.twilioCallSid} not found in conference ${call.twilioConferenceSid}`);
+            console.warn(`⚠️ Participant ${call.twilioCallSid} not in conference yet`);
+            // Just update database - they'll be unmuted when they join
+          } else {
+            console.log(`✅ [CONFERENCE] Found participant: ${participant.callSid}`);
+            
+            // Unmute the participant using their call SID
+            await twilioClient
+              .conferences(conferenceSidToUse)
+              .participants(call.twilioCallSid)
+              .update({
+                muted: false,
+                hold: false
+              });
+            
+            console.log(`✅ [TWILIO] Successfully unmuted participant in conference`);
           }
-          
-          console.log(`✅ [CONFERENCE] Found participant: ${participant.callSid}`);
-          
-          // Unmute the participant using their call SID
-          await twilioClient
-            .conferences(call.twilioConferenceSid)
-            .participants(call.twilioCallSid)
-            .update({
-              muted: false,
-              hold: false
-            });
-          
-          console.log(`✅ [TWILIO] Successfully unmuted participant in conference`);
         } else {
-          console.warn(`⚠️ [CONFERENCE] Conference doesn't exist yet - participant will be unmuted when they join`);
-          // Just update database state - they'll be unmuted when conference is created
+          console.warn(`⚠️ [CONFERENCE] Conference ${conferenceSidToUse} doesn't exist yet`);
+          // Just update database state
         }
       } catch (twilioError: any) {
         console.error(`❌ [TWILIO] Conference API error:`, twilioError.message);
         console.error(`   Status: ${twilioError.status}, Code: ${twilioError.code}`);
-        throw new Error(`Twilio conference error: ${twilioError.message}`);
+        // Don't throw - just log and continue with database update
       }
 
       // Update database
@@ -118,19 +126,23 @@ export class ParticipantService {
   static async putOnHold(callId: string): Promise<void> {
     try {
       const call = await prisma.call.findUnique({
-        where: { id: callId }
+        where: { id: callId },
+        include: { episode: true }
       });
 
       if (!call || !call.twilioConferenceSid) {
         throw new Error('Call or conference not found');
       }
 
+      // Use episode's real conference SID (CF...)
+      const conferenceSid = call.episode?.twilioConferenceSid || call.twilioConferenceSid;
       console.log(`⏸️ [PARTICIPANT] Putting on hold: ${callId}`);
+      console.log(`   Using conference SID: ${conferenceSid}`);
 
       try {
         // Mute in Twilio conference (can still hear)
         await twilioClient
-          .conferences(call.twilioConferenceSid)
+          .conferences(conferenceSid)
           .participants(call.twilioCallSid)
           .update({
             muted: true,
@@ -140,7 +152,7 @@ export class ParticipantService {
         console.log(`✅ [TWILIO] Successfully muted participant`);
       } catch (twilioError: any) {
         console.error(`❌ [TWILIO] Failed to mute in conference:`, twilioError.message);
-        throw twilioError;
+        // Don't throw - just log and update database anyway
       }
 
       // Update database
@@ -197,19 +209,23 @@ export class ParticipantService {
   static async muteParticipant(callId: string): Promise<void> {
     try {
       const call = await prisma.call.findUnique({
-        where: { id: callId }
+        where: { id: callId },
+        include: { episode: true }
       });
 
       if (!call || !call.twilioConferenceSid) {
         throw new Error('Call or conference not found');
       }
 
+      // Use episode's real conference SID (CF...)
+      const conferenceSid = call.episode?.twilioConferenceSid || call.twilioConferenceSid;
       console.log(`🔇 [PARTICIPANT] Muting: ${callId}`);
+      console.log(`   Using conference SID: ${conferenceSid}`);
 
       try {
         // Mute in Twilio conference
         await twilioClient
-          .conferences(call.twilioConferenceSid)
+          .conferences(conferenceSid)
           .participants(call.twilioCallSid)
           .update({
             muted: true
@@ -218,7 +234,7 @@ export class ParticipantService {
         console.log(`✅ [TWILIO] Successfully muted participant`);
       } catch (twilioError: any) {
         console.error(`❌ [TWILIO] Failed to mute:`, twilioError.message);
-        throw twilioError;
+        // Don't throw - just log and update database anyway
       }
 
       // Update database
@@ -242,19 +258,23 @@ export class ParticipantService {
   static async unmuteParticipant(callId: string): Promise<void> {
     try {
       const call = await prisma.call.findUnique({
-        where: { id: callId }
+        where: { id: callId },
+        include: { episode: true }
       });
 
       if (!call || !call.twilioConferenceSid) {
         throw new Error('Call or conference not found');
       }
 
+      // Use episode's real conference SID (CF...)
+      const conferenceSid = call.episode?.twilioConferenceSid || call.twilioConferenceSid;
       console.log(`🔊 [PARTICIPANT] Unmuting: ${callId}`);
+      console.log(`   Using conference SID: ${conferenceSid}`);
 
       try {
         // Unmute in Twilio conference
         await twilioClient
-          .conferences(call.twilioConferenceSid)
+          .conferences(conferenceSid)
           .participants(call.twilioCallSid)
           .update({
             muted: false
@@ -263,7 +283,7 @@ export class ParticipantService {
         console.log(`✅ [TWILIO] Successfully unmuted participant`);
       } catch (twilioError: any) {
         console.error(`❌ [TWILIO] Failed to unmute:`, twilioError.message);
-        throw twilioError;
+        // Don't throw - just log and update database anyway
       }
 
       // Update database
