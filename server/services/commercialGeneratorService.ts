@@ -52,7 +52,7 @@ Example style:
 Now generate the commercial script:`;
 
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20240620',
+      model: 'claude-3-5-haiku-20241022', // Latest Haiku 3.5 (fast & cost-effective)
       max_tokens: 200,
       messages: [{
         role: 'user',

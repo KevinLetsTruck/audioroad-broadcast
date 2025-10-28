@@ -112,7 +112,7 @@ Respond in JSON format:
 }`;
 
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20240620',
+      model: 'claude-3-5-haiku-20241022', // Latest Haiku 3.5 (fast & cost-effective)
       max_tokens: 500,
       messages: [{
         role: 'user',
@@ -207,7 +207,7 @@ Respond in JSON:
 }`;
 
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20240620',
+      model: 'claude-3-5-haiku-20241022', // Latest Haiku 3.5 (fast & cost-effective)
       max_tokens: 800,
       messages: [{
         role: 'user',
