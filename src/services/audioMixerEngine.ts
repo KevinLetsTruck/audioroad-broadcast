@@ -118,9 +118,10 @@ export class AudioMixerEngine {
     try {
       const audioConstraints: MediaTrackConstraints = {
         echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: false, // We'll handle gain manually
-        sampleRate: this.config.sampleRate
+        noiseSuppression: true,      // AI-powered noise removal
+        autoGainControl: true,        // Enable auto gain (works with compressor)
+        sampleRate: this.config.sampleRate,
+        channelCount: 1              // Mono for voice (clearer)
       };
 
       // If specific device requested, add deviceId constraint

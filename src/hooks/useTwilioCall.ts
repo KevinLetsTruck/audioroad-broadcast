@@ -46,6 +46,9 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
           logLevel: 'error',
           edge: 'ashburn' // Use specific edge for better reliability
         });
+        
+        console.log('🎤 [DEVICE] Twilio Device created (browser will handle noise suppression automatically)');
+
 
         twilioDevice.on('registered', () => {
           console.log('✅ [DEVICE] Registered successfully, identity:', identity);

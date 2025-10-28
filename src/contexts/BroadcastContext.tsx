@@ -234,6 +234,8 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
         enableImprovedSignalingErrorPrecision: true,
         logLevel: 'error'
       });
+      
+      console.log('🎤 [CONTEXT] Twilio Device created (browser handles noise suppression automatically)');
 
       device.on('registered', () => {
         console.log('✅ [TWILIO] Device registered');
