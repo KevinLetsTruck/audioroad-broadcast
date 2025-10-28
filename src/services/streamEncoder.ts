@@ -1,15 +1,11 @@
 /**
- * Stream Encoder
+ * Stream Encoder (Client-Side)
  * 
- * Handles encoding audio to MP3 and streaming to Radio.co via backend WebSocket
+ * Captures raw audio and sends to server for MP3 encoding and Radio.co streaming
+ * Server-side encoding is more reliable than browser-side lamejs
  */
 
-// @ts-ignore - lamejs doesn't have types
-import * as lamejsModule from 'lamejs';
 import { io, Socket } from 'socket.io-client';
-
-// Handle different module exports
-const lamejs = (lamejsModule as any).default || lamejsModule;
 
 export interface StreamConfig {
   serverUrl: string;
@@ -34,7 +30,6 @@ export class StreamEncoder {
   private config: StreamConfig | null = null;
   private isStreaming = false;
   private isConnected = false;
-  private mp3Encoder: any = null;
   private audioContext: AudioContext | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private processorNode: ScriptProcessorNode | null = null;
@@ -75,83 +70,52 @@ export class StreamEncoder {
         });
       }
 
-      // Create MP3 encoder
-      const sampleRate = this.audioContext.sampleRate;
-      const kbps = this.config.bitrate;
-      const channels = 2;
-
-      // Initialize lame encoder
-      // Try different ways to access Mp3Encoder due to CommonJS/ES6 module issues
-      try {
-        const keys = Object.keys(lamejs);
-        console.log('🔍 [DEBUG] lamejs has', keys.length, 'properties:', keys);
-        console.log('🔍 [DEBUG] lamejs.Mp3Encoder:', typeof lamejs.Mp3Encoder);
-        console.log('🔍 [DEBUG] lamejs.WavHeader:', typeof lamejs.WavHeader);
-        
-        // Access the Mp3Encoder constructor
-        const Mp3Encoder = lamejs.Mp3Encoder;
-        if (!Mp3Encoder) {
-          console.error('❌ Mp3Encoder not found. Available:', keys);
-          throw new Error('Mp3Encoder not found in lamejs package');
-        }
-        
-        console.log('🎵 Initializing Mp3Encoder with:', { channels, sampleRate, kbps });
-        
-        // Create encoder instance - this is where MPEGMode error happens
-        // The constant should be defined in the lamejs module scope
-        this.mp3Encoder = new Mp3Encoder(channels, sampleRate, kbps);
-        
-        console.log('✅ MP3 Encoder initialized successfully');
-      } catch (encoderError) {
-        console.error('❌ Failed to initialize MP3 encoder:', encoderError);
-        console.error('❌ Error at lame_init - MPEGMode constant missing from bundled code');
-        console.error('   This is a Vite bundling issue with the old lamejs library');
-        throw new Error(`MP3 Encoder initialization failed: ${encoderError instanceof Error ? encoderError.message : 'Unknown error'}`);
-      }
-
-      // Create audio processing chain
+      // Create audio processing chain (NO MP3 encoding in browser!)
+      // Server will handle MP3 encoding - much more reliable
+      console.log('🎵 [CLIENT STREAM] Audio context sample rate:', this.audioContext.sampleRate);
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
       
       // Use ScriptProcessorNode for audio processing
       // Note: This is deprecated but AudioWorklet requires separate files
       // For a production app, migrate to AudioWorklet
       const bufferSize = 4096;
+      const channels = 2;
       this.processorNode = this.audioContext.createScriptProcessor(
         bufferSize,
         channels,
         channels
       );
 
-      // Process audio and encode to MP3
+      // Process audio and send RAW PCM to server (server will encode to MP3)
       this.processorNode.onaudioprocess = (event) => {
-        if (!this.isStreaming || !this.mp3Encoder) return;
+        if (!this.isStreaming) return;
 
+        // Get left and right channels as Float32Array
         const left = event.inputBuffer.getChannelData(0);
         const right = event.inputBuffer.getChannelData(1);
 
-        // Convert Float32Array to Int16Array for lame
-        const leftInt16 = this.floatTo16BitPCM(left);
-        const rightInt16 = this.floatTo16BitPCM(right);
-
-        // Encode to MP3
-        const mp3buf = this.mp3Encoder.encodeBuffer(leftInt16, rightInt16);
-
-        if (mp3buf.length > 0) {
-          this.sendToServer(mp3buf);
-          this.bytesStreamed += mp3buf.length;
+        // Interleave stereo channels into single Float32Array
+        const interleaved = new Float32Array(left.length * 2);
+        for (let i = 0; i < left.length; i++) {
+          interleaved[i * 2] = left[i];
+          interleaved[i * 2 + 1] = right[i];
         }
+
+        // Send raw PCM to server (server handles MP3 encoding)
+        this.sendToServer(interleaved);
+        this.bytesStreamed += interleaved.byteLength;
       };
 
       // Connect nodes
       this.sourceNode.connect(this.processorNode);
       this.processorNode.connect(this.audioContext.destination);
 
-      // Connect to Radio.co server
+      // Connect to server (server will handle MP3 encoding and Radio.co connection)
       await this.connectToServer();
 
       this.isStreaming = true;
       this.startTime = Date.now();
-      console.log('🚀 Streaming started');
+      console.log('🚀 [CLIENT STREAM] Streaming started - sending raw PCM to server');
 
     } catch (error) {
       console.error('Failed to start streaming:', error);
@@ -167,20 +131,14 @@ export class StreamEncoder {
     if (!this.isStreaming) return;
 
     try {
-      // Flush remaining MP3 data
-      if (this.mp3Encoder) {
-        const mp3buf = this.mp3Encoder.flush();
-        if (mp3buf.length > 0) {
-          this.sendToServer(mp3buf);
-        }
-      }
+      console.log('⏹️ [CLIENT STREAM] Stopping audio capture...');
 
       // Disconnect from server
       this.disconnectFromServer();
 
       this.cleanup();
       this.isStreaming = false;
-      console.log('⏹️ Streaming stopped');
+      console.log('✅ [CLIENT STREAM] Streaming stopped');
 
     } catch (error) {
       console.error('Error stopping stream:', error);
@@ -189,28 +147,28 @@ export class StreamEncoder {
   }
 
   /**
-   * Connect to Radio.co via backend WebSocket
+   * Connect to backend WebSocket (server will connect to Radio.co)
    */
   private async connectToServer(): Promise<void> {
     if (!this.config) return;
 
     return new Promise((resolve, reject) => {
-      console.log(`🔌 Connecting to Radio.co via backend...`);
+      console.log(`🔌 [CLIENT STREAM] Connecting to backend server...`);
 
       // Connect to our backend Socket.IO server
       this.socket = io();
 
       this.socket.on('connect', () => {
-        console.log('✅ Connected to backend');
+        console.log('✅ [CLIENT STREAM] Connected to backend');
 
-        // Request to start streaming to Radio.co
+        // Request server to start streaming to Radio.co (with server-side MP3 encoding)
         this.socket!.emit('stream:start', this.config, (response: any) => {
           if (response.success) {
-            console.log('✅ Backend connected to Radio.co!');
+            console.log('✅ [CLIENT STREAM] Server connected to Radio.co with MP3 encoding!');
             this.isConnected = true;
             resolve();
           } else {
-            console.error('❌ Failed to connect to Radio.co:', response.error);
+            console.error('❌ [CLIENT STREAM] Server failed to connect to Radio.co:', response.error);
             this.isConnected = false;
             reject(new Error(response.error));
           }
@@ -218,22 +176,22 @@ export class StreamEncoder {
       });
 
       this.socket.on('stream:connected', () => {
-        console.log('🎙️ Stream to Radio.co active');
+        console.log('🎙️ [CLIENT STREAM] Radio.co stream active (server-side encoding)');
         this.isConnected = true;
       });
 
       this.socket.on('stream:disconnected', () => {
-        console.warn('⚠️ Disconnected from Radio.co');
+        console.warn('⚠️ [CLIENT STREAM] Disconnected from Radio.co');
         this.isConnected = false;
       });
 
       this.socket.on('stream:error', (error: any) => {
-        console.error('❌ Stream error:', error.message);
+        console.error('❌ [CLIENT STREAM] Stream error:', error.message);
         this.isConnected = false;
       });
 
       this.socket.on('disconnect', () => {
-        console.warn('⚠️ Backend connection lost');
+        console.warn('⚠️ [CLIENT STREAM] Backend connection lost');
         this.isConnected = false;
       });
     });
@@ -252,31 +210,14 @@ export class StreamEncoder {
   }
 
   /**
-   * Send encoded MP3 data to backend WebSocket
+   * Send raw PCM audio data to backend for server-side encoding
    */
-  private sendToServer(mp3Data: Int8Array | Uint8Array): void {
+  private sendToServer(pcmData: Float32Array): void {
     if (!this.isConnected || !this.socket) return;
 
-    // Convert to ArrayBuffer for transmission
-    const buffer = mp3Data.buffer.slice(
-      mp3Data.byteOffset,
-      mp3Data.byteOffset + mp3Data.byteLength
-    );
-
-    // Send to backend via Socket.IO
-    this.socket.emit('stream:audio-data', buffer);
-  }
-
-  /**
-   * Convert Float32 audio to 16-bit PCM
-   */
-  private floatTo16BitPCM(input: Float32Array): Int16Array {
-    const output = new Int16Array(input.length);
-    for (let i = 0; i < input.length; i++) {
-      const s = Math.max(-1, Math.min(1, input[i]));
-      output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-    }
-    return output;
+    // Send Float32Array as ArrayBuffer to server
+    // Server will handle MP3 encoding
+    this.socket.emit('stream:audio-data', pcmData.buffer);
   }
 
   /**
@@ -304,8 +245,6 @@ export class StreamEncoder {
       this.sourceNode.disconnect();
       this.sourceNode = null;
     }
-
-    this.mp3Encoder = null;
   }
 
   /**

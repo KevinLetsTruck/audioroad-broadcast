@@ -2,10 +2,11 @@
  * Stream Socket Service
  * 
  * Handles WebSocket connections from browser for audio streaming
+ * NOW with server-side MP3 encoding (much more reliable!)
  */
 
 import { Server as SocketIOServer } from 'socket.io';
-import { RadioCoStreamService } from './radioCoStreamService.js';
+import { ServerStreamEncoder } from './serverStreamEncoder.js';
 
 interface StreamConfig {
   serverUrl: string;
@@ -18,7 +19,7 @@ interface StreamConfig {
 }
 
 // Store active stream sessions
-const activeStreams = new Map<string, RadioCoStreamService>();
+const activeStreams = new Map<string, ServerStreamEncoder>();
 
 export function initializeStreamSocketHandlers(io: SocketIOServer): void {
   io.on('connection', (socket) => {
@@ -29,7 +30,7 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
      */
     socket.on('stream:start', async (config: StreamConfig, callback) => {
       try {
-        console.log('🎙️ Starting stream to Radio.co...');
+        console.log('🎙️ [SERVER STREAM] Starting stream to Radio.co with server-side encoding...');
 
         // Check if already streaming
         if (activeStreams.has(socket.id)) {
@@ -38,83 +39,89 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           return;
         }
 
-        // Create new Radio.co stream service
-        const streamService = new RadioCoStreamService();
+        // Create new server-side stream encoder
+        const streamEncoder = new ServerStreamEncoder();
 
         // Set up event handlers
-        streamService.on('connected', () => {
-          console.log('✅ Connected to Radio.co');
+        streamEncoder.on('connected', () => {
+          console.log('✅ [SERVER STREAM] Connected to Radio.co');
           socket.emit('stream:connected');
         });
 
-        streamService.on('disconnected', () => {
-          console.log('📴 Disconnected from Radio.co');
+        streamEncoder.on('disconnected', () => {
+          console.log('📴 [SERVER STREAM] Disconnected from Radio.co');
           socket.emit('stream:disconnected');
         });
 
-        streamService.on('error', (error) => {
-          console.error('❌ Radio.co error:', error);
+        streamEncoder.on('stopped', () => {
+          console.log('⏹️ [SERVER STREAM] Stream stopped');
+          socket.emit('stream:stopped');
+        });
+
+        streamEncoder.on('error', (error) => {
+          console.error('❌ [SERVER STREAM] Error:', error);
           socket.emit('stream:error', { message: error.message });
         });
 
-        streamService.on('data-sent', (bytes) => {
+        streamEncoder.on('data-sent', (bytes) => {
           // Optionally emit progress updates
           socket.emit('stream:progress', { bytesSent: bytes });
         });
 
-        // Connect to Radio.co
-        await streamService.connect(config);
+        // Initialize encoder and connect to Radio.co
+        await streamEncoder.initialize(config);
 
-        // Store the stream service
-        activeStreams.set(socket.id, streamService);
+        // Store the stream encoder
+        activeStreams.set(socket.id, streamEncoder);
 
-        console.log(`✅ Stream started for ${socket.id}`);
+        console.log(`✅ [SERVER STREAM] Stream started for client ${socket.id}`);
         callback({ success: true });
 
       } catch (error: any) {
-        console.error('❌ Failed to start stream:', error);
+        console.error('❌ [SERVER STREAM] Failed to start:', error);
         callback({ success: false, error: error.message });
       }
     });
 
     /**
-     * Receive audio data from browser
+     * Receive audio data from browser (now as Float32Array PCM)
      */
     socket.on('stream:audio-data', (data: ArrayBuffer) => {
-      const streamService = activeStreams.get(socket.id);
+      const streamEncoder = activeStreams.get(socket.id);
 
-      if (!streamService) {
-        console.warn('⚠️ No active stream for this client');
+      if (!streamEncoder) {
+        console.warn('⚠️ [SERVER STREAM] No active stream for this client');
         return;
       }
 
-      // Convert ArrayBuffer to Buffer
-      const buffer = Buffer.from(data);
-
-      // Send to Radio.co
-      const success = streamService.sendAudioData(buffer);
-
-      if (!success) {
-        socket.emit('stream:error', { message: 'Failed to send audio data' });
+      try {
+        // Convert ArrayBuffer to Float32Array (raw PCM from browser)
+        const float32Data = new Float32Array(data);
+        
+        // Process audio chunk (encode to MP3 and send to Radio.co)
+        streamEncoder.processAudioChunk(float32Data);
+      } catch (error) {
+        console.error('❌ [SERVER STREAM] Error processing audio chunk:', error);
+        socket.emit('stream:error', { message: 'Failed to process audio data' });
       }
     });
 
     /**
      * Stop streaming
      */
-    socket.on('stream:stop', (callback) => {
-      const streamService = activeStreams.get(socket.id);
+    socket.on('stream:stop', async (callback) => {
+      const streamEncoder = activeStreams.get(socket.id);
 
-      if (streamService) {
-        console.log(`📴 Stopping stream for ${socket.id}`);
-        streamService.disconnect();
+      if (streamEncoder) {
+        console.log(`📴 [SERVER STREAM] Stopping stream for ${socket.id}`);
+        await streamEncoder.stop();
         activeStreams.delete(socket.id);
         
         if (callback) {
           callback({ success: true });
         }
       } else {
-        console.warn('⚠️ No active stream to stop');
+        console.warn('⚠️ [SERVER STREAM] No active stream to stop');
         if (callback) {
           callback({ success: false, error: 'No active stream' });
         }
@@ -125,10 +132,10 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
      * Get stream status
      */
     socket.on('stream:status', (callback) => {
-      const streamService = activeStreams.get(socket.id);
+      const streamEncoder = activeStreams.get(socket.id);
 
-      if (streamService) {
-        callback({ success: true, status: streamService.getStatus() });
+      if (streamEncoder) {
+        callback({ success: true, status: streamEncoder.getStatus() });
       } else {
         callback({ success: false, error: 'No active stream' });
       }
@@ -137,18 +144,18 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
     /**
      * Handle client disconnect
      */
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       console.log(`🔌 Client disconnected: ${socket.id}`);
 
-      const streamService = activeStreams.get(socket.id);
-      if (streamService) {
-        console.log(`📴 Cleaning up stream for disconnected client ${socket.id}`);
-        streamService.disconnect();
+      const streamEncoder = activeStreams.get(socket.id);
+      if (streamEncoder) {
+        console.log(`📴 [SERVER STREAM] Cleaning up stream for disconnected client`);
+        await streamEncoder.stop();
         activeStreams.delete(socket.id);
       }
     });
   });
 
-  console.log('🎙️ Stream socket handlers initialized');
+  console.log('🎙️ Stream socket handlers initialized (server-side encoding enabled)');
 }
 
