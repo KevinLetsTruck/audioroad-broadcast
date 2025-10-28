@@ -17,7 +17,11 @@ router.get('/', async (req: Request, res: Response) => {
     const shows = await prisma.show.findMany({
       where: { isActive: true },
       include: {
-        _count: { select: { episodes: true } }
+        _count: { select: { episodes: true } },
+        commercials: {
+          include: { audioAsset: true },
+          orderBy: { slot: 'asc' }
+        }
       }
     });
     res.json(shows);
@@ -34,6 +38,10 @@ router.get('/:id', async (req: Request, res: Response) => {
         episodes: {
           orderBy: { date: 'desc' },
           take: 20
+        },
+        commercials: {
+          include: { audioAsset: true },
+          orderBy: { slot: 'asc' }
         }
       }
     });
@@ -231,6 +239,89 @@ router.delete('/:id/ad', async (req: Request, res: Response) => {
     res.json({ success: true, show: updatedShow });
   } catch (error) {
     res.status(500).json({ error: 'Failed to remove ad' });
+  }
+});
+
+/**
+ * GET /api/shows/:showId/commercials - Get assigned commercials for a show
+ */
+router.get('/:showId/commercials', async (req: Request, res: Response) => {
+  try {
+    const commercials = await prisma.showCommercial.findMany({
+      where: { showId: req.params.showId },
+      include: { audioAsset: true },
+      orderBy: { slot: 'asc' }
+    });
+    res.json(commercials);
+  } catch (error) {
+    console.error('Error fetching show commercials:', error);
+    res.status(500).json({ error: 'Failed to fetch commercials' });
+  }
+});
+
+/**
+ * POST /api/shows/:showId/commercials - Assign commercial to slot
+ * Body: { audioAssetId: string, slot: number }
+ */
+router.post('/:showId/commercials', async (req: Request, res: Response) => {
+  try {
+    const { audioAssetId, slot } = req.body;
+    
+    if (!audioAssetId || !slot) {
+      return res.status(400).json({ error: 'audioAssetId and slot are required' });
+    }
+    
+    if (slot < 1 || slot > 3) {
+      return res.status(400).json({ error: 'Slot must be 1, 2, or 3' });
+    }
+    
+    // Delete existing commercial in this slot (if any)
+    await prisma.showCommercial.deleteMany({
+      where: { 
+        showId: req.params.showId, 
+        slot: parseInt(slot) 
+      }
+    });
+    
+    // Create new assignment
+    const assignment = await prisma.showCommercial.create({
+      data: { 
+        showId: req.params.showId, 
+        audioAssetId, 
+        slot: parseInt(slot) 
+      },
+      include: { audioAsset: true }
+    });
+    
+    res.json(assignment);
+  } catch (error) {
+    console.error('Error assigning commercial:', error);
+    res.status(500).json({ error: 'Failed to assign commercial' });
+  }
+});
+
+/**
+ * DELETE /api/shows/:showId/commercials/:slot - Remove commercial from slot
+ */
+router.delete('/:showId/commercials/:slot', async (req: Request, res: Response) => {
+  try {
+    const slot = parseInt(req.params.slot);
+    
+    if (slot < 1 || slot > 3) {
+      return res.status(400).json({ error: 'Slot must be 1, 2, or 3' });
+    }
+    
+    await prisma.showCommercial.deleteMany({
+      where: { 
+        showId: req.params.showId, 
+        slot 
+      }
+    });
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error removing commercial:', error);
+    res.status(500).json({ error: 'Failed to remove commercial' });
   }
 });
 

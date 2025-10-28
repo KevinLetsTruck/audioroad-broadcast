@@ -39,7 +39,7 @@ Requirements:
 - Speak directly to truck drivers
 - Highlight key benefits
 - Include a clear call-to-action
-- Mention the website: store.letstruck.com
+- Mention the website: letstruck.com
 - Sound natural for radio, not like a written ad
 - Use trucker-friendly language
 - Create urgency or excitement

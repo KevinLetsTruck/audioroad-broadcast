@@ -341,18 +341,37 @@ export default function BroadcastControl() {
       console.log('📴 [END] Ending show...');
       console.log('📴 [END] Episode ID:', status.episodeId);
 
-      // AUTOMATICALLY play ad if show has one
-      if (selectedShow?.adAudioUrl && broadcast.mixer) {
-        console.log('📢 [END] Show has ad - playing automatically...');
-        setPlayingAd(true);
+      // AUTOMATICALLY play end-of-show commercials (up to 3)
+      if (selectedShow?.id && broadcast.mixer) {
         try {
-          await broadcast.mixer.playAudioFile(selectedShow.adAudioUrl);
-          console.log('✅ [END] Ad played successfully');
-        } catch (adError) {
-          console.error('⚠️ [END] Failed to play ad:', adError);
-          // Continue with ending even if ad fails
-        } finally {
+          // Fetch assigned commercials for this show
+          const commercialsResponse = await fetch(`/api/shows/${selectedShow.id}/commercials`);
+          const commercials = await commercialsResponse.json();
+          
+          if (commercials.length > 0) {
+            console.log(`📢 [END] Playing ${commercials.length} end-of-show commercials...`);
+            setPlayingAd(true);
+            
+            for (const commercial of commercials) {
+              try {
+                console.log(`  ▶️ Playing commercial ${commercial.slot}: ${commercial.audioAsset.name}`);
+                await broadcast.mixer.playAudioFile(commercial.audioAsset.fileUrl);
+                console.log(`  ✅ Commercial ${commercial.slot} completed`);
+              } catch (commercialError) {
+                console.error(`  ⚠️ Failed to play commercial ${commercial.slot}:`, commercialError);
+                // Continue with next commercial even if one fails
+              }
+            }
+            
+            setPlayingAd(false);
+            console.log('✅ [END] All commercials played successfully');
+          } else {
+            console.log('ℹ️ [END] No commercials assigned to this show');
+          }
+        } catch (commercialsError) {
+          console.error('⚠️ [END] Failed to fetch/play commercials:', commercialsError);
           setPlayingAd(false);
+          // Continue with ending even if commercials fail
         }
       }
 

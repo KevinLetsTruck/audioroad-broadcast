@@ -58,6 +58,7 @@ model Show {
   
   episodes    Episode[]
   audioAssets AudioAsset[]
+  commercials ShowCommercial[]
   
   @@index([slug])
   @@index([isActive])
@@ -300,11 +301,30 @@ model AudioAsset {
   sortOrder   Int       @default(0)
   isActive    Boolean   @default(true)
   
+  assignedToShows ShowCommercial[]
+  
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   
   @@index([showId, type])
   @@index([type, isActive])
+}
+
+// ============================================
+// SHOW COMMERCIAL ASSIGNMENTS
+// ============================================
+
+model ShowCommercial {
+  id              String      @id @default(cuid())
+  showId          String
+  show            Show        @relation(fields: [showId], references: [id], onDelete: Cascade)
+  audioAssetId    String
+  audioAsset      AudioAsset  @relation(fields: [audioAssetId], references: [id], onDelete: Cascade)
+  slot            Int         // 1, 2, or 3
+  createdAt       DateTime    @default(now())
+  
+  @@unique([showId, slot])
+  @@index([showId])
 }
 
 // ============================================
