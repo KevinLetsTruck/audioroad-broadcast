@@ -402,15 +402,27 @@ export default function Commercials() {
                       <div className="space-y-3">
                         <select
                           value={selectedVoiceId}
-                          onChange={(e) => setSelectedVoiceId(e.target.value)}
+                          onChange={(e) => {
+                            console.log('[Commercials] Voice selected:', e.target.value);
+                            setSelectedVoiceId(e.target.value);
+                          }}
                           className="w-full px-4 py-3 bg-gray-900 border border-gray-700 rounded-lg text-white focus:border-green-500 focus:outline-none"
                         >
-                          {voices.map(voice => (
-                            <option key={voice.voiceId} value={voice.voiceId}>
-                              {voice.name} {voice.category ? `(${voice.category})` : ''}
-                            </option>
-                          ))}
+                          {voices.length === 0 ? (
+                            <option value="">Loading voices...</option>
+                          ) : (
+                            voices.map(voice => (
+                              <option key={voice.voiceId} value={voice.voiceId}>
+                                {voice.name} {voice.category ? `- ${voice.category}` : ''}
+                              </option>
+                            ))
+                          )}
                         </select>
+                        {selectedVoiceId && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Voice ID: {selectedVoiceId}
+                          </p>
+                        )}
                         
                         {voices.find(v => v.voiceId === selectedVoiceId)?.previewUrl && (
                           <div className="bg-gray-900 p-3 rounded-lg">

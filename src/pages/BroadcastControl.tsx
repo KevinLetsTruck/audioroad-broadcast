@@ -311,8 +311,13 @@ export default function BroadcastControl() {
       console.log('🎉 SHOW STARTED! You are LIVE!');
 
       // AUTOMATICALLY play opener if show has one
+      console.log('🎵 [START] Checking for show opener...');
+      console.log('   Show:', selectedShow?.name);
+      console.log('   Opener URL:', selectedShow?.openerAudioUrl || 'Not set');
+      console.log('   Mixer:', mixerInstance ? 'Ready' : 'Not ready');
+      
       if (selectedShow?.openerAudioUrl && mixerInstance) {
-        console.log('🎵 [START] Show has opener - playing automatically...');
+        console.log('🎵 [START] Playing show opener automatically...');
         setPlayingOpener(true);
         try {
           // Play opener through mixer (broadcasts to listeners AND your speakers!)
@@ -320,9 +325,18 @@ export default function BroadcastControl() {
           console.log('✅ [START] Opener played successfully');
         } catch (openerError) {
           console.error('⚠️ [START] Failed to play opener:', openerError);
+          alert(`⚠️ Could not play show opener: ${openerError instanceof Error ? openerError.message : 'Unknown error'}`);
           // Don't fail the whole start if opener fails
         } finally {
           setPlayingOpener(false);
+        }
+      } else {
+        if (!selectedShow?.openerAudioUrl) {
+          console.log('ℹ️ [START] No opener configured for this show');
+          console.log('   💡 To add an opener: Go to Settings → Upload show opener');
+        }
+        if (!mixerInstance) {
+          console.log('⚠️ [START] Mixer not ready - cannot play opener');
         }
       }
 
