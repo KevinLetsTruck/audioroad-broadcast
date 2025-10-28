@@ -14,6 +14,15 @@ export default defineConfig({
         ws: true,
       }
     }
+  },
+  optimizeDeps: {
+    include: ['lamejs']
+  },
+  build: {
+    commonjsOptions: {
+      include: [/lamejs/, /node_modules/],
+      transformMixedEsModules: true
+    }
   }
 })
 

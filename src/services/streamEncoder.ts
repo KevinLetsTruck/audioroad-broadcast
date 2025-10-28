@@ -78,7 +78,18 @@ export class StreamEncoder {
       const channels = 2;
 
       // Initialize lame encoder
-      this.mp3Encoder = new lamejs.Mp3Encoder(channels, sampleRate, kbps);
+      // Try different ways to access Mp3Encoder due to CommonJS/ES6 module issues
+      try {
+        const Mp3Encoder = lamejs.Mp3Encoder || lamejs.default?.Mp3Encoder || (lamejs as any).Mp3Encoder;
+        if (!Mp3Encoder) {
+          throw new Error('Mp3Encoder not found in lamejs package');
+        }
+        this.mp3Encoder = new Mp3Encoder(channels, sampleRate, kbps);
+        console.log('✅ MP3 Encoder initialized successfully');
+      } catch (encoderError) {
+        console.error('❌ Failed to initialize MP3 encoder:', encoderError);
+        throw new Error(`MP3 Encoder initialization failed: ${encoderError instanceof Error ? encoderError.message : 'Unknown error'}`);
+      }
 
       // Create audio processing chain
       this.sourceNode = this.audioContext.createMediaStreamSource(stream);
