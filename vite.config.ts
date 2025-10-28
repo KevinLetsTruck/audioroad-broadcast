@@ -16,12 +16,23 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    include: ['lamejs']
+    include: ['lamejs'],
+    exclude: []
   },
   build: {
     commonjsOptions: {
       include: [/lamejs/, /node_modules/],
       transformMixedEsModules: true
+    },
+    rollupOptions: {
+      output: {
+        // Don't minify lamejs - it breaks internal references
+        manualChunks: (id) => {
+          if (id.includes('lamejs')) {
+            return 'lamejs';
+          }
+        }
+      }
     }
   }
 })

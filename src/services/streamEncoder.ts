@@ -5,8 +5,11 @@
  */
 
 // @ts-ignore - lamejs doesn't have types
-import lamejs from 'lamejs';
+import * as lamejsModule from 'lamejs';
 import { io, Socket } from 'socket.io-client';
+
+// Handle different module exports
+const lamejs = (lamejsModule as any).default || lamejsModule;
 
 export interface StreamConfig {
   serverUrl: string;
@@ -80,14 +83,22 @@ export class StreamEncoder {
       // Initialize lame encoder
       // Try different ways to access Mp3Encoder due to CommonJS/ES6 module issues
       try {
+        console.log('🔍 [DEBUG] lamejs object keys:', Object.keys(lamejs));
+        console.log('🔍 [DEBUG] lamejs.Mp3Encoder:', typeof lamejs.Mp3Encoder);
+        console.log('🔍 [DEBUG] lamejs.default:', typeof lamejs.default);
+        
         const Mp3Encoder = lamejs.Mp3Encoder || lamejs.default?.Mp3Encoder || (lamejs as any).Mp3Encoder;
         if (!Mp3Encoder) {
+          console.error('❌ Mp3Encoder not found. Available properties:', Object.keys(lamejs));
           throw new Error('Mp3Encoder not found in lamejs package');
         }
+        
+        console.log('🎵 Initializing Mp3Encoder with:', { channels, sampleRate, kbps });
         this.mp3Encoder = new Mp3Encoder(channels, sampleRate, kbps);
         console.log('✅ MP3 Encoder initialized successfully');
       } catch (encoderError) {
         console.error('❌ Failed to initialize MP3 encoder:', encoderError);
+        console.error('❌ lamejs content:', lamejs);
         throw new Error(`MP3 Encoder initialization failed: ${encoderError instanceof Error ? encoderError.message : 'Unknown error'}`);
       }
 
