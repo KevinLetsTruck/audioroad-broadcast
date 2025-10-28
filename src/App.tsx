@@ -115,13 +115,31 @@ function AppContent() {
           <Route 
             path="/sign-in/*" 
             element={
-              <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+              <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
                 <SignIn 
                   afterSignInUrl="/"
                   appearance={{
+                    layout: {
+                      socialButtonsPlacement: "bottom",
+                      socialButtonsVariant: "blockButton"
+                    },
+                    variables: {
+                      colorPrimary: "#22c55e",
+                      colorBackground: "#ffffff",
+                      colorText: "#1f2937",
+                      colorInputBackground: "#f3f4f6",
+                      colorInputText: "#1f2937",
+                      borderRadius: "0.5rem"
+                    },
                     elements: {
                       rootBox: "mx-auto",
-                      card: "bg-gray-800 shadow-xl"
+                      card: "shadow-2xl",
+                      headerTitle: "text-2xl font-bold text-gray-900",
+                      headerSubtitle: "text-gray-600",
+                      socialButtonsBlockButton: "border-2 hover:bg-gray-50",
+                      formButtonPrimary: "bg-green-600 hover:bg-green-700 text-white font-semibold",
+                      formFieldInput: "border-gray-300 text-gray-900",
+                      footerActionLink: "text-green-600 hover:text-green-700 font-semibold"
                     }
                   }}
                 />
@@ -131,13 +149,31 @@ function AppContent() {
           <Route 
             path="/sign-up/*" 
             element={
-              <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+              <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
                 <SignUp 
                   afterSignUpUrl="/"
                   appearance={{
+                    layout: {
+                      socialButtonsPlacement: "bottom",
+                      socialButtonsVariant: "blockButton"
+                    },
+                    variables: {
+                      colorPrimary: "#22c55e",
+                      colorBackground: "#ffffff",
+                      colorText: "#1f2937",
+                      colorInputBackground: "#f3f4f6",
+                      colorInputText: "#1f2937",
+                      borderRadius: "0.5rem"
+                    },
                     elements: {
                       rootBox: "mx-auto",
-                      card: "bg-gray-800 shadow-xl"
+                      card: "shadow-2xl",
+                      headerTitle: "text-2xl font-bold text-gray-900",
+                      headerSubtitle: "text-gray-600",
+                      socialButtonsBlockButton: "border-2 hover:bg-gray-50",
+                      formButtonPrimary: "bg-green-600 hover:bg-green-700 text-white font-semibold",
+                      formFieldInput: "border-gray-300 text-gray-900",
+                      footerActionLink: "text-green-600 hover:text-green-700 font-semibold"
                     }
                   }}
                 />
