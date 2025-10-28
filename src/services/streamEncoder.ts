@@ -5,7 +5,7 @@
  */
 
 // @ts-ignore - lamejs doesn't have types
-import * as lamejs from 'lamejs';
+import lamejs from 'lamejs';
 import { io, Socket } from 'socket.io-client';
 
 export interface StreamConfig {
