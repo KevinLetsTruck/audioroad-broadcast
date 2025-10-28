@@ -41,3 +41,7 @@ tmp/
 temp/
 *.tmp
 
+
+# Environment variable reference files (contain secrets)
+RAILWAY_ENVIRONMENT_VARIABLES.txt
+NEW_VARIABLES_TO_ADD.txt
