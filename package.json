@@ -22,6 +22,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.20.0",
     "@aws-sdk/client-s3": "^3.901.0",
+    "@aws-sdk/client-transcribe": "^3.918.0",
     "@aws-sdk/lib-storage": "^3.901.0",
     "@aws-sdk/s3-request-presigner": "^3.901.0",
     "@clerk/backend": "^2.19.0",
@@ -45,6 +46,7 @@
     "jsonwebtoken": "^9.0.2",
     "lamejs": "^1.2.1",
     "multer": "^2.0.2",
+    "openai": "^6.7.0",
     "pdf-parse": "^2.4.3",
     "react": "^19.1.1-beta-02802f085b-20240712",
     "react-dom": "^19.1.1-beta-02802f085b-20240712",
