@@ -148,17 +148,66 @@ router.get('/', async (req: Request, res: Response) => {
     const episodes = await prisma.episode.findMany({
       where,
       include: {
-        show: true
+        show: true,
+        _count: {
+          select: { calls: true }
+        }
       },
       orderBy: {
         date: 'desc'
       }
     });
 
+    console.log(`📁 [RECORDINGS] Fetched ${episodes.length} recordings`);
     res.json(episodes);
   } catch (error) {
     console.error('Error fetching recordings:', error);
     res.status(500).json({ error: 'Failed to fetch recordings' });
+  }
+});
+
+/**
+ * DELETE /api/recordings/:episodeId - Delete recording reference
+ */
+router.delete('/:episodeId', async (req: Request, res: Response) => {
+  try {
+    const { episodeId } = req.params;
+
+    console.log(`🗑️ [RECORDINGS] Removing recording from episode: ${episodeId}`);
+
+    // Just remove the recording URL, don't delete the episode
+    await prisma.episode.update({
+      where: { id: episodeId },
+      data: {
+        recordingUrl: null
+      }
+    });
+
+    console.log(`✅ [RECORDINGS] Recording reference removed`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting recording:', error);
+    res.status(500).json({ error: 'Failed to delete recording' });
+  }
+});
+
+/**
+ * PATCH /api/recordings/:episodeId/notes - Update episode notes
+ */
+router.patch('/:episodeId/notes', async (req: Request, res: Response) => {
+  try {
+    const { episodeId } = req.params;
+    const { notes } = req.body;
+
+    await prisma.episode.update({
+      where: { id: episodeId },
+      data: { notes }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating notes:', error);
+    res.status(500).json({ error: 'Failed to update notes' });
   }
 });
 
