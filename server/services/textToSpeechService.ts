@@ -3,9 +3,7 @@
  * Converts AI-generated commercial scripts into audio
  */
 
-// @ts-ignore - No type definitions available
-import pkg from 'elevenlabs-node';
-const { ElevenLabsClient } = pkg;
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -47,22 +45,21 @@ export async function generateSpeech(
     console.log('   Text length:', text.length, 'characters');
     console.log('   Voice:', voiceId);
 
-    const audio = await client.textToSpeech({
-      voiceId,
+    const audio = await client.textToSpeech.convert(voiceId, {
       text,
       modelId: 'eleven_monolingual_v1',
       voiceSettings: {
         stability,
-        similarity_boost
+        similarityBoost: similarity_boost
       }
     });
 
     // Convert audio stream to buffer
-    const chunks: Buffer[] = [];
+    const chunks: Uint8Array[] = [];
     for await (const chunk of audio) {
       chunks.push(chunk);
     }
-    const audioBuffer = Buffer.concat(chunks);
+    const audioBuffer = Buffer.concat(chunks.map(chunk => Buffer.from(chunk)));
 
     console.log(`✅ [TTS] Speech generated (${audioBuffer.length} bytes)`);
     return audioBuffer;
@@ -116,7 +113,7 @@ export async function getAvailableVoices() {
   }
 
   try {
-    const voices = await client.getVoices();
+    const voices = await client.voices.getAll();
     return voices;
   } catch (error) {
     console.error('❌ [TTS] Error fetching voices:', error);
