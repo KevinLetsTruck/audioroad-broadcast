@@ -253,24 +253,44 @@ export default function BroadcastControl() {
       // Step 7: Start Radio.co stream (if enabled and password provided)
       if (autoStream && radioCoPassword) {
         console.log('🎙️ [START] Step 7: Starting Radio.co stream...');
-        const encoder = new StreamEncoder();
-        const streamConfig: StreamConfig = {
-          serverUrl: 'pear.radio.co',
-          port: 5568,
-          password: radioCoPassword,
-          streamName: episode.title || 'AudioRoad Network LIVE',
-          genre: 'Trucking',
-          url: 'http://audioroad.letstruck.com',
-          bitrate: 256
-        };
+        console.log('   📡 Server: pear.radio.co:5568');
+        console.log('   🔐 Password:', radioCoPassword.length > 0 ? '✓ Set' : '✗ Empty');
+        
+        try {
+          const encoder = new StreamEncoder();
+          const streamConfig: StreamConfig = {
+            serverUrl: 'pear.radio.co',
+            port: 5568,
+            password: radioCoPassword,
+            streamName: episode.title || 'AudioRoad Network LIVE',
+            genre: 'Trucking',
+            url: 'http://audioroad.letstruck.com',
+            bitrate: 256
+          };
 
-        encoder.configure(streamConfig);
-        const outputStream = mixerInstance.getOutputStream();
-        if (outputStream) {
-          await encoder.startStreaming(outputStream);
-          encoderRef.current = encoder;
-          setIsStreaming(true);
-          console.log('✅ [START] Streaming to Radio.co');
+          encoder.configure(streamConfig);
+          const outputStream = mixerInstance.getOutputStream();
+          
+          if (!outputStream) {
+            console.error('❌ [START] No output stream from mixer!');
+            alert('⚠️ Warning: Could not get audio output stream. Streaming may not work.');
+          } else {
+            console.log('✅ [START] Got output stream from mixer');
+            await encoder.startStreaming(outputStream);
+            encoderRef.current = encoder;
+            setIsStreaming(true);
+            console.log('✅ [START] Streaming to Radio.co ACTIVE');
+          }
+        } catch (streamError) {
+          console.error('❌ [START] Streaming failed:', streamError);
+          alert(`⚠️ Failed to start Radio.co stream: ${streamError instanceof Error ? streamError.message : 'Unknown error'}\n\nCheck console for details.`);
+        }
+      } else {
+        if (!autoStream) {
+          console.log('ℹ️ [START] Auto-stream disabled - skipping Radio.co');
+        } else if (!radioCoPassword) {
+          console.log('⚠️ [START] No Radio.co password - skipping stream');
+          console.log('   💡 To stream: Enable "Stream to Radio.co" and set password in settings below');
         }
       }
 
@@ -767,16 +787,28 @@ export default function BroadcastControl() {
                 <StatusItem 
                   icon="📡" 
                   label="Radio.co Stream" 
-                  value={isStreaming ? 'Live' : 'Off'}
+                  value={isStreaming ? 'Live ✓' : 'Off'}
                   active={isStreaming}
                 />
-                <StatusItem 
-                  icon="📞" 
-                  label="Callers" 
-                  value={audioSources.filter(s => s.type === 'caller').length.toString()}
-                  active={audioSources.filter(s => s.type === 'caller').length > 0}
-                />
               </div>
+
+              {/* Stream Diagnostics (if streaming is supposed to be on but isn't) */}
+              {autoStream && radioCoPassword && !isStreaming && status.isLive && (
+                <div className="mb-6 p-4 bg-yellow-900/30 border-2 border-yellow-500 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">⚠️</span>
+                    <div>
+                      <div className="font-bold text-yellow-400">Radio.co Stream Not Active</div>
+                      <div className="text-sm text-gray-300 mt-1">
+                        Auto-stream is enabled but not connected. Check console (F12) for errors.
+                      </div>
+                      <div className="text-xs text-gray-400 mt-2">
+                        Config: pear.radio.co:5568 • Password: {'*'.repeat(radioCoPassword.length)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Audio Playback Indicator */}
               {(playingOpener || playingAd) && (
