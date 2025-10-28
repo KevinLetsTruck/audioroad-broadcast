@@ -23,7 +23,6 @@ export default function ContentDashboard() {
   
   // Generated Commercials State
   const [generatedCommercials, setGeneratedCommercials] = useState<any[]>([]);
-  const [loadingCommercials, setLoadingCommercials] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -72,14 +71,11 @@ export default function ContentDashboard() {
 
   const loadGeneratedCommercials = async () => {
     try {
-      setLoadingCommercials(true);
       const response = await fetch('/api/commercials/list');
       const data = await response.json();
       setGeneratedCommercials(data.commercials || []);
     } catch (error) {
       console.error('Error loading commercials:', error);
-    } finally {
-      setLoadingCommercials(false);
     }
   };
 
