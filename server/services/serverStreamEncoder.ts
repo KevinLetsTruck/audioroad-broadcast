@@ -5,10 +5,14 @@
  * This avoids browser bundling issues with lamejs
  */
 
-// @ts-ignore - lamejs doesn't have types but works perfectly in Node.js
-import lamejs from 'lamejs';
 import { EventEmitter } from 'events';
 import net from 'net';
+import { createRequire } from 'module';
+
+// Use CommonJS require to load lamejs (works perfectly, avoids ES6 module issues)
+const require = createRequire(import.meta.url);
+// @ts-ignore - lamejs doesn't have types
+const lamejs = require('lamejs');
 
 export interface StreamConfig {
   serverUrl: string;
