@@ -2,11 +2,11 @@
  * Stream Socket Service
  * 
  * Handles WebSocket connections from browser for audio streaming
- * NOW with server-side MP3 encoding (much more reliable!)
+ * NOW with FFmpeg server-side MP3 encoding (professional grade!)
  */
 
 import { Server as SocketIOServer } from 'socket.io';
-import { ServerStreamEncoder } from './serverStreamEncoder.js';
+import { FFmpegStreamEncoder } from './ffmpegStreamEncoder.js';
 
 interface StreamConfig {
   serverUrl: string;
@@ -19,7 +19,7 @@ interface StreamConfig {
 }
 
 // Store active stream sessions
-const activeStreams = new Map<string, ServerStreamEncoder>();
+const activeStreams = new Map<string, FFmpegStreamEncoder>();
 
 export function initializeStreamSocketHandlers(io: SocketIOServer): void {
   io.on('connection', (socket) => {
@@ -30,7 +30,7 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
      */
     socket.on('stream:start', async (config: StreamConfig, callback) => {
       try {
-        console.log('🎙️ [SERVER STREAM] Starting stream to Radio.co with server-side encoding...');
+        console.log('🎙️ [FFMPEG STREAM] Starting stream to Radio.co with FFmpeg encoding...');
 
         // Check if already streaming
         if (activeStreams.has(socket.id)) {
@@ -39,27 +39,27 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           return;
         }
 
-        // Create new server-side stream encoder
-        const streamEncoder = new ServerStreamEncoder();
+        // Create new FFmpeg stream encoder
+        const streamEncoder = new FFmpegStreamEncoder();
 
         // Set up event handlers
         streamEncoder.on('connected', () => {
-          console.log('✅ [SERVER STREAM] Connected to Radio.co');
+          console.log('✅ [FFMPEG STREAM] Connected to Radio.co');
           socket.emit('stream:connected');
         });
 
         streamEncoder.on('disconnected', () => {
-          console.log('📴 [SERVER STREAM] Disconnected from Radio.co');
+          console.log('📴 [FFMPEG STREAM] Disconnected from Radio.co');
           socket.emit('stream:disconnected');
         });
 
         streamEncoder.on('stopped', () => {
-          console.log('⏹️ [SERVER STREAM] Stream stopped');
+          console.log('⏹️ [FFMPEG STREAM] Stream stopped');
           socket.emit('stream:stopped');
         });
 
         streamEncoder.on('error', (error) => {
-          console.error('❌ [SERVER STREAM] Error:', error);
+          console.error('❌ [FFMPEG STREAM] Error:', error);
           socket.emit('stream:error', { message: error.message });
         });
 
@@ -74,11 +74,11 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         // Store the stream encoder
         activeStreams.set(socket.id, streamEncoder);
 
-        console.log(`✅ [SERVER STREAM] Stream started for client ${socket.id}`);
+        console.log(`✅ [FFMPEG STREAM] Stream started for client ${socket.id}`);
         callback({ success: true });
 
       } catch (error: any) {
-        console.error('❌ [SERVER STREAM] Failed to start:', error);
+        console.error('❌ [FFMPEG STREAM] Failed to start:', error);
         callback({ success: false, error: error.message });
       }
     });
@@ -90,7 +90,7 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
       const streamEncoder = activeStreams.get(socket.id);
 
       if (!streamEncoder) {
-        console.warn('⚠️ [SERVER STREAM] No active stream for this client');
+        console.warn('⚠️ [FFMPEG STREAM] No active stream for this client');
         return;
       }
 
@@ -98,10 +98,10 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         // Convert ArrayBuffer to Float32Array (raw PCM from browser)
         const float32Data = new Float32Array(data);
         
-        // Process audio chunk (encode to MP3 and send to Radio.co)
+        // Process audio chunk (FFmpeg encodes to MP3 and sends to Radio.co)
         streamEncoder.processAudioChunk(float32Data);
       } catch (error) {
-        console.error('❌ [SERVER STREAM] Error processing audio chunk:', error);
+        console.error('❌ [FFMPEG STREAM] Error processing audio chunk:', error);
         socket.emit('stream:error', { message: 'Failed to process audio data' });
       }
     });
@@ -113,7 +113,7 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
       const streamEncoder = activeStreams.get(socket.id);
 
       if (streamEncoder) {
-        console.log(`📴 [SERVER STREAM] Stopping stream for ${socket.id}`);
+        console.log(`📴 [FFMPEG STREAM] Stopping stream for ${socket.id}`);
         await streamEncoder.stop();
         activeStreams.delete(socket.id);
         
@@ -121,7 +121,7 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           callback({ success: true });
         }
       } else {
-        console.warn('⚠️ [SERVER STREAM] No active stream to stop');
+        console.warn('⚠️ [FFMPEG STREAM] No active stream to stop');
         if (callback) {
           callback({ success: false, error: 'No active stream' });
         }
@@ -149,13 +149,13 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
 
       const streamEncoder = activeStreams.get(socket.id);
       if (streamEncoder) {
-        console.log(`📴 [SERVER STREAM] Cleaning up stream for disconnected client`);
+        console.log(`📴 [FFMPEG STREAM] Cleaning up stream for disconnected client`);
         await streamEncoder.stop();
         activeStreams.delete(socket.id);
       }
     });
   });
 
-  console.log('🎙️ Stream socket handlers initialized (server-side encoding enabled)');
+  console.log('🎙️ Stream socket handlers initialized (FFmpeg encoding enabled)');
 }
 

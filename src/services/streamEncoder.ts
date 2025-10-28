@@ -161,10 +161,10 @@ export class StreamEncoder {
       this.socket.on('connect', () => {
         console.log('✅ [CLIENT STREAM] Connected to backend');
 
-        // Request server to start streaming to Radio.co (with server-side MP3 encoding)
+        // Request server to start streaming to Radio.co (with FFmpeg MP3 encoding)
         this.socket!.emit('stream:start', this.config, (response: any) => {
           if (response.success) {
-            console.log('✅ [CLIENT STREAM] Server connected to Radio.co with MP3 encoding!');
+            console.log('✅ [CLIENT STREAM] Server connected to Radio.co with FFmpeg encoding!');
             this.isConnected = true;
             resolve();
           } else {
@@ -176,7 +176,7 @@ export class StreamEncoder {
       });
 
       this.socket.on('stream:connected', () => {
-        console.log('🎙️ [CLIENT STREAM] Radio.co stream active (server-side encoding)');
+        console.log('🎙️ [CLIENT STREAM] Radio.co stream active (FFmpeg encoding)');
         this.isConnected = true;
       });
 
