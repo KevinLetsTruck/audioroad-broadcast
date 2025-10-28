@@ -14,6 +14,9 @@ const require = createRequire(import.meta.url);
 // @ts-ignore - lamejs doesn't have types
 const lamejs = require('lamejs');
 
+console.log('🔍 [DEBUG] lamejs loaded, exports:', Object.keys(lamejs));
+console.log('🔍 [DEBUG] lamejs.Mp3Encoder type:', typeof lamejs.Mp3Encoder);
+
 export interface StreamConfig {
   serverUrl: string;
   port: number;

@@ -6,3 +6,5 @@ dist
 .vscode
 coverage
 .turbo
+NEW_VARIABLES_TO_ADD.txt
+RAILWAY_ENVIRONMENT_VARIABLES.txt
