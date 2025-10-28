@@ -4,7 +4,8 @@
  */
 
 // @ts-ignore - No type definitions available
-import { ElevenLabsClient } from 'elevenlabs-node';
+import pkg from 'elevenlabs-node';
+const { ElevenLabsClient } = pkg;
 import fs from 'fs/promises';
 import path from 'path';
 
