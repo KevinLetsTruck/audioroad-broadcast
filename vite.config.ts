@@ -26,14 +26,16 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        // Don't minify lamejs - it breaks internal references
+        // Isolate lamejs in its own chunk
         manualChunks: (id) => {
           if (id.includes('lamejs')) {
             return 'lamejs';
           }
         }
       }
-    }
+    },
+    // Use esbuild minification which is gentler
+    minify: 'esbuild'
   }
 })
 
