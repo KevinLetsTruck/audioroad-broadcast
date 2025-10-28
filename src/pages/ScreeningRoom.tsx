@@ -385,7 +385,7 @@ export default function ScreeningRoom() {
   };
 
   return (
-    <div className="h-[calc(100vh-73px)] flex flex-col">
+    <div className="min-h-screen flex flex-col">
       {/* Single Header Bar */}
       <div className="px-6 py-3 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
         <div className="flex items-center gap-6">

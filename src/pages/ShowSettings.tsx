@@ -143,7 +143,7 @@ export default function ShowSettings() {
   };
 
   return (
-    <div className="h-[calc(100vh-73px)] p-6">
+    <div className="min-h-screen p-6">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-3xl font-bold mb-2">Show Settings</h1>
         <p className="text-gray-400 mb-8">Manage show openers and ads for each of your shows</p>

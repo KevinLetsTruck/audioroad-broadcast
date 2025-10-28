@@ -1,7 +1,9 @@
-import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
-import { ClerkProvider, SignedIn, SignedOut, UserButton, useUser, SignIn, SignUp } from '@clerk/clerk-react'
+import { useState } from 'react'
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom'
+import { ClerkProvider, SignedIn, SignedOut, useUser, SignIn, SignUp } from '@clerk/clerk-react'
 import { BroadcastProvider } from './contexts/BroadcastContext'
 import RoleGate from './components/RoleGate'
+import Sidebar from './components/Sidebar'
 import BroadcastControl from './pages/BroadcastControl'
 import HostDashboard from './pages/HostDashboard'
 import ScreeningRoom from './pages/ScreeningRoom'
@@ -21,117 +23,25 @@ if (!CLERK_PUBLISHABLE_KEY) {
 function AppContent() {
   const location = useLocation()
   const { user } = useUser()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Get user role from Clerk metadata
-  const userRole = user?.publicMetadata?.role as string | undefined
-
-  // Don't show navigation on auth pages
+  // Don't show navigation on auth pages or public pages
   const isAuthPage = location.pathname === '/sign-in' || location.pathname === '/sign-up'
-  const showNav = !isAuthPage && user
+  const isPublicPage = location.pathname === '/call-now'
+  const showSidebar = !isAuthPage && !isPublicPage && user
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      {/* Navigation */}
-      {showNav && (
-        <nav className="bg-gray-800 border-b border-gray-700 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-primary-500">
-                🎙️ AudioRoad Network
-              </h1>
-              {user && (
-                <p className="text-xs text-gray-400 mt-1">
-                  {user.firstName} {user.lastName} • {userRole || 'user'}
-                </p>
-              )}
-            </div>
-            <div className="flex gap-4">
-            <Link
-              to="/"
-              className={`px-4 py-2 rounded font-bold ${
-                location.pathname === '/'
-                  ? 'bg-green-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              🎙️ Broadcast Control
-            </Link>
-            <Link
-              to="/host-dashboard"
-              className={`px-4 py-2 rounded ${
-                location.pathname === '/host-dashboard'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              Host Dashboard
-            </Link>
-            <Link
-              to="/screening-room"
-              className={`px-4 py-2 rounded ${
-                location.pathname === '/screening-room'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              Screening Room
-            </Link>
-            <Link
-              to="/recordings"
-              className={`px-4 py-2 rounded ${
-                location.pathname === '/recordings'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              📁 Recordings
-            </Link>
-            <Link
-              to="/commercials"
-              className={`px-4 py-2 rounded ${
-                location.pathname === '/commercials'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              🎬 Commercials
-            </Link>
-            <Link
-              to="/content"
-              className={`px-4 py-2 rounded ${
-                location.pathname === '/content'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              📱 Social Content
-            </Link>
-            <Link
-              to="/settings"
-              className={`px-4 py-2 rounded ${
-                location.pathname === '/settings'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              ⚙️ Settings
-            </Link>
-            {/* Clerk's UserButton - includes profile, settings, and sign out */}
-            <UserButton 
-              afterSignOutUrl="/sign-in"
-              appearance={{
-                elements: {
-                  avatarBox: "w-10 h-10"
-                }
-              }}
-            />
-          </div>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-gray-900 text-white flex">
+      {/* Sidebar Navigation */}
+      {showSidebar && (
+        <Sidebar 
+          collapsed={sidebarCollapsed} 
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} 
+        />
       )}
 
       {/* Page Content */}
-      <main>
+      <main className="flex-1 overflow-y-auto bg-gray-900">
         <Routes>
           {/* Auth Routes - Clerk's beautiful pre-built pages */}
           <Route 

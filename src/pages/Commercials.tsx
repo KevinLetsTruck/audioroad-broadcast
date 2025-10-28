@@ -213,6 +213,65 @@ export default function Commercials() {
           </p>
         </div>
 
+        {/* Generated Commercials Library - MOVED TO TOP */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-8">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">🎙️ Your Commercial Library ({commercials.length})</h2>
+            <button
+              onClick={loadCommercials}
+              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
+            >
+              🔄 Refresh
+            </button>
+          </div>
+
+          {loadingCommercials ? (
+            <div className="text-center py-8">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+            </div>
+          ) : commercials.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-gray-400">No commercials generated yet</p>
+              <p className="text-gray-500 text-sm mt-2">Create your first commercial below!</p>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {commercials.map(commercial => (
+                <div key={commercial.id} className="bg-gray-900 p-4 rounded-lg flex items-center gap-4">
+                  <div className="flex-1">
+                    <h3 className="font-semibold">{commercial.name}</h3>
+                    <p className="text-sm text-gray-400">
+                      Duration: {commercial.duration}s • Created: {new Date(commercial.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <audio controls src={commercial.fileUrl} className="h-10">
+                    Your browser does not support audio.
+                  </audio>
+                  <div className="flex gap-2">
+                    <a
+                      href={commercial.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm whitespace-nowrap"
+                    >
+                      ⬇️ Download
+                    </a>
+                    <button
+                      onClick={() => {
+                        setAssigningCommercial(commercial);
+                        setShowAssignModal(true);
+                      }}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm whitespace-nowrap"
+                    >
+                      📺 Assign to Show
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Search & Filters */}
         <div className="bg-gray-800 rounded-lg p-6 mb-6">
           <div className="grid md:grid-cols-3 gap-4">
@@ -287,65 +346,6 @@ export default function Commercials() {
             )}
           </>
         )}
-
-        {/* Generated Commercials Library */}
-        <div className="bg-gray-800 rounded-lg p-6 mb-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold">🎙️ Your Commercial Library ({commercials.length})</h2>
-            <button
-              onClick={loadCommercials}
-              className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
-            >
-              🔄 Refresh
-            </button>
-          </div>
-
-          {loadingCommercials ? (
-            <div className="text-center py-8">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
-            </div>
-          ) : commercials.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-400">No commercials generated yet</p>
-              <p className="text-gray-500 text-sm mt-2">Create your first commercial above!</p>
-            </div>
-          ) : (
-            <div className="grid gap-4">
-              {commercials.map(commercial => (
-                <div key={commercial.id} className="bg-gray-900 p-4 rounded-lg flex items-center gap-4">
-                  <div className="flex-1">
-                    <h3 className="font-semibold">{commercial.name}</h3>
-                    <p className="text-sm text-gray-400">
-                      Duration: {commercial.duration}s • Created: {new Date(commercial.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <audio controls src={commercial.fileUrl} className="h-10">
-                    Your browser does not support audio.
-                  </audio>
-                  <div className="flex gap-2">
-                    <a
-                      href={commercial.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm whitespace-nowrap"
-                    >
-                      ⬇️ Download
-                    </a>
-                    <button
-                      onClick={() => {
-                        setAssigningCommercial(commercial);
-                        setShowAssignModal(true);
-                      }}
-                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm whitespace-nowrap"
-                    >
-                      📺 Assign to Show
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Script Preview Modal */}
