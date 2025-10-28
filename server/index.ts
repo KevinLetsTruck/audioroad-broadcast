@@ -174,6 +174,12 @@ if (process.env.NODE_ENV === 'production') {
   app.get('*', (req: Request, res: Response) => {
     const indexPath = path.join(distPath, 'index.html');
     console.log('📄 Serving index.html from:', indexPath);
+    
+    // Force no caching on index.html
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    
     res.sendFile(indexPath);
   });
 }
