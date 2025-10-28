@@ -84,9 +84,9 @@ const twilioWebhookLimiter = rateLimit({
 });
 
 // Security Middleware
-// Helmet - adds security headers
+// Helmet - adds security headers (but allow Clerk scripts)
 app.use(helmet({
-  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false, // Disable in dev for easier testing
+  contentSecurityPolicy: false, // Disable CSP to allow Clerk (they handle their own security)
   crossOriginEmbedderPolicy: false, // Allow audio/video embedding
   crossOriginResourcePolicy: { policy: "cross-origin" } // Allow S3/external resources
 }));
