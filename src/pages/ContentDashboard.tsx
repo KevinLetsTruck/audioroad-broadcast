@@ -1,14 +1,7 @@
 import { useState, useEffect } from 'react';
 
 export default function ContentDashboard() {
-  const [activeTab, setActiveTab] = useState<'commercials' | 'social' | 'library'>('commercials');
-  
-  // Shopify Products State
-  const [products, setProducts] = useState<any[]>([]);
-  const [loadingProducts, setLoadingProducts] = useState(false);
-  const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
-  const [generatingCommercials, setGeneratingCommercials] = useState(false);
-  const [commercialProgress, setCommercialProgress] = useState('');
+  const [activeTab, setActiveTab] = useState<'social' | 'library'>('social');
   
   // Social Content State
   const [episodes, setEpisodes] = useState<any[]>([]);
@@ -20,15 +13,11 @@ export default function ContentDashboard() {
   // Content Library State
   const [pendingClips, setPendingClips] = useState<any[]>([]);
   const [loadingClips, setLoadingClips] = useState(false);
-  
-  // Generated Commercials State
-  const [generatedCommercials, setGeneratedCommercials] = useState<any[]>([]);
 
   // Load initial data
   useEffect(() => {
     loadEpisodes();
     loadPendingClips();
-    loadGeneratedCommercials();
   }, []);
 
   const loadEpisodes = async () => {
@@ -51,66 +40,6 @@ export default function ContentDashboard() {
       console.error('Error loading clips:', error);
     } finally {
       setLoadingClips(false);
-    }
-  };
-
-  // COMMERCIALS TAB FUNCTIONS
-  const loadProducts = async () => {
-    try {
-      setLoadingProducts(true);
-      const response = await fetch('/api/commercials/products');
-      const data = await response.json();
-      setProducts(data.products || []);
-    } catch (error) {
-      console.error('Error loading products:', error);
-      alert('Failed to load products from Shopify');
-    } finally {
-      setLoadingProducts(false);
-    }
-  };
-
-  const loadGeneratedCommercials = async () => {
-    try {
-      const response = await fetch('/api/commercials/list');
-      const data = await response.json();
-      setGeneratedCommercials(data.commercials || []);
-    } catch (error) {
-      console.error('Error loading commercials:', error);
-    }
-  };
-
-  const generateCommercials = async () => {
-    if (confirm(`Generate commercials for ${selectedProducts.size || 'top 10'} products?\n\nThis will take 2-3 minutes per commercial.`)) {
-      try {
-        setGeneratingCommercials(true);
-        setCommercialProgress('Generating AI scripts and converting to audio...');
-        
-        const response = await fetch('/api/commercials/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            productIds: selectedProducts.size > 0 ? Array.from(selectedProducts) : undefined,
-            count: selectedProducts.size || 10
-          })
-        });
-        
-        const data = await response.json();
-        
-        setCommercialProgress(`✅ Generated ${data.generated} commercials!`);
-        setSelectedProducts(new Set());
-        loadGeneratedCommercials(); // Refresh the list
-        
-        setTimeout(() => {
-          setCommercialProgress('');
-          alert(`Success! ${data.generated} commercials generated!\n\nScroll down to see them!`);
-        }, 2000);
-        
-      } catch (error) {
-        console.error('Error generating commercials:', error);
-        alert('Failed to generate commercials');
-      } finally {
-        setGeneratingCommercials(false);
-      }
     }
   };
 
@@ -185,24 +114,14 @@ export default function ContentDashboard() {
     <div className="min-h-screen bg-gray-900 text-white p-6">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">🎬 Content Creation Engine</h1>
+        <h1 className="text-4xl font-bold mb-2">📱 Social Content Engine</h1>
         <p className="text-gray-400">
-          Automate your marketing - Generate commercials and social content with AI
+          Automate your social media - Generate engaging content from your shows with AI
         </p>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-4 mb-8 border-b border-gray-700">
-        <button
-          onClick={() => setActiveTab('commercials')}
-          className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
-            activeTab === 'commercials'
-              ? 'border-green-500 text-green-400'
-              : 'border-transparent text-gray-400 hover:text-white'
-          }`}
-        >
-          🛒 Product Commercials
-        </button>
         <button
           onClick={() => setActiveTab('social')}
           className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
@@ -227,156 +146,6 @@ export default function ContentDashboard() {
 
       {/* Tab Content */}
       <div className="max-w-7xl mx-auto">
-        {/* COMMERCIALS TAB */}
-        {activeTab === 'commercials' && (
-          <div>
-            <div className="bg-gray-800 rounded-lg p-6 mb-6">
-              <h2 className="text-2xl font-bold mb-4">Generate Product Commercials</h2>
-              <p className="text-gray-300 mb-6">
-                AI will fetch products from your Shopify store, write 30-second radio scripts,
-                and convert them to professional voice audio. Commercials are added to your soundboard automatically!
-              </p>
-
-              {!products.length && (
-                <button
-                  onClick={loadProducts}
-                  disabled={loadingProducts}
-                  className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
-                    loadingProducts
-                      ? 'bg-gray-600 cursor-not-allowed'
-                      : 'bg-green-600 hover:bg-green-700'
-                  }`}
-                >
-                  {loadingProducts ? '🔄 Loading Products...' : '🛒 Load Products from Shopify'}
-                </button>
-              )}
-
-              {products.length > 0 && (
-                <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <p className="text-gray-400">
-                      {products.length} products found • {selectedProducts.size} selected • {generatedCommercials.length} commercials ready
-                    </p>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => setSelectedProducts(new Set())}
-                        className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
-                      >
-                        Clear Selection
-                      </button>
-                      <button
-                        onClick={loadGeneratedCommercials}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm"
-                      >
-                        🔄 Refresh Commercials
-                      </button>
-                      <button
-                        onClick={generateCommercials}
-                        disabled={generatingCommercials}
-                        className={`px-6 py-2 rounded-lg font-semibold ${
-                          generatingCommercials
-                            ? 'bg-gray-600 cursor-not-allowed'
-                            : 'bg-green-600 hover:bg-green-700'
-                        }`}
-                      >
-                        {generatingCommercials 
-                          ? '⏳ Generating...'
-                          : `🎬 Generate ${selectedProducts.size || 10} Commercials`
-                        }
-                      </button>
-                    </div>
-                  </div>
-
-                  {commercialProgress && (
-                    <div className="mb-4 p-4 bg-green-500/10 border border-green-500 rounded-lg">
-                      <p className="text-green-400">{commercialProgress}</p>
-                    </div>
-                  )}
-
-                  {/* Generated Commercials List */}
-                  {generatedCommercials.length > 0 && (
-                    <div className="mb-6 bg-gray-700 rounded-lg p-6">
-                      <h3 className="text-xl font-bold mb-4">🎙️ Generated Commercials ({generatedCommercials.length})</h3>
-                      <div className="space-y-3">
-                        {generatedCommercials.map(commercial => (
-                          <div key={commercial.id} className="bg-gray-800 p-4 rounded-lg flex items-center justify-between">
-                            <div>
-                              <h4 className="font-semibold">{commercial.name}</h4>
-                              <p className="text-sm text-gray-400">
-                                Duration: {commercial.duration}s • Created: {new Date(commercial.createdAt).toLocaleDateString()}
-                              </p>
-                            </div>
-                            <div className="flex gap-3">
-                              <audio controls src={commercial.fileUrl} className="h-10">
-                                Your browser does not support audio.
-                              </audio>
-                              <a
-                                href={commercial.fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm"
-                              >
-                                ⬇️ Download
-                              </a>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
-                    {products.slice(0, 50).map(product => (
-                      <div
-                        key={product.id}
-                        onClick={() => {
-                          const newSelected = new Set(selectedProducts);
-                          if (newSelected.has(product.id)) {
-                            newSelected.delete(product.id);
-                          } else {
-                            newSelected.add(product.id);
-                          }
-                          setSelectedProducts(newSelected);
-                        }}
-                        className={`p-4 rounded-lg cursor-pointer transition-colors border-2 ${
-                          selectedProducts.has(product.id)
-                            ? 'bg-green-500/20 border-green-500'
-                            : 'bg-gray-700 border-gray-600 hover:border-gray-500'
-                        }`}
-                      >
-                        {product.images?.[0] && (
-                          <img 
-                            src={product.images[0].src} 
-                            alt={product.title}
-                            className="w-full h-32 object-cover rounded mb-2"
-                          />
-                        )}
-                        <h3 className="font-semibold mb-1">{product.title}</h3>
-                        <p className="text-green-400 font-bold">${product.price}</p>
-                        <p className="text-xs text-gray-400 mt-1">{product.product_type}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-gray-800/50 rounded-lg p-4">
-              <h3 className="font-semibold mb-2">💡 How It Works:</h3>
-              <ol className="list-decimal list-inside space-y-1 text-sm text-gray-300">
-                <li>Load products from your Shopify store (store.letstruck.com)</li>
-                <li>Select products or generate for top 10 automatically</li>
-                <li>AI writes professional 30-second radio scripts</li>
-                <li>ElevenLabs converts to professional voice audio</li>
-                <li>Commercials appear in your soundboard - ready to play!</li>
-              </ol>
-              <p className="text-xs text-gray-500 mt-3">
-                Cost: ~$0.10 per commercial • Time: ~2 min per commercial
-              </p>
-            </div>
-          </div>
-        )}
-
         {/* SOCIAL CONTENT TAB */}
         {activeTab === 'social' && (
           <div>
