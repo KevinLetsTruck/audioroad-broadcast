@@ -1,6 +1,6 @@
 /**
- * Patch lamejs to fix MPEGMode import bug
- * This runs after npm install to fix the missing import in Lame.js
+ * Patch lamejs to fix multiple missing import bugs
+ * This runs after npm install to fix broken imports in Lame.js and BitStream.js
  */
 
 import { readFileSync, writeFileSync } from 'fs';
@@ -10,31 +10,48 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const lamejsPath = join(__dirname, '../node_modules/lamejs/src/js/Lame.js');
+const lamejsDir = join(__dirname, '../node_modules/lamejs/src/js');
 
-console.log('🔧 Patching lamejs to fix MPEGMode import bug...');
+console.log('🔧 Patching lamejs to fix missing imports...');
 
 try {
-  let content = readFileSync(lamejsPath, 'utf8');
+  let patchCount = 0;
   
-  // Check if already patched
-  if (content.includes("var MPEGMode = require('./MPEGMode.js');")) {
-    console.log('✅ lamejs already patched!');
-    process.exit(0);
+  // PATCH 1: Lame.js - Missing MPEGMode import
+  const lamePath = join(lamejsDir, 'Lame.js');
+  let lameContent = readFileSync(lamePath, 'utf8');
+  
+  if (!lameContent.includes("var MPEGMode = require('./MPEGMode.js');")) {
+    lameContent = lameContent.replace(
+      "var LameInternalFlags = require('./LameInternalFlags.js');",
+      `var LameInternalFlags = require('./LameInternalFlags.js');
+var MPEGMode = require('./MPEGMode.js');  // PATCH: Missing import`
+    );
+    writeFileSync(lamePath, lameContent, 'utf8');
+    console.log('  ✅ Patched Lame.js - Added MPEGMode import');
+    patchCount++;
   }
   
-  // Add the missing import after LameInternalFlags
-  const searchString = "var LameInternalFlags = require('./LameInternalFlags.js');";
-  const replacement = `var LameInternalFlags = require('./LameInternalFlags.js');
-var MPEGMode = require('./MPEGMode.js');  // PATCH: Missing import causing MPEGMode is not defined`;
+  // PATCH 2: BitStream.js - Missing Lame import
+  const bitStreamPath = join(lamejsDir, 'BitStream.js');
+  let bitStreamContent = readFileSync(bitStreamPath, 'utf8');
   
-  content = content.replace(searchString, replacement);
+  if (!bitStreamContent.includes("var Lame = require('./Lame.js');")) {
+    bitStreamContent = bitStreamContent.replace(
+      "var LameInternalFlags = require('./LameInternalFlags.js');",
+      `var Lame = require('./Lame.js');  // PATCH: Missing import
+var LameInternalFlags = require('./LameInternalFlags.js');`
+    );
+    writeFileSync(bitStreamPath, bitStreamContent, 'utf8');
+    console.log('  ✅ Patched BitStream.js - Added Lame import');
+    patchCount++;
+  }
   
-  writeFileSync(lamejsPath, content, 'utf8');
-  
-  console.log('✅ lamejs patched successfully!');
-  console.log('   Added: var MPEGMode = require(\'./MPEGMode.js\');');
-  console.log('   This fixes the MPEGMode is not defined error');
+  if (patchCount > 0) {
+    console.log(`✅ lamejs patched successfully! (${patchCount} files fixed)`);
+  } else {
+    console.log('✅ lamejs already patched!');
+  }
   
 } catch (error) {
   console.error('❌ Failed to patch lamejs:', error);
