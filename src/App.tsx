@@ -117,10 +117,7 @@ function AppContent() {
             element={
               <div className="min-h-screen bg-gray-900 flex items-center justify-center">
                 <SignIn 
-                  routing="path" 
-                  path="/sign-in"
-                  signUpUrl="/sign-up"
-                  redirectUrl="/"
+                  afterSignInUrl="/"
                   appearance={{
                     elements: {
                       rootBox: "mx-auto",
@@ -136,10 +133,7 @@ function AppContent() {
             element={
               <div className="min-h-screen bg-gray-900 flex items-center justify-center">
                 <SignUp 
-                  routing="path" 
-                  path="/sign-up"
-                  signInUrl="/sign-in"
-                  redirectUrl="/"
+                  afterSignUpUrl="/"
                   appearance={{
                     elements: {
                       rootBox: "mx-auto",
