@@ -13,18 +13,22 @@ router.get('/', async (req: Request, res: Response) => {
     
     // Transform the response to include only necessary info
     const formattedVoices = voices.voices.map((voice: any, index: number) => {
+      // Try multiple possible field names for voice ID (SDK might use different naming)
+      const voiceId = voice.voice_id || voice.voiceId || voice.id || voice.voice_ID;
+      const previewUrl = voice.preview_url || voice.previewUrl;
+      
       const voiceData = {
-        voiceId: voice.voice_id,
+        voiceId: voiceId,
         name: voice.name,
         category: voice.category,
         description: voice.description || '',
-        previewUrl: voice.preview_url || null,
+        previewUrl: previewUrl || null,
         labels: voice.labels || {}
       };
       
       // Log first few voices for debugging
       if (index < 3) {
-        console.log(`  Voice "${voiceData.name}" → ID: ${voiceData.voiceId}`);
+        console.log(`  Voice "${voiceData.name}" → ID: ${voiceData.voiceId} (raw keys: ${Object.keys(voice).join(', ')})`);
       }
       
       return voiceData;

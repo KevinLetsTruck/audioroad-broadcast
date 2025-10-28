@@ -115,6 +115,12 @@ export async function getAvailableVoices() {
 
   try {
     const voices = await client.voices.getAll();
+    
+    // Debug: Log the first voice to see the actual structure
+    if (voices.voices && voices.voices.length > 0) {
+      console.log('🔍 [DEBUG] First voice structure:', JSON.stringify(voices.voices[0], null, 2));
+    }
+    
     return voices;
   } catch (error) {
     console.error('❌ [TTS] Error fetching voices:', error);
