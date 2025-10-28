@@ -306,6 +306,8 @@ router.post('/generate-with-script', async (req: Request, res: Response) => {
     }
 
     console.log(`🎬 [COMMERCIAL] Generating commercial with custom script for product: ${productId}`);
+    console.log(`   📋 Script length: ${script.length} chars`);
+    console.log(`   🎙️ Voice ID received: "${voiceId}"`);
 
     // Fetch product for metadata
     const allProducts = await fetchAllProducts();

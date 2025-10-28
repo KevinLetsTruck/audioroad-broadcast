@@ -77,6 +77,8 @@ export default function Commercials() {
       const data = await response.json();
       setVoices(data.voices || []);
       if (data.voices?.length > 0) {
+        console.log('[Commercials] First voice:', data.voices[0]);
+        console.log('[Commercials] Setting selectedVoiceId to:', data.voices[0].voiceId);
         setSelectedVoiceId(data.voices[0].voiceId);
       }
     } catch (error) {
@@ -135,6 +137,10 @@ export default function Commercials() {
 
   const handleGenerateCommercial = async () => {
     if (!editedScript || !currentProduct) return;
+
+    console.log('[Commercials] Generating commercial with voiceId:', selectedVoiceId);
+    const selectedVoice = voices.find(v => v.voiceId === selectedVoiceId);
+    console.log('[Commercials] Selected voice object:', selectedVoice);
 
     setGeneratingAudio(true);
     try {
