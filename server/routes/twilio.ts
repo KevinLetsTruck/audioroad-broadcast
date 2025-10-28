@@ -95,6 +95,37 @@ router.post('/voice', async (req: Request, res: Response) => {
     if (callerId) {
       console.log('📝 [VOICE] Creating call record for callerId:', callerId);
       
+      // First, mark any previous incomplete calls from this caller as completed
+      // This handles the case where a caller refreshed or had a network issue
+      const previousCalls = await prisma.call.findMany({
+        where: {
+          callerId: callerId,
+          episodeId: activeEpisode.id,
+          endedAt: null,
+          status: {
+            notIn: ['completed', 'rejected']
+          }
+        }
+      });
+
+      if (previousCalls.length > 0) {
+        console.log(`🧹 [VOICE] Found ${previousCalls.length} incomplete calls from this caller, marking as completed`);
+        await prisma.call.updateMany({
+          where: {
+            callerId: callerId,
+            episodeId: activeEpisode.id,
+            endedAt: null,
+            status: {
+              notIn: ['completed', 'rejected']
+            }
+          },
+          data: {
+            status: 'completed',
+            endedAt: new Date()
+          }
+        });
+      }
+      
       const call = await prisma.call.create({
         data: {
           episodeId: activeEpisode.id,

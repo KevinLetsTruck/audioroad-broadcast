@@ -201,6 +201,34 @@ export async function addHostToConference(
 }
 
 /**
+ * End conference by SID
+ */
+export async function endConference(conferenceSid: string) {
+  if (!client) throw new Error('Twilio not configured');
+
+  try {
+    console.log(`🎙️ [CONFERENCE] Ending conference: ${conferenceSid}`);
+    
+    // Update conference to completed status
+    const conference = await client
+      .conferences(conferenceSid)
+      .update({ status: 'completed' });
+
+    console.log(`✅ [CONFERENCE] Conference ended: ${conferenceSid}`);
+
+    return conference;
+  } catch (error: any) {
+    // If conference doesn't exist or already ended, that's okay
+    if (error.code === 20404) {
+      console.log(`⚠️ [CONFERENCE] Conference not found (may have already ended): ${conferenceSid}`);
+      return null;
+    }
+    console.error('❌ [CONFERENCE] Error ending conference:', error);
+    throw error;
+  }
+}
+
+/**
  * End conference (when episode ends)
  */
 export async function endEpisodeConference(episodeId: string) {

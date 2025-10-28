@@ -152,7 +152,7 @@ router.patch('/:id/queue', async (req: Request, res: Response) => {
 });
 
 /**
- * PATCH /api/calls/:id/screen - Move call to screening
+ * PATCH /api/calls/:id/screen - Mark call as being screened
  */
 router.patch('/:id/screen', async (req: Request, res: Response) => {
   try {
@@ -163,33 +163,7 @@ router.patch('/:id/screen', async (req: Request, res: Response) => {
       data: {
         status: 'screening',
         screenedAt: new Date(),
-        screenerUserId
-      },
-      include: {
-        caller: true
-      }
-    });
-
-    const io = req.app.get('io');
-    emitToEpisode(io, call.episodeId, 'call:screening', call);
-
-    res.json(call);
-  } catch (error) {
-    console.error('Error screening call:', error);
-    res.status(500).json({ error: 'Failed to screen call' });
-  }
-});
-
-/**
- * PATCH /api/calls/:id/screen - Mark call as being screened
- */
-router.patch('/:id/screen', async (req: Request, res: Response) => {
-  try {
-    const call = await prisma.call.update({
-      where: { id: req.params.id },
-      data: {
-        status: 'screening',
-        screenedAt: new Date()
+        screenerUserId: screenerUserId || undefined
       },
       include: {
         caller: true
@@ -453,6 +427,74 @@ router.post('/:id/feature', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error featuring call:', error);
     res.status(500).json({ error: 'Failed to feature call' });
+  }
+});
+
+/**
+ * POST /api/calls/cleanup/:episodeId - Clean up all active calls for an episode
+ * Called when END SHOW is clicked
+ */
+router.post('/cleanup/:episodeId', async (req: Request, res: Response) => {
+  try {
+    const { episodeId } = req.params;
+    console.log(`🧹 [CLEANUP] Starting cleanup for episode: ${episodeId}`);
+
+    // Find all active calls (not completed, not rejected)
+    const activeCalls = await prisma.call.findMany({
+      where: {
+        episodeId,
+        endedAt: null,
+        status: {
+          notIn: ['completed', 'rejected', 'missed']
+        }
+      }
+    });
+
+    console.log(`📞 [CLEANUP] Found ${activeCalls.length} active calls to clean up`);
+
+    // End each call in Twilio
+    for (const call of activeCalls) {
+      if (call.twilioCallSid && call.twilioCallSid.startsWith('CA')) {
+        try {
+          const { endCall } = await import('../services/twilioService.js');
+          await endCall(call.twilioCallSid);
+          console.log(`📴 [CLEANUP] Ended Twilio call: ${call.twilioCallSid}`);
+        } catch (twilioError) {
+          console.error(`⚠️ [CLEANUP] Error ending call ${call.twilioCallSid}:`, twilioError);
+          // Continue anyway
+        }
+      }
+    }
+
+    // Mark all as completed in database
+    const result = await prisma.call.updateMany({
+      where: {
+        episodeId,
+        endedAt: null,
+        status: {
+          notIn: ['completed', 'rejected', 'missed']
+        }
+      },
+      data: {
+        status: 'completed',
+        endedAt: new Date()
+      }
+    });
+
+    console.log(`✅ [CLEANUP] Marked ${result.count} calls as completed`);
+
+    // Emit cleanup event to all clients
+    const io = req.app.get('io');
+    emitToEpisode(io, episodeId, 'episode:cleanup', { episodeId, count: result.count });
+
+    res.json({ 
+      success: true, 
+      cleanedUp: result.count,
+      message: `Cleaned up ${result.count} active calls`
+    });
+  } catch (error) {
+    console.error('❌ [CLEANUP] Error cleaning up calls:', error);
+    res.status(500).json({ error: 'Failed to clean up calls' });
   }
 });
 

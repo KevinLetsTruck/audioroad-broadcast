@@ -82,17 +82,21 @@ export default function ScreeningRoom() {
   useEffect(() => {
     if (!socket || !activeEpisode) return;
 
-    console.log('🔌 Joining episode room:', activeEpisode.id);
+    console.log('🔌 [SCREENER] Joining episode room:', activeEpisode.id);
     socket.emit('join:episode', activeEpisode.id);
 
-    // Fetch existing queued calls
-    fetchQueuedCalls();
+    // Wait for join confirmation
+    socket.on('joined:episode', (data) => {
+      console.log('✅ [SCREENER] Successfully joined episode room:', data.episodeId);
+      // Now fetch existing calls
+      fetchQueuedCalls();
+    });
 
     socket.on('call:incoming', (data) => {
       console.log('📞 [SCREENER] Incoming call event received:', data);
       // Refresh immediately
       fetchQueuedCalls();
-      // And again after 1 second to catch race conditions
+      // And again after 1 second to catch any database lag
       setTimeout(fetchQueuedCalls, 1000);
     });
 

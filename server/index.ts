@@ -2,12 +2,15 @@ import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 
 // Import routes
+import authRoutes from './routes/auth.js';
+import clerkWebhooksRoutes from './routes/clerk-webhooks.js';
 import callRoutes from './routes/calls.js';
 import callerRoutes from './routes/callers.js';
 import episodeRoutes from './routes/episodes.js';
@@ -77,12 +80,18 @@ const twilioWebhookLimiter = rateLimit({
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.APP_URL || 'http://localhost:5173',
+  credentials: true // Allow cookies
+}));
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(generalLimiter);
 
 // API Routes
+app.use('/api/auth', apiLimiter, authRoutes); // Custom auth routes (legacy, can be removed later)
+app.use('/api/clerk', clerkWebhooksRoutes); // Clerk webhooks (no rate limit - Clerk handles this)
 app.use('/api/calls', apiLimiter, callRoutes);
 app.use('/api/callers', apiLimiter, callerRoutes);
 app.use('/api/episodes', apiLimiter, episodeRoutes);
@@ -95,6 +104,9 @@ app.use('/api/chat', apiLimiter, chatRoutes);
 app.use('/api/recordings', apiLimiter, recordingsRoutes);
 app.use('/api/participants', apiLimiter, participantsRoutes);
 // app.use('/api/broadcast', apiLimiter, broadcastRoutes); // Temporarily disabled until migration runs
+
+// NOTE: Route protection can be added gradually using requireAuth middleware
+// Example: app.use('/api/episodes', apiLimiter, requireAuth, episodeRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req: Request, res: Response) => {

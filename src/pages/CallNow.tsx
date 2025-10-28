@@ -37,18 +37,12 @@ export default function CallNow() {
       // Note: Call record is created by /api/twilio/voice endpoint
     },
     onCallDisconnected: () => {
-      console.log('📴 Call disconnected');
+      console.log('📴 [CALLNOW] Call disconnected');
       setCallState('idle');
       
-      // Clear session data for completely fresh start
-      sessionStorage.removeItem('caller-identity');
-      console.log('🧹 [CALLNOW] Cleared session data');
-      
-      // Auto-refresh page for clean state (fresh device for next call)
-      setTimeout(() => {
-        console.log('🔄 [CALLNOW] Auto-refreshing for clean state');
-        window.location.reload();
-      }, 2000); // 2 second delay so they see "Call ended" state
+      // Device stays active - ready for next call!
+      // No need to refresh anymore - the device can handle multiple calls
+      console.log('✅ [CALLNOW] Ready for next call (device still active)');
     }
   });
 

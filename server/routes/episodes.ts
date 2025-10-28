@@ -196,6 +196,64 @@ router.patch('/:id/end', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Episode not started' });
     }
 
+    console.log(`🎙️ [EPISODE] Ending episode: ${req.params.id}`);
+
+    // 1. Clean up all active calls FIRST
+    console.log(`🧹 [EPISODE] Cleaning up active calls...`);
+    const activeCalls = await prisma.call.findMany({
+      where: {
+        episodeId: req.params.id,
+        endedAt: null,
+        status: {
+          notIn: ['completed', 'rejected', 'missed']
+        }
+      }
+    });
+
+    console.log(`📞 [EPISODE] Found ${activeCalls.length} active calls to end`);
+
+    // End each active Twilio call
+    for (const call of activeCalls) {
+      if (call.twilioCallSid && call.twilioCallSid.startsWith('CA')) {
+        try {
+          const { endCall } = await import('../services/twilioService.js');
+          await endCall(call.twilioCallSid);
+          console.log(`📴 [EPISODE] Ended call: ${call.twilioCallSid}`);
+        } catch (twilioError) {
+          console.error(`⚠️ [EPISODE] Error ending call ${call.twilioCallSid}:`, twilioError);
+        }
+      }
+    }
+
+    // Mark all as completed
+    await prisma.call.updateMany({
+      where: {
+        episodeId: req.params.id,
+        endedAt: null,
+        status: {
+          notIn: ['completed', 'rejected', 'missed']
+        }
+      },
+      data: {
+        status: 'completed',
+        endedAt: new Date()
+      }
+    });
+
+    console.log(`✅ [EPISODE] All active calls cleaned up`);
+
+    // 2. End the Twilio conference if it exists
+    if (episode.twilioConferenceSid && episode.twilioConferenceSid.startsWith('CF')) {
+      try {
+        const { endConference } = await import('../services/conferenceService.js');
+        await endConference(episode.twilioConferenceSid);
+        console.log(`📴 [EPISODE] Conference ended: ${episode.twilioConferenceSid}`);
+      } catch (confError) {
+        console.error(`⚠️ [EPISODE] Error ending conference:`, confError);
+      }
+    }
+
+    // 3. Update episode status
     const duration = Math.floor((Date.now() - episode.actualStart.getTime()) / (1000 * 60));
 
     const updatedEpisode = await prisma.episode.update({
@@ -206,10 +264,12 @@ router.patch('/:id/end', async (req: Request, res: Response) => {
         duration,
         recordingUrl,
         transcriptUrl,
-        conferenceActive: false, // Mark conference as inactive
-        twilioConferenceSid: null // Clear conference SID
+        conferenceActive: false,
+        twilioConferenceSid: null
       }
     });
+
+    console.log(`✅ [EPISODE] Episode ended successfully`);
 
     const io = req.app.get('io');
     io.to(`episode:${updatedEpisode.id}`).emit('episode:end', updatedEpisode);

@@ -16,6 +16,7 @@ datasource db {
 model BroadcastUser {
   id          String   @id @default(cuid())
   email       String   @unique
+  password    String   // Hashed password
   name        String
   role        String   // 'host', 'co-host', 'producer', 'screener', 'admin'
   showId      String?  // Primary show assignment

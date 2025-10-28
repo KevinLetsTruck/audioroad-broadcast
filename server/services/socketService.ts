@@ -34,7 +34,11 @@ export function initializeSocketHandlers(io: SocketIOServer) {
     // Join episode room
     socket.on('join:episode', (episodeId: string) => {
       socket.join(`episode:${episodeId}`);
-      console.log(`👤 Socket ${socket.id} joined episode:${episodeId}`);
+      console.log(`✅ [SOCKET] Client ${socket.id} joined episode:${episodeId}`);
+      console.log(`📊 [SOCKET] Rooms for this socket:`, Array.from(socket.rooms));
+      
+      // Confirm join to the client
+      socket.emit('joined:episode', { episodeId, socketId: socket.id });
       
       // Notify others in the room
       socket.to(`episode:${episodeId}`).emit('user:joined', {
@@ -54,41 +58,9 @@ export function initializeSocketHandlers(io: SocketIOServer) {
       });
     });
 
-    // Call queue events
-    socket.on('call:incoming', (data: CallEvent) => {
-      console.log('📞 Incoming call:', data.callId);
-      io.to(`episode:${data.episodeId}`).emit('call:incoming', data);
-    });
-
-    socket.on('call:queued', (data: CallEvent) => {
-      console.log('📋 Call queued:', data.callId);
-      io.to(`episode:${data.episodeId}`).emit('call:queued', data);
-    });
-
-    socket.on('call:screening', (data: CallEvent) => {
-      console.log('🔍 Call screening:', data.callId);
-      io.to(`episode:${data.episodeId}`).emit('call:screening', data);
-    });
-
-    socket.on('call:approved', (data: CallEvent) => {
-      console.log('✅ Call approved:', data.callId);
-      io.to(`episode:${data.episodeId}`).emit('call:approved', data);
-    });
-
-    socket.on('call:rejected', (data: CallEvent) => {
-      console.log('❌ Call rejected:', data.callId);
-      io.to(`episode:${data.episodeId}`).emit('call:rejected', data);
-    });
-
-    socket.on('call:onair', (data: CallEvent) => {
-      console.log('🎙️  Call on-air:', data.callId);
-      io.to(`episode:${data.episodeId}`).emit('call:onair', data);
-    });
-
-    socket.on('call:completed', (data: CallEvent) => {
-      console.log('✔️  Call completed:', data.callId);
-      io.to(`episode:${data.episodeId}`).emit('call:completed', data);
-    });
+    // NOTE: Call queue events are emitted by API endpoints only
+    // Clients should NOT send these events - they only listen for them
+    // This prevents race conditions and ensures single source of truth
 
     // Chat events
     socket.on('chat:message', (data: ChatMessageEvent) => {
