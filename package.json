@@ -38,6 +38,7 @@
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
     "fluent-ffmpeg": "^2.1.2",
+    "helmet": "^8.1.0",
     "icecast-metadata-js": "^1.2.9",
     "jsonwebtoken": "^9.0.2",
     "lamejs": "^1.2.1",
@@ -50,7 +51,8 @@
     "socket.io-client": "^4.7.0",
     "svix": "^1.81.0",
     "twilio": "^5.0.0",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

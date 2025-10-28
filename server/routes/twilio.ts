@@ -2,24 +2,40 @@ import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { generateAccessToken, generateTwiML, twilioClient } from '../services/twilioService.js';
 import { processRecording } from '../services/audioService.js';
+import { verifyTwilioWebhook } from '../middleware/twilioWebhookAuth.js';
+import { z } from 'zod';
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+// Validation schemas
+const tokenRequestSchema = z.object({
+  identity: z.string().min(1).max(100)
+});
+
+const voiceRequestSchema = z.object({
+  callerId: z.string().optional(),
+  CallSid: z.string().optional(),
+  role: z.enum(['screener', 'host', 'caller']).optional(),
+  callId: z.string().optional(),
+  episodeId: z.string().optional()
+});
 
 /**
  * POST /api/twilio/token - Generate access token for WebRTC
  */
 router.post('/token', (req: Request, res: Response) => {
   try {
-    const { identity } = req.body;
-    
-    if (!identity) {
-      return res.status(400).json({ error: 'Identity required' });
-    }
+    // Validate input
+    const validated = tokenRequestSchema.parse(req.body);
+    const { identity } = validated;
 
     const token = generateAccessToken(identity);
     res.json({ token, identity });
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: 'Invalid request', details: error.issues });
+    }
     console.error('Error generating token:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to generate token';
     res.status(500).json({ error: errorMessage });
@@ -206,8 +222,9 @@ router.post('/voice', async (req: Request, res: Response) => {
 
 /**
  * POST /api/twilio/incoming-call - Handle incoming call webhook
+ * Protected by Twilio signature verification
  */
-router.post('/incoming-call', async (req: Request, res: Response) => {
+router.post('/incoming-call', verifyTwilioWebhook, async (req: Request, res: Response) => {
   try {
     const { From, CallSid } = req.body;
     
@@ -289,8 +306,9 @@ router.post('/incoming-call', async (req: Request, res: Response) => {
 
 /**
  * POST /api/twilio/recording-status - Handle recording status callback
+ * Protected by Twilio signature verification
  */
-router.post('/recording-status', async (req: Request, res: Response) => {
+router.post('/recording-status', verifyTwilioWebhook, async (req: Request, res: Response) => {
   try {
     const { RecordingSid, CallSid, RecordingStatus } = req.body;
 
@@ -328,8 +346,9 @@ router.post('/recording-status', async (req: Request, res: Response) => {
 
 /**
  * POST /api/twilio/conference-status - Handle conference status callback
+ * Protected by Twilio signature verification
  */
-router.post('/conference-status', async (req: Request, res: Response) => {
+router.post('/conference-status', verifyTwilioWebhook, async (req: Request, res: Response) => {
   try {
     const { ConferenceSid, StatusCallbackEvent, CallSid, FriendlyName } = req.body;
     console.log('📞 [CONFERENCE] Event:', StatusCallbackEvent, 'Conference:', FriendlyName, 'SID:', ConferenceSid, 'CallSid:', CallSid);

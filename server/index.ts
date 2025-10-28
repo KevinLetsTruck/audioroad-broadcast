@@ -1,12 +1,14 @@
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import { validateEnvironment } from './utils/validation.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -79,14 +81,37 @@ const twilioWebhookLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Middleware
+// Security Middleware
+// Helmet - adds security headers
+app.use(helmet({
+  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false, // Disable in dev for easier testing
+  crossOriginEmbedderPolicy: false, // Allow audio/video embedding
+  crossOriginResourcePolicy: { policy: "cross-origin" } // Allow S3/external resources
+}));
+
+// CORS - restrict to known origins in production
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? [process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app']
+  : ['http://localhost:5173', 'http://localhost:3001'];
+
 app.use(cors({
-  origin: process.env.APP_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`⚠️ [SECURITY] Blocked CORS request from: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true // Allow cookies
 }));
+
 app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' })); // Limit JSON payload size
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(generalLimiter);
 
 // API Routes
@@ -163,15 +188,23 @@ const startServer = async () => {
     console.log('🎙️  Starting AudioRoad Broadcast Platform...');
     console.log(`📡 Port: ${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    
+    // Validate required environment variables
+    console.log('🔐 [SECURITY] Validating environment...');
+    validateEnvironment();
+    
     console.log(`📊 Database: ${process.env.DATABASE_URL ? 'Connected' : 'Not configured'}`);
     console.log(`📞 Twilio: ${process.env.TWILIO_ACCOUNT_SID ? 'Configured' : 'Not configured'}`);
     console.log(`🤖 Claude AI: ${process.env.ANTHROPIC_API_KEY ? 'Configured' : 'Not configured'}`);
+    console.log(`🔐 Clerk: ${process.env.CLERK_SECRET_KEY ? 'Configured' : 'Not configured'}`);
+    console.log(`🛡️  Security: Helmet enabled, CORS restricted, Input validation active`);
     
     httpServer.listen(PORT, '0.0.0.0', () => {
       console.log(`\n✅ Server running on port ${PORT}`);
       console.log(`📊 API available at http://localhost:${PORT}/api`);
       console.log(`🔌 WebSocket available at http://localhost:${PORT}`);
-      console.log(`🌐 Frontend proxy: ${process.env.APP_URL || 'http://localhost:5173'}\n`);
+      console.log(`🌐 Frontend proxy: ${process.env.APP_URL || 'http://localhost:5173'}`);
+      console.log(`🔒 Security hardening: ACTIVE\n`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

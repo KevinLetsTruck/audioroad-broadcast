@@ -2,6 +2,8 @@ import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { generateCallerSummary } from '../services/aiService.js';
 import { emitToEpisode } from '../services/socketService.js';
+import { z } from 'zod';
+import { createCallSchema, updateCallStatusSchema, sanitizeString } from '../utils/validation.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -79,7 +81,12 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    let { episodeId, callerId, twilioCallSid, topic, status } = req.body;
+    // Validate input
+    const validated = createCallSchema.parse(req.body);
+    let { episodeId, callerId, twilioCallSid, topic, status } = validated;
+    
+    // Sanitize text inputs
+    if (topic) topic = sanitizeString(topic, 500);
     
     // If episodeId is 'current', find the active live episode
     if (episodeId === 'current') {
@@ -186,7 +193,13 @@ router.patch('/:id/screen', async (req: Request, res: Response) => {
  */
 router.patch('/:id/approve', async (req: Request, res: Response) => {
   try {
-    const { screenerNotes, topic, priority } = req.body;
+    // Validate input
+    const validated = updateCallStatusSchema.parse(req.body);
+    let { screenerNotes, topic, priority } = validated;
+    
+    // Sanitize text inputs
+    if (screenerNotes) screenerNotes = sanitizeString(screenerNotes, 1000);
+    if (topic) topic = sanitizeString(topic, 500);
 
     // Get existing call to preserve conference info
     const existingCall = await prisma.call.findUnique({
