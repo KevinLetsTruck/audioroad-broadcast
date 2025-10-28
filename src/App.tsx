@@ -9,6 +9,7 @@ import CallNow from './pages/CallNow'
 import Recordings from './pages/Recordings'
 import ShowSettings from './pages/ShowSettings'
 import ContentDashboard from './pages/ContentDashboard'
+import Commercials from './pages/Commercials'
 
 // Get Clerk publishable key from environment
 const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
@@ -86,6 +87,16 @@ function AppContent() {
               📁 Recordings
             </Link>
             <Link
+              to="/commercials"
+              className={`px-4 py-2 rounded ${
+                location.pathname === '/commercials'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+              }`}
+            >
+              🎬 Commercials
+            </Link>
+            <Link
               to="/content"
               className={`px-4 py-2 rounded ${
                 location.pathname === '/content'
@@ -93,7 +104,7 @@ function AppContent() {
                   : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
               }`}
             >
-              🎬 Content
+              📱 Social Content
             </Link>
             <Link
               to="/settings"
@@ -225,6 +236,13 @@ function AppContent() {
           <Route path="/settings" element={
             <SignedIn>
               <ShowSettings />
+            </SignedIn>
+          } />
+          <Route path="/commercials" element={
+            <SignedIn>
+              <RoleGate allowedRoles={['host', 'admin', 'producer']}>
+                <Commercials />
+              </RoleGate>
             </SignedIn>
           } />
           <Route path="/content" element={

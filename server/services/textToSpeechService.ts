@@ -75,14 +75,15 @@ export async function generateSpeech(
  */
 export async function generateCommercialAudio(
   script: string,
-  productName: string
+  productName: string,
+  voiceId?: string
 ): Promise<string> {
   try {
     console.log(`🎬 [COMMERCIAL] Generating audio for: ${productName}`);
 
     // Generate speech
     const audioBuffer = await generateSpeech(script, {
-      voiceId: VOICE_IDS.announcer, // Use announcer voice for commercials
+      voiceId: voiceId || VOICE_IDS.announcer, // Use custom voice or default announcer
       stability: 0.6, // Slightly more stable for clarity
       similarity_boost: 0.8 // High quality
     });

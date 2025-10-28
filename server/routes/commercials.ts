@@ -244,6 +244,130 @@ router.post('/generate-one', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/commercials/generate-script - Generate script only (no audio)
+ * Body: { productId: string }
+ */
+router.post('/generate-script', async (req: Request, res: Response) => {
+  try {
+    const { productId } = req.body;
+
+    if (!productId) {
+      return res.status(400).json({ error: 'Product ID required' });
+    }
+
+    console.log(`📝 [COMMERCIAL] Generating script for product: ${productId}`);
+
+    // Fetch product
+    const allProducts = await fetchAllProducts();
+    const product = allProducts.find(p => p.id === productId);
+
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    // Generate script
+    const script = await generateCommercialScript({
+      title: product.title,
+      description: product.description,
+      price: product.price,
+      category: product.product_type
+    });
+
+    console.log(`✅ [COMMERCIAL] Script generated for ${product.title}`);
+
+    res.json({
+      success: true,
+      product: {
+        id: product.id,
+        title: product.title,
+        price: product.price
+      },
+      script,
+      wordCount: script.split(/\s+/).length,
+      charCount: script.length
+    });
+
+  } catch (error) {
+    console.error('❌ [COMMERCIAL] Error generating script:', error);
+    res.status(500).json({ error: 'Failed to generate script' });
+  }
+});
+
+/**
+ * POST /api/commercials/generate-with-script - Generate commercial with custom script
+ * Body: { productId: string, script: string, voiceId?: string, showId?: string }
+ */
+router.post('/generate-with-script', async (req: Request, res: Response) => {
+  try {
+    const { productId, script, voiceId, showId } = req.body;
+
+    if (!productId || !script) {
+      return res.status(400).json({ error: 'Product ID and script required' });
+    }
+
+    console.log(`🎬 [COMMERCIAL] Generating commercial with custom script for product: ${productId}`);
+
+    // Fetch product for metadata
+    const allProducts = await fetchAllProducts();
+    const product = allProducts.find(p => p.id === productId);
+
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    // Convert script to audio with optional custom voice
+    const audioFilePath = await generateCommercialAudio(script, product.title, voiceId);
+
+    // Upload to S3
+    const audioBuffer = await fs.readFile(audioFilePath);
+    const s3Key = `commercials/${Date.now()}-${product.handle}.mp3`;
+    const s3Url = await uploadToS3(audioBuffer, s3Key);
+
+    // Get duration
+    const stats = await fs.stat(audioFilePath);
+    const duration = Math.round(stats.size / 4000);
+
+    // Save to database
+    const audioAsset = await prisma.audioAsset.create({
+      data: {
+        showId: showId || null,
+        name: `${product.title} Commercial`,
+        type: 'commercial',
+        fileUrl: s3Url,
+        duration,
+        fileSize: stats.size,
+        category: product.product_type,
+        tags: [...product.tags, 'auto-generated', 'shopify', voiceId ? `voice-${voiceId}` : 'default-voice'],
+        color: '#10b981',
+        isActive: true
+      }
+    });
+
+    // Clean up
+    await fs.unlink(audioFilePath);
+
+    console.log(`✅ [COMMERCIAL] Generated commercial with custom script for ${product.title}`);
+
+    res.json({
+      success: true,
+      product: product.title,
+      script,
+      voiceId: voiceId || 'default',
+      audioAsset: {
+        id: audioAsset.id,
+        name: audioAsset.name,
+        fileUrl: audioAsset.fileUrl,
+        duration: audioAsset.duration
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ [COMMERCIAL] Error generating commercial with script:', error);
+    res.status(500).json({ error: 'Failed to generate commercial' });
+  }
+});
+
+/**
  * GET /api/commercials/list - List all generated commercials
  */
 router.get('/list', async (req: Request, res: Response) => {
