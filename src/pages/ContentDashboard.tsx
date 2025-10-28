@@ -20,11 +20,16 @@ export default function ContentDashboard() {
   // Content Library State
   const [pendingClips, setPendingClips] = useState<any[]>([]);
   const [loadingClips, setLoadingClips] = useState(false);
+  
+  // Generated Commercials State
+  const [generatedCommercials, setGeneratedCommercials] = useState<any[]>([]);
+  const [loadingCommercials, setLoadingCommercials] = useState(false);
 
   // Load initial data
   useEffect(() => {
     loadEpisodes();
     loadPendingClips();
+    loadGeneratedCommercials();
   }, []);
 
   const loadEpisodes = async () => {
@@ -65,6 +70,19 @@ export default function ContentDashboard() {
     }
   };
 
+  const loadGeneratedCommercials = async () => {
+    try {
+      setLoadingCommercials(true);
+      const response = await fetch('/api/commercials/list');
+      const data = await response.json();
+      setGeneratedCommercials(data.commercials || []);
+    } catch (error) {
+      console.error('Error loading commercials:', error);
+    } finally {
+      setLoadingCommercials(false);
+    }
+  };
+
   const generateCommercials = async () => {
     if (confirm(`Generate commercials for ${selectedProducts.size || 'top 10'} products?\n\nThis will take 2-3 minutes per commercial.`)) {
       try {
@@ -82,13 +100,14 @@ export default function ContentDashboard() {
         
         const data = await response.json();
         
-        setCommercialProgress(`✅ Generated ${data.generated} commercials! Check your soundboard!`);
+        setCommercialProgress(`✅ Generated ${data.generated} commercials!`);
         setSelectedProducts(new Set());
+        loadGeneratedCommercials(); // Refresh the list
         
         setTimeout(() => {
           setCommercialProgress('');
-          alert(`Success! ${data.generated} commercials added to your soundboard!`);
-        }, 3000);
+          alert(`Success! ${data.generated} commercials generated!\n\nScroll down to see them!`);
+        }, 2000);
         
       } catch (error) {
         console.error('Error generating commercials:', error);
@@ -240,7 +259,7 @@ export default function ContentDashboard() {
                 <div>
                   <div className="flex justify-between items-center mb-4">
                     <p className="text-gray-400">
-                      {products.length} products found • {selectedProducts.size} selected
+                      {products.length} products found • {selectedProducts.size} selected • {generatedCommercials.length} commercials ready
                     </p>
                     <div className="flex gap-3">
                       <button
@@ -248,6 +267,12 @@ export default function ContentDashboard() {
                         className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
                       >
                         Clear Selection
+                      </button>
+                      <button
+                        onClick={loadGeneratedCommercials}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm"
+                      >
+                        🔄 Refresh Commercials
                       </button>
                       <button
                         onClick={generateCommercials}
@@ -269,6 +294,38 @@ export default function ContentDashboard() {
                   {commercialProgress && (
                     <div className="mb-4 p-4 bg-green-500/10 border border-green-500 rounded-lg">
                       <p className="text-green-400">{commercialProgress}</p>
+                    </div>
+                  )}
+
+                  {/* Generated Commercials List */}
+                  {generatedCommercials.length > 0 && (
+                    <div className="mb-6 bg-gray-700 rounded-lg p-6">
+                      <h3 className="text-xl font-bold mb-4">🎙️ Generated Commercials ({generatedCommercials.length})</h3>
+                      <div className="space-y-3">
+                        {generatedCommercials.map(commercial => (
+                          <div key={commercial.id} className="bg-gray-800 p-4 rounded-lg flex items-center justify-between">
+                            <div>
+                              <h4 className="font-semibold">{commercial.name}</h4>
+                              <p className="text-sm text-gray-400">
+                                Duration: {commercial.duration}s • Created: {new Date(commercial.createdAt).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="flex gap-3">
+                              <audio controls src={commercial.fileUrl} className="h-10">
+                                Your browser does not support audio.
+                              </audio>
+                              <a
+                                href={commercial.fileUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm"
+                              >
+                                ⬇️ Download
+                              </a>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 
