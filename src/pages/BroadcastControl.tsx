@@ -253,14 +253,14 @@ export default function BroadcastControl() {
       // Step 7: Start Radio.co stream (if enabled and password provided)
       if (autoStream && radioCoPassword) {
         console.log('🎙️ [START] Step 7: Starting Radio.co stream...');
-        console.log('   📡 Server: pear.radio.co:5568');
+        console.log('   📡 Server: s923c25be7.dj.radio.co:80');
         console.log('   🔐 Password:', radioCoPassword.length > 0 ? '✓ Set' : '✗ Empty');
         
         try {
           const encoder = new StreamEncoder();
           const streamConfig: StreamConfig = {
-            serverUrl: 'pear.radio.co',
-            port: 5568,
+            serverUrl: 's923c25be7.dj.radio.co',
+            port: 80,
             password: radioCoPassword,
             streamName: episode.title || 'AudioRoad Network LIVE',
             genre: 'Trucking',
@@ -817,7 +817,7 @@ export default function BroadcastControl() {
                         Auto-stream is enabled but not connected. Check console (F12) for errors.
                       </div>
                       <div className="text-xs text-gray-400 mt-2">
-                        Config: pear.radio.co:5568 • Password: {'*'.repeat(radioCoPassword.length)}
+                        Config: s923c25be7.dj.radio.co:80 • Password: {'*'.repeat(radioCoPassword.length)}
                       </div>
                     </div>
                   </div>
