@@ -12,6 +12,7 @@ import Recordings from './pages/Recordings'
 import ShowSettings from './pages/ShowSettings'
 import ContentDashboard from './pages/ContentDashboard'
 import Commercials from './pages/Commercials'
+import Listen from './pages/Listen'
 
 // Get Clerk publishable key from environment
 const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
@@ -113,8 +114,9 @@ function AppContent() {
             } 
           />
           
-          {/* Public Route */}
+          {/* Public Routes - No authentication required */}
           <Route path="/call-now" element={<CallNow />} />
+          <Route path="/listen" element={<Listen />} />
           
           {/* Protected Routes - Only accessible when signed in */}
           <Route path="/" element={
@@ -169,6 +171,7 @@ function AppContent() {
           <Routes>
             {/* Don't redirect public pages */}
             <Route path="/call-now" element={null} />
+            <Route path="/listen" element={null} />
             <Route path="/sign-in/*" element={null} />
             <Route path="/sign-up/*" element={null} />
             {/* Redirect everything else to sign-in */}

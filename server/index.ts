@@ -27,6 +27,7 @@ import participantsRoutes from './routes/participants.js';
 import commercialsRoutes from './routes/commercials.js';
 import contentRoutes from './routes/content.js';
 import voicesRoutes from './routes/voices.js';
+import streamRoutes from './routes/stream.js';
 // import broadcastRoutes from './routes/broadcast.js'; // Temporarily disabled until migration runs
 
 // Import services
@@ -134,6 +135,7 @@ app.use('/api/participants', apiLimiter, participantsRoutes);
 app.use('/api/commercials', apiLimiter, commercialsRoutes); // Shopify product commercials
 app.use('/api/content', apiLimiter, contentRoutes); // Social media content generation
 app.use('/api/voices', apiLimiter, voicesRoutes); // ElevenLabs voices for commercial generation
+app.use('/api/stream', streamRoutes); // HLS streaming endpoints (public, no auth needed for listeners)
 // app.use('/api/broadcast', apiLimiter, broadcastRoutes); // Temporarily disabled until migration runs
 
 // NOTE: Route protection can be added gradually using requireAuth middleware

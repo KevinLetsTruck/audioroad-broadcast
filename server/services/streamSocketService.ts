@@ -2,11 +2,13 @@
  * Stream Socket Service
  * 
  * Handles WebSocket connections from browser for audio streaming
- * NOW with FFmpeg server-side MP3 encoding (professional grade!)
+ * Supports BOTH Radio.co (FFmpeg) AND HLS streaming simultaneously!
  */
 
 import { Server as SocketIOServer } from 'socket.io';
 import { FFmpegStreamEncoder } from './ffmpegStreamEncoder.js';
+import { HLSStreamServer } from './hlsStreamServer.js';
+import { setHLSServer } from '../routes/stream.js';
 
 interface StreamConfig {
   serverUrl: string;
@@ -16,10 +18,12 @@ interface StreamConfig {
   genre?: string;
   url?: string;
   bitrate: number;
+  mode?: 'radio.co' | 'hls' | 'both';  // Streaming mode
 }
 
 // Store active stream sessions
-const activeStreams = new Map<string, FFmpegStreamEncoder>();
+const activeRadioStreams = new Map<string, FFmpegStreamEncoder>();
+let hlsServer: HLSStreamServer | null = null;
 
 export function initializeStreamSocketHandlers(io: SocketIOServer): void {
   io.on('connection', (socket) => {
@@ -30,55 +34,74 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
      */
     socket.on('stream:start', async (config: StreamConfig, callback) => {
       try {
-        console.log('🎙️ [FFMPEG STREAM] Starting stream to Radio.co with FFmpeg encoding...');
+        const mode = config.mode || 'radio.co';  // Default to Radio.co for compatibility
+        console.log(`🎙️ [STREAM] Starting stream in ${mode} mode...`);
 
-        // Check if already streaming
-        if (activeStreams.has(socket.id)) {
-          console.warn('⚠️ Stream already active for this client');
+        // Start HLS server if mode is HLS
+        if (mode === 'hls' && !hlsServer) {
+          console.log('🎬 [HLS] Creating HLS streaming server...');
+          hlsServer = new HLSStreamServer({
+            segmentDuration: 10,
+            playlistSize: 6,
+            bitrate: config.bitrate
+          });
+          
+          await hlsServer.start();
+          setHLSServer(hlsServer);  // Make available to HTTP routes
+          console.log('✅ [HLS] HLS server started and ready');
+          
+          callback({ success: true, mode: 'hls' });
+          return;
+        }
+
+        // Radio.co mode (existing functionality)
+        if (activeRadioStreams.has(socket.id)) {
+          console.warn('⚠️ Radio.co stream already active for this client');
           callback({ success: false, error: 'Stream already active' });
           return;
         }
 
-        // Create new FFmpeg stream encoder
-        const streamEncoder = new FFmpegStreamEncoder();
+        console.log('🎙️ [RADIO.CO] Starting Radio.co stream with FFmpeg encoding...');
+        
+        // Create new FFmpeg stream encoder for Radio.co
+        const radioCoEncoder = new FFmpegStreamEncoder();
 
         // Set up event handlers
-        streamEncoder.on('connected', () => {
-          console.log('✅ [FFMPEG STREAM] Connected to Radio.co');
+        radioCoEncoder.on('connected', () => {
+          console.log('✅ [RADIO.CO] Connected to Radio.co');
           socket.emit('stream:connected');
         });
 
-        streamEncoder.on('disconnected', () => {
-          console.log('📴 [FFMPEG STREAM] Disconnected from Radio.co');
+        radioCoEncoder.on('disconnected', () => {
+          console.log('📴 [RADIO.CO] Disconnected from Radio.co');
           socket.emit('stream:disconnected');
         });
 
-        streamEncoder.on('stopped', () => {
-          console.log('⏹️ [FFMPEG STREAM] Stream stopped');
+        radioCoEncoder.on('stopped', () => {
+          console.log('⏹️ [RADIO.CO] Stream stopped');
           socket.emit('stream:stopped');
         });
 
-        streamEncoder.on('error', (error) => {
-          console.error('❌ [FFMPEG STREAM] Error:', error);
+        radioCoEncoder.on('error', (error) => {
+          console.error('❌ [RADIO.CO] Error:', error);
           socket.emit('stream:error', { message: error.message });
         });
 
-        streamEncoder.on('data-sent', (bytes) => {
-          // Optionally emit progress updates
+        radioCoEncoder.on('data-sent', (bytes) => {
           socket.emit('stream:progress', { bytesSent: bytes });
         });
 
         // Initialize encoder and connect to Radio.co
-        await streamEncoder.initialize(config);
+        await radioCoEncoder.initialize(config);
 
         // Store the stream encoder
-        activeStreams.set(socket.id, streamEncoder);
+        activeRadioStreams.set(socket.id, radioCoEncoder);
 
-        console.log(`✅ [FFMPEG STREAM] Stream started for client ${socket.id}`);
-        callback({ success: true });
+        console.log(`✅ [RADIO.CO] Stream started for client ${socket.id}`);
+        callback({ success: true, mode: 'radio.co' });
 
       } catch (error: any) {
-        console.error('❌ [FFMPEG STREAM] Failed to start:', error);
+        console.error('❌ [STREAM] Failed to start:', error);
         callback({ success: false, error: error.message });
       }
     });
@@ -87,12 +110,7 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
      * Receive audio data from browser (as Float32Array binary data)
      */
     socket.on('stream:audio-data', (data: Float32Array | Buffer) => {
-      const streamEncoder = activeStreams.get(socket.id);
-
-      if (!streamEncoder) {
-        console.warn('⚠️ [FFMPEG STREAM] No active stream for this client');
-        return;
-      }
+      const radioCoEncoder = activeRadioStreams.get(socket.id);
 
       try {
         // Socket.IO sends typed arrays as Buffers - convert back to Float32Array
@@ -102,7 +120,6 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           float32Data = data;
         } else if (Buffer.isBuffer(data)) {
           // Buffer contains raw bytes - copy to ensure 4-byte alignment
-          // ArrayBuffer.slice() creates a new aligned buffer
           const alignedBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.length);
           float32Data = new Float32Array(alignedBuffer);
         } else {
@@ -110,18 +127,22 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           return;
         }
         
-        // Debug: Log the first chunk
-        if (streamEncoder.getStatus().bytesStreamed === 0) {
-          console.log('🔍 [SOCKET] First audio chunk from browser:');
-          console.log('   Type:', data.constructor.name);
-          console.log('   Samples:', float32Data.length);
-          console.log('   First 4 float values:', Array.from(float32Data.slice(0, 4)));
+        // Send to Radio.co encoder if active
+        if (radioCoEncoder) {
+          radioCoEncoder.processAudioChunk(float32Data);
         }
         
-        // Process audio chunk (FFmpeg encodes to MP3 and sends to Radio.co)
-        streamEncoder.processAudioChunk(float32Data);
+        // Send to HLS server if active
+        if (hlsServer && hlsServer.getStatus().streaming) {
+          hlsServer.processAudioChunk(float32Data);
+        }
+        
+        // Warn if no destination
+        if (!radioCoEncoder && (!hlsServer || !hlsServer.getStatus().streaming)) {
+          console.warn('⚠️ [STREAM] No active stream destination for audio data');
+        }
       } catch (error) {
-        console.error('❌ [FFMPEG STREAM] Error processing audio chunk:', error);
+        console.error('❌ [STREAM] Error processing audio chunk:', error);
         socket.emit('stream:error', { message: 'Failed to process audio data' });
       }
     });
@@ -130,21 +151,24 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
      * Stop streaming
      */
     socket.on('stream:stop', async (callback) => {
-      const streamEncoder = activeStreams.get(socket.id);
+      const radioCoEncoder = activeRadioStreams.get(socket.id);
 
-      if (streamEncoder) {
-        console.log(`📴 [FFMPEG STREAM] Stopping stream for ${socket.id}`);
-        await streamEncoder.stop();
-        activeStreams.delete(socket.id);
-        
-        if (callback) {
-          callback({ success: true });
-        }
-      } else {
-        console.warn('⚠️ [FFMPEG STREAM] No active stream to stop');
-        if (callback) {
-          callback({ success: false, error: 'No active stream' });
-        }
+      // Stop Radio.co stream if active
+      if (radioCoEncoder) {
+        console.log(`📴 [RADIO.CO] Stopping stream for ${socket.id}`);
+        await radioCoEncoder.stop();
+        activeRadioStreams.delete(socket.id);
+      }
+      
+      // Stop HLS server if no more active streams
+      if (hlsServer && activeRadioStreams.size === 0) {
+        console.log('📴 [HLS] No more active streams, stopping HLS server...');
+        await hlsServer.stop();
+        hlsServer = null;
+      }
+
+      if (callback) {
+        callback({ success: true });
       }
     });
 
@@ -152,13 +176,14 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
      * Get stream status
      */
     socket.on('stream:status', (callback) => {
-      const streamEncoder = activeStreams.get(socket.id);
+      const radioCoEncoder = activeRadioStreams.get(socket.id);
+      const hlsStatus = hlsServer ? hlsServer.getStatus() : null;
 
-      if (streamEncoder) {
-        callback({ success: true, status: streamEncoder.getStatus() });
-      } else {
-        callback({ success: false, error: 'No active stream' });
-      }
+      callback({ 
+        success: true, 
+        radioCo: radioCoEncoder ? radioCoEncoder.getStatus() : null,
+        hls: hlsStatus
+      });
     });
 
     /**
@@ -167,15 +192,23 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
     socket.on('disconnect', async () => {
       console.log(`🔌 Client disconnected: ${socket.id}`);
 
-      const streamEncoder = activeStreams.get(socket.id);
-      if (streamEncoder) {
-        console.log(`📴 [FFMPEG STREAM] Cleaning up stream for disconnected client`);
-        await streamEncoder.stop();
-        activeStreams.delete(socket.id);
+      // Clean up Radio.co stream if active
+      const radioCoEncoder = activeRadioStreams.get(socket.id);
+      if (radioCoEncoder) {
+        console.log(`📴 [RADIO.CO] Cleaning up stream for disconnected client`);
+        await radioCoEncoder.stop();
+        activeRadioStreams.delete(socket.id);
+      }
+      
+      // Stop HLS if no more clients
+      if (hlsServer && activeRadioStreams.size === 0) {
+        console.log('📴 [HLS] Last client disconnected, stopping HLS server...');
+        await hlsServer.stop();
+        hlsServer = null;
       }
     });
   });
 
-  console.log('🎙️ Stream socket handlers initialized (FFmpeg encoding enabled)');
+  console.log('🎙️ Stream socket handlers initialized (Radio.co + HLS support enabled)');
 }
 
