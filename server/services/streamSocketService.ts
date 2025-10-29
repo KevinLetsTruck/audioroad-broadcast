@@ -95,6 +95,14 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
       }
 
       try {
+        // Debug: Log the first chunk
+        if (streamEncoder.getStatus().bytesStreamed === 0) {
+          console.log('🔍 [SOCKET] First audio chunk from browser:');
+          console.log('   Type:', data.constructor.name);
+          console.log('   Byte length:', data.byteLength);
+          console.log('   First 16 bytes as Uint8:', Array.from(new Uint8Array(data).slice(0, 16)));
+        }
+        
         // Convert ArrayBuffer to Float32Array (raw PCM from browser)
         const float32Data = new Float32Array(data);
         
