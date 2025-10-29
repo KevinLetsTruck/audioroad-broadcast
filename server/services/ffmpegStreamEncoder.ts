@@ -136,7 +136,6 @@ export class FFmpegStreamEncoder extends EventEmitter {
     const config = this.config;
 
     // Radio.co uses Icecast 2.x protocol
-    // Try basic authentication format first
     const handshake = [
       `SOURCE / HTTP/1.0`,
       `Authorization: Basic ${Buffer.from(`source:${config.password}`).toString('base64')}`,
@@ -148,6 +147,7 @@ export class FFmpegStreamEncoder extends EventEmitter {
       `ice-url: ${config.url || 'http://audioroad.letstruck.com'}`,
       `ice-public: 1`,
       `ice-bitrate: ${config.bitrate}`,
+      `ice-audio-info: samplerate=44100;channels=2;bitrate=256`,
       `ice-description: ${config.streamName || 'Live Broadcast'}`,
       '',
       ''
