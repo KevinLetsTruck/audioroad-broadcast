@@ -205,12 +205,16 @@ export class FFmpegStreamEncoder extends EventEmitter {
         }
       });
 
-      // Handle FFmpeg errors
+      // Handle FFmpeg stderr (includes errors AND status info)
       this.ffmpeg.stderr!.on('data', (data: Buffer) => {
         const message = data.toString();
-        // Only log errors, not info messages
+        // Log first few lines to see format detection
+        if (message.includes('Stream') || message.includes('Input') || message.includes('Output')) {
+          console.log('📊 [FFMPEG]:', message.trim().substring(0, 200));
+        }
+        // Always log errors
         if (message.includes('Error') || message.includes('error')) {
-          console.error('⚠️ [FFMPEG]:', message);
+          console.error('⚠️ [FFMPEG ERROR]:', message);
         }
       });
 
@@ -246,6 +250,14 @@ export class FFmpegStreamEncoder extends EventEmitter {
     try {
       // Convert Float32Array to Buffer (raw PCM bytes)
       const buffer = Buffer.from(audioData.buffer);
+      
+      // Debug: Log first chunk to verify format
+      if (this.bytesStreamed === 0) {
+        console.log('🎵 [FFMPEG STREAM] First audio chunk received:');
+        console.log('   Samples:', audioData.length);
+        console.log('   Buffer size:', buffer.length, 'bytes');
+        console.log('   First few values:', Array.from(audioData.slice(0, 4)));
+      }
       
       // Send to FFmpeg for encoding
       this.inputStream.write(buffer);
