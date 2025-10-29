@@ -135,10 +135,13 @@ export class FFmpegStreamEncoder extends EventEmitter {
 
     const config = this.config;
 
+    // Radio.co uses Icecast 2.x protocol
+    // Try basic authentication format first
     const handshake = [
-      `SOURCE /${config.password} ICE/1.0`,
+      `SOURCE / HTTP/1.0`,
+      `Authorization: Basic ${Buffer.from(`source:${config.password}`).toString('base64')}`,
       `Host: ${config.serverUrl}:${config.port}`,
-      `User-Agent: AudioRoad-FFmpeg-Broadcast/1.0`,
+      `User-Agent: AudioRoad-FFmpeg/1.0`,
       `Content-Type: audio/mpeg`,
       `ice-name: ${config.streamName || 'AudioRoad Network LIVE'}`,
       `ice-genre: ${config.genre || 'Trucking'}`,
@@ -149,6 +152,8 @@ export class FFmpegStreamEncoder extends EventEmitter {
       '',
       ''
     ].join('\r\n');
+    
+    console.log('📤 [FFMPEG STREAM] Using Icecast 2.x HTTP Basic Auth format');
 
     console.log('📤 [FFMPEG STREAM] Sending Shoutcast handshake...');
     this.socket.write(handshake);
