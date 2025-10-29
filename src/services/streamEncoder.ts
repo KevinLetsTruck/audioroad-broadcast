@@ -215,9 +215,12 @@ export class StreamEncoder {
   private sendToServer(pcmData: Float32Array): void {
     if (!this.isConnected || !this.socket) return;
 
-    // Send Float32Array as ArrayBuffer to server
-    // Server will handle MP3 encoding
-    this.socket.emit('stream:audio-data', pcmData.buffer);
+    // Convert Float32Array to regular array to preserve values during transmission
+    // Socket.IO can corrupt ArrayBuffer byte order
+    const audioArray = Array.from(pcmData);
+    
+    // Send as regular array (Socket.IO will serialize properly)
+    this.socket.emit('stream:audio-data', audioArray);
   }
 
   /**

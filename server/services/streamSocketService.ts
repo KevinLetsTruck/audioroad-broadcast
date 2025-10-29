@@ -84,9 +84,9 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
     });
 
     /**
-     * Receive audio data from browser (now as Float32Array PCM)
+     * Receive audio data from browser (as number array to preserve float values)
      */
-    socket.on('stream:audio-data', (data: ArrayBuffer) => {
+    socket.on('stream:audio-data', (data: number[]) => {
       const streamEncoder = activeStreams.get(socket.id);
 
       if (!streamEncoder) {
@@ -99,11 +99,11 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         if (streamEncoder.getStatus().bytesStreamed === 0) {
           console.log('🔍 [SOCKET] First audio chunk from browser:');
           console.log('   Type:', data.constructor.name);
-          console.log('   Byte length:', data.byteLength);
-          console.log('   First 16 bytes as Uint8:', Array.from(new Uint8Array(data).slice(0, 16)));
+          console.log('   Length:', data.length);
+          console.log('   First 4 float values:', data.slice(0, 4));
         }
         
-        // Convert ArrayBuffer to Float32Array (raw PCM from browser)
+        // Convert number array back to Float32Array
         const float32Data = new Float32Array(data);
         
         // Process audio chunk (FFmpeg encodes to MP3 and sends to Radio.co)
