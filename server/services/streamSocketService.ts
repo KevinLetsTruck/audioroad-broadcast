@@ -101,8 +101,10 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         if (data instanceof Float32Array) {
           float32Data = data;
         } else if (Buffer.isBuffer(data)) {
-          // Buffer contains the raw bytes - create Float32Array view
-          float32Data = new Float32Array(data.buffer, data.byteOffset, data.length / 4);
+          // Buffer contains raw bytes - copy to ensure 4-byte alignment
+          // ArrayBuffer.slice() creates a new aligned buffer
+          const alignedBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.length);
+          float32Data = new Float32Array(alignedBuffer);
         } else {
           console.error('❌ [SOCKET] Unknown data type:', typeof data);
           return;
