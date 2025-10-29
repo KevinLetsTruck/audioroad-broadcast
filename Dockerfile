@@ -19,7 +19,11 @@ COPY . .
 # Install dependencies (this will run postinstall with Prisma generate)
 RUN npm ci
 
-# Build application
+# Accept build-time environment variables (from Railway)
+ARG VITE_CLERK_PUBLISHABLE_KEY
+ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
+
+# Build application (Vite will use VITE_CLERK_PUBLISHABLE_KEY)
 RUN npm run build
 
 # Remove dev dependencies to reduce image size
