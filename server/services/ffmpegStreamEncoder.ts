@@ -171,16 +171,18 @@ export class FFmpegStreamEncoder extends EventEmitter {
 
       // FFmpeg command to encode PCM to MP3
       const args = [
-        '-f', 'f32le',                    // Input format: 32-bit float PCM
-        '-ar', this.sampleRate.toString(), // Sample rate from browser
-        '-ac', this.channels.toString(),   // Stereo
+        '-f', 'f32le',                    // Input format: 32-bit float PCM little-endian
+        '-ar', this.sampleRate.toString(), // Sample rate: 48000 from browser
+        '-ac', this.channels.toString(),   // Channels: 2 (stereo)
+        '-channel_layout', 'stereo',      // Explicit stereo layout
         '-i', 'pipe:0',                   // Input from stdin
-        '-f', 'mp3',                      // Output format: MP3
+        '-acodec', 'libmp3lame',          // Use LAME MP3 encoder
         '-b:a', `${this.config!.bitrate}k`, // Bitrate
-        '-maxrate', `${this.config!.bitrate}k`,
-        '-bufsize', '1920k',
-        '-ar', '48000',                   // Output sample rate
+        '-ar', '44100',                   // Output: 44.1kHz (standard for Radio.co)
         '-ac', '2',                       // Stereo output
+        '-f', 'mp3',                      // Output format: MP3
+        '-fflags', '+nobuffer',           // Low latency
+        '-flush_packets', '1',            // Flush packets immediately
         'pipe:1'                          // Output to stdout
       ];
 
