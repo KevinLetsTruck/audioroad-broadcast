@@ -44,8 +44,8 @@ export default function StreamPlayer({
     // Check immediately
     checkAndConnect();
     
-    // Poll every 5 seconds
-    const interval = setInterval(checkAndConnect, 5000);
+    // Poll every 2 seconds for fast detection
+    const interval = setInterval(checkAndConnect, 2000);
     
     return () => clearInterval(interval);
   }, []);
@@ -57,12 +57,18 @@ export default function StreamPlayer({
 
       // Check if HLS is supported
       if (Hls.isSupported()) {
-        console.log('🎵 [PLAYER] HLS.js supported, initializing...');
+        console.log('🎵 [PLAYER] HLS.js supported, initializing for LOW LATENCY...');
         
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: true,
-          backBufferLength: 90
+          backBufferLength: 10,        // Minimal buffer (was 90)
+          maxBufferLength: 10,          // Keep buffer small
+          maxMaxBufferLength: 20,       // Don't buffer too far ahead
+          liveSyncDuration: 2,          // Stay close to live edge
+          liveMaxLatencyDuration: 10,   // Max 10 sec behind live
+          liveDurationInfinity: true,   // Live stream
+          highBufferWatchdogPeriod: 1   // Aggressive buffer management
         });
 
         hls.loadSource(streamUrl);

@@ -38,8 +38,14 @@ export class HLSStreamServer extends EventEmitter {
 
   constructor(config: HLSConfig) {
     super();
-    this.config = config;
+    // Override config for ultra-low latency
+    this.config = {
+      segmentDuration: 2,      // 2 seconds (was 10) - much lower latency!
+      playlistSize: 3,          // 3 segments (was 6) - faster startup
+      bitrate: config.bitrate
+    };
     this.streamPath = '/tmp/hls-stream';
+    console.log('🎯 [HLS] Configured for LOW LATENCY: 2-sec segments, 3-segment playlist');
   }
 
   /**

@@ -18,6 +18,34 @@ export function setHLSServer(server: any) {
 }
 
 /**
+ * GET /api/stream/status - Get stream status
+ * Shows if stream is live, listener count, etc.
+ * MUST BE BEFORE /:segment route!
+ */
+router.get('/status', (req: Request, res: Response) => {
+  try {
+    if (!hlsServer) {
+      return res.json({
+        live: false,
+        message: 'Stream offline'
+      });
+    }
+
+    const status = hlsServer.getStatus();
+    
+    res.json({
+      live: status.streaming,
+      currentSegment: status.currentSegment,
+      encoder: status.encoder
+    });
+    
+  } catch (error) {
+    console.error('Error getting status:', error);
+    res.status(500).json({ error: 'Failed to get status' });
+  }
+});
+
+/**
  * GET /api/stream/live.m3u8 - Get HLS playlist
  * Public endpoint for all listeners
  */
@@ -43,6 +71,7 @@ router.get('/live.m3u8', async (req: Request, res: Response) => {
 /**
  * GET /api/stream/:segment - Get HLS segment file
  * Public endpoint for all listeners
+ * MUST BE LAST - catch-all route!
  */
 router.get('/:segment', async (req: Request, res: Response) => {
   try {
@@ -67,33 +96,6 @@ router.get('/:segment', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error serving segment:', error);
     res.status(404).send('Segment not found');
-  }
-});
-
-/**
- * GET /api/stream/status - Get stream status
- * Shows if stream is live, listener count, etc.
- */
-router.get('/status', (req: Request, res: Response) => {
-  try {
-    if (!hlsServer) {
-      return res.json({
-        live: false,
-        message: 'Stream offline'
-      });
-    }
-
-    const status = hlsServer.getStatus();
-    
-    res.json({
-      live: status.streaming,
-      currentSegment: status.currentSegment,
-      encoder: status.encoder
-    });
-    
-  } catch (error) {
-    console.error('Error getting status:', error);
-    res.status(500).json({ error: 'Failed to get status' });
   }
 });
 
