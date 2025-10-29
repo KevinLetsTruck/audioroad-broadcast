@@ -10,9 +10,9 @@ import StreamPlayer from '../components/StreamPlayer';
 export default function Listen() {
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      {/* Simple centered player with autoplay */}
+      {/* Ultra-simple player - auto-connects when stream goes live */}
       <div className="w-full max-w-2xl">
-        <StreamPlayer autoplay={true} showControls={true} />
+        <StreamPlayer />
       </div>
     </div>
   );
