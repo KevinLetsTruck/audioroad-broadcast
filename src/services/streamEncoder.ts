@@ -16,6 +16,7 @@ export interface StreamConfig {
   genre?: string;
   url?: string;
   bitrate: number; // 128 or 256
+  mode?: 'radio.co' | 'hls' | 'both';  // Streaming destination
 }
 
 export interface StreamStatus {

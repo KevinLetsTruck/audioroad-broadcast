@@ -34,12 +34,12 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
      */
     socket.on('stream:start', async (config: StreamConfig, callback) => {
       try {
-        const mode = config.mode || 'radio.co';  // Default to Radio.co for compatibility
+        const mode = config.mode || 'hls';  // Default to HLS (our platform!)
         console.log(`🎙️ [STREAM] Starting stream in ${mode} mode...`);
 
-        // Start HLS server if mode is HLS
-        if (mode === 'hls' && !hlsServer) {
-          console.log('🎬 [HLS] Creating HLS streaming server...');
+        // ALWAYS start HLS server (this is now your primary streaming platform!)
+        if (!hlsServer) {
+          console.log('🎬 [HLS] Creating HLS streaming server (your custom platform)...');
           hlsServer = new HLSStreamServer({
             segmentDuration: 10,
             playlistSize: 6,
@@ -48,57 +48,60 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           
           await hlsServer.start();
           setHLSServer(hlsServer);  // Make available to HTTP routes
-          console.log('✅ [HLS] HLS server started and ready');
+          console.log('✅ [HLS] HLS server started - listeners can tune in at /listen');
+        }
+
+        // ALSO start Radio.co if mode is 'radio.co'
+        if (mode === 'radio.co') {
+          if (activeRadioStreams.has(socket.id)) {
+            console.warn('⚠️ Radio.co stream already active for this client');
+            callback({ success: false, error: 'Radio.co stream already active' });
+            return;
+          }
+
+          console.log('🎙️ [RADIO.CO] ALSO starting Radio.co stream...');
           
-          callback({ success: true, mode: 'hls' });
-          return;
-        }
+          // Create new FFmpeg stream encoder for Radio.co
+          const radioCoEncoder = new FFmpegStreamEncoder();
 
-        // Radio.co mode (existing functionality)
-        if (activeRadioStreams.has(socket.id)) {
-          console.warn('⚠️ Radio.co stream already active for this client');
-          callback({ success: false, error: 'Stream already active' });
-          return;
-        }
+          // Set up event handlers
+          radioCoEncoder.on('connected', () => {
+            console.log('✅ [RADIO.CO] Connected to Radio.co');
+            socket.emit('stream:connected');
+          });
 
-        console.log('🎙️ [RADIO.CO] Starting Radio.co stream with FFmpeg encoding...');
+          radioCoEncoder.on('disconnected', () => {
+            console.log('📴 [RADIO.CO] Disconnected from Radio.co');
+            socket.emit('stream:disconnected');
+          });
+
+          radioCoEncoder.on('stopped', () => {
+            console.log('⏹️ [RADIO.CO] Stream stopped');
+            socket.emit('stream:stopped');
+          });
+
+          radioCoEncoder.on('error', (error) => {
+            console.error('❌ [RADIO.CO] Error:', error);
+            socket.emit('stream:error', { message: error.message });
+          });
+
+          radioCoEncoder.on('data-sent', (bytes) => {
+            socket.emit('stream:progress', { bytesSent: bytes });
+          });
+
+          // Initialize encoder and connect to Radio.co
+          await radioCoEncoder.initialize(config);
+
+          // Store the stream encoder
+          activeRadioStreams.set(socket.id, radioCoEncoder);
+
+          console.log(`✅ [RADIO.CO] Radio.co stream started for client ${socket.id}`);
+        }
         
-        // Create new FFmpeg stream encoder for Radio.co
-        const radioCoEncoder = new FFmpegStreamEncoder();
-
-        // Set up event handlers
-        radioCoEncoder.on('connected', () => {
-          console.log('✅ [RADIO.CO] Connected to Radio.co');
-          socket.emit('stream:connected');
-        });
-
-        radioCoEncoder.on('disconnected', () => {
-          console.log('📴 [RADIO.CO] Disconnected from Radio.co');
-          socket.emit('stream:disconnected');
-        });
-
-        radioCoEncoder.on('stopped', () => {
-          console.log('⏹️ [RADIO.CO] Stream stopped');
-          socket.emit('stream:stopped');
-        });
-
-        radioCoEncoder.on('error', (error) => {
-          console.error('❌ [RADIO.CO] Error:', error);
-          socket.emit('stream:error', { message: error.message });
-        });
-
-        radioCoEncoder.on('data-sent', (bytes) => {
-          socket.emit('stream:progress', { bytesSent: bytes });
-        });
-
-        // Initialize encoder and connect to Radio.co
-        await radioCoEncoder.initialize(config);
-
-        // Store the stream encoder
-        activeRadioStreams.set(socket.id, radioCoEncoder);
-
-        console.log(`✅ [RADIO.CO] Stream started for client ${socket.id}`);
-        callback({ success: true, mode: 'radio.co' });
+        // Notify client of success
+        console.log(`✅ [STREAM] All streams started successfully`);
+        socket.emit('stream:connected');  // Notify client
+        callback({ success: true, mode: mode, hls: true });
 
       } catch (error: any) {
         console.error('❌ [STREAM] Failed to start:', error);

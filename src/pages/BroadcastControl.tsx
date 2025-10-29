@@ -250,48 +250,53 @@ export default function BroadcastControl() {
         console.log('✅ [START] Recording started');
       }
 
-      // Step 7: Start Radio.co stream (if enabled and password provided)
-      if (autoStream && radioCoPassword) {
-        console.log('🎙️ [START] Step 7: Starting Radio.co stream...');
-        console.log('   📡 Server: s923c25be7.dj.radio.co:80');
-        console.log('   🔐 Password:', radioCoPassword.length > 0 ? '✓ Set' : '✗ Empty');
+      // Step 7: Start streaming (ALWAYS to HLS, optionally to Radio.co)
+      console.log('🎙️ [START] Step 7: Starting streams...');
+      
+      try {
+        const encoder = new StreamEncoder();
         
-        try {
-          const encoder = new StreamEncoder();
-          const streamConfig: StreamConfig = {
-            serverUrl: 's923c25be7.dj.radio.co',
-            port: 80,
-            password: radioCoPassword,
-            streamName: episode.title || 'AudioRoad Network LIVE',
-            genre: 'Trucking',
-            url: 'http://audioroad.letstruck.com',
-            bitrate: 256
-          };
+        // Determine streaming mode
+        const streamingToRadioCo = autoStream && radioCoPassword;
+        const streamMode = streamingToRadioCo ? 'radio.co' : 'hls';
+        
+        console.log(`   📡 Streaming mode: ${streamMode}`);
+        console.log('   🌐 HLS stream: ALWAYS ACTIVE (listeners can tune in at /listen)');
+        if (streamingToRadioCo) {
+          console.log('   📻 Radio.co: ENABLED');
+          console.log('   📡 Server: s923c25be7.dj.radio.co:80');
+        } else {
+          console.log('   📻 Radio.co: Disabled (uncheck to enable)');
+        }
+        
+        const streamConfig: StreamConfig = {
+          serverUrl: 's923c25be7.dj.radio.co',
+          port: 80,
+          password: radioCoPassword || '',
+          streamName: episode.title || 'AudioRoad Network LIVE',
+          genre: 'Trucking',
+          url: 'http://audioroad.letstruck.com',
+          bitrate: 256,
+          mode: streamMode
+        };
 
-          encoder.configure(streamConfig);
-          const outputStream = mixerInstance.getOutputStream();
-          
-          if (!outputStream) {
-            console.error('❌ [START] No output stream from mixer!');
-            alert('⚠️ Warning: Could not get audio output stream. Streaming may not work.');
-          } else {
-            console.log('✅ [START] Got output stream from mixer');
-            await encoder.startStreaming(outputStream);
-            encoderRef.current = encoder;
-            setIsStreaming(true);
-            console.log('✅ [START] Streaming to Radio.co ACTIVE');
-          }
-        } catch (streamError) {
-          console.error('❌ [START] Streaming failed:', streamError);
-          alert(`⚠️ Failed to start Radio.co stream: ${streamError instanceof Error ? streamError.message : 'Unknown error'}\n\nCheck console for details.`);
+        encoder.configure(streamConfig);
+        const outputStream = mixerInstance.getOutputStream();
+        
+        if (!outputStream) {
+          console.error('❌ [START] No output stream from mixer!');
+          alert('⚠️ Warning: Could not get audio output stream. Streaming may not work.');
+        } else {
+          console.log('✅ [START] Got output stream from mixer');
+          await encoder.startStreaming(outputStream);
+          encoderRef.current = encoder;
+          setIsStreaming(true);
+          console.log(`✅ [START] Streaming ACTIVE (${streamMode} mode)`);
+          console.log('   💡 Listeners can tune in at: /listen');
         }
-      } else {
-        if (!autoStream) {
-          console.log('ℹ️ [START] Auto-stream disabled - skipping Radio.co');
-        } else if (!radioCoPassword) {
-          console.log('⚠️ [START] No Radio.co password - skipping stream');
-          console.log('   💡 To stream: Enable "Stream to Radio.co" and set password in settings below');
-        }
+      } catch (streamError) {
+        console.error('❌ [START] Streaming failed:', streamError);
+        alert(`⚠️ Failed to start stream: ${streamError instanceof Error ? streamError.message : 'Unknown error'}\n\nCheck console for details.`);
       }
 
       // Update status in context (persists across pages!)
