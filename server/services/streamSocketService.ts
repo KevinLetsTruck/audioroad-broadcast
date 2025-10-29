@@ -84,9 +84,9 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
     });
 
     /**
-     * Receive audio data from browser (as number array to preserve float values)
+     * Receive audio data from browser (as Float32Array binary data)
      */
-    socket.on('stream:audio-data', (data: number[]) => {
+    socket.on('stream:audio-data', (data: Float32Array | Buffer) => {
       const streamEncoder = activeStreams.get(socket.id);
 
       if (!streamEncoder) {
@@ -95,16 +95,26 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
       }
 
       try {
+        // Socket.IO sends typed arrays as Buffers - convert back to Float32Array
+        let float32Data: Float32Array;
+        
+        if (data instanceof Float32Array) {
+          float32Data = data;
+        } else if (Buffer.isBuffer(data)) {
+          // Buffer contains the raw bytes - create Float32Array view
+          float32Data = new Float32Array(data.buffer, data.byteOffset, data.length / 4);
+        } else {
+          console.error('❌ [SOCKET] Unknown data type:', typeof data);
+          return;
+        }
+        
         // Debug: Log the first chunk
         if (streamEncoder.getStatus().bytesStreamed === 0) {
           console.log('🔍 [SOCKET] First audio chunk from browser:');
           console.log('   Type:', data.constructor.name);
-          console.log('   Length:', data.length);
-          console.log('   First 4 float values:', data.slice(0, 4));
+          console.log('   Samples:', float32Data.length);
+          console.log('   First 4 float values:', Array.from(float32Data.slice(0, 4)));
         }
-        
-        // Convert number array back to Float32Array
-        const float32Data = new Float32Array(data);
         
         // Process audio chunk (FFmpeg encodes to MP3 and sends to Radio.co)
         streamEncoder.processAudioChunk(float32Data);
