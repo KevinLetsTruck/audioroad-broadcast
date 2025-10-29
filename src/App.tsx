@@ -164,9 +164,14 @@ function AppContent() {
           } />
         </Routes>
         
-        {/* Redirect to sign-in if not authenticated */}
+        {/* Redirect to sign-in if not authenticated (except public pages) */}
         <SignedOut>
           <Routes>
+            {/* Don't redirect public pages */}
+            <Route path="/call-now" element={null} />
+            <Route path="/sign-in/*" element={null} />
+            <Route path="/sign-up/*" element={null} />
+            {/* Redirect everything else to sign-in */}
             <Route path="*" element={<Navigate to="/sign-in" replace />} />
           </Routes>
         </SignedOut>
