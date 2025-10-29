@@ -1,9 +1,11 @@
 # Use Node.js 20 Alpine (small, fast)
 FROM node:20-alpine
 
-# Install FFmpeg and other dependencies
+# Install FFmpeg, OpenSSL 3, and other dependencies
 RUN apk add --no-cache \
     ffmpeg \
+    openssl \
+    openssl-dev \
     python3 \
     make \
     g++
