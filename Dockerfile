@@ -11,20 +11,17 @@ RUN apk add --no-cache \
 # Set working directory
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm ci --only=production
-
-# Copy application code
+# Copy ALL application code first (needed for Prisma schema)
 COPY . .
 
-# Generate Prisma client
-RUN npx prisma generate
+# Install dependencies (this will run postinstall with Prisma generate)
+RUN npm ci
 
 # Build application
 RUN npm run build
+
+# Remove dev dependencies to reduce image size
+RUN npm prune --production
 
 # Expose port
 EXPOSE 8080
