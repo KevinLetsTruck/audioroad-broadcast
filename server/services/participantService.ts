@@ -274,6 +274,10 @@ export class ParticipantService {
       const actualConferenceSid = call.episode?.twilioConferenceSid;
       const conferenceSidToUse = actualConferenceSid || call.twilioConferenceSid;
       
+      if (!conferenceSidToUse) {
+        throw new Error(`Call ${callId} has no conference SID`);
+      }
+      
       console.log(`🔊 [PARTICIPANT] Unmuting: ${callId}`);
       console.log(`   Call Conference field: ${call.twilioConferenceSid}`);
       console.log(`   Episode Conference SID: ${actualConferenceSid}`);
