@@ -328,6 +328,36 @@ model ShowCommercial {
 }
 
 // ============================================
+// AUTO DJ PLAYLIST
+// ============================================
+
+model PlaylistTrack {
+  id          String    @id @default(cuid())
+  title       String
+  artist      String?
+  audioUrl    String    // S3 URL or external URL
+  duration    Int       // Seconds
+  fileSize    Int?      // Bytes
+  
+  // Organization
+  category    String?   // Genre/mood
+  tags        Json?     // Array of tags
+  
+  // Playback
+  sortOrder   Int       @default(0)
+  playCount   Int       @default(0)
+  lastPlayed  DateTime?
+  
+  isActive    Boolean   @default(true)
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([isActive, sortOrder])
+  @@index([lastPlayed])
+}
+
+// ============================================
 // CONTENT CREATION & SOCIAL MEDIA
 // ============================================
 
