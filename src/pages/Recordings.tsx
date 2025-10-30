@@ -54,7 +54,7 @@ export default function Recordings() {
       
       // Transform episodes into recordings
       const recordingsList = episodes
-        .filter((ep: any) => ep.recordingUrl)
+        .filter((ep: any) => ep.recordingUrl) // Only episodes with recording URLs
         .map((ep: any) => ({
           id: ep.id,
           title: ep.title,
@@ -264,48 +264,72 @@ export default function Recordings() {
                   </div>
                 </div>
 
-                {/* Audio Player (if currently playing this recording) */}
-                {playingId === recording.id && (
-                  <div className="mb-4 bg-gray-900 rounded-lg p-4">
-                    <audio 
-                      controls 
-                      autoPlay
-                      src={recording.recordingUrl}
-                      className="w-full"
-                      onEnded={() => setPlayingId(null)}
-                    >
-                      Your browser does not support audio playback.
-                    </audio>
+                {/* Recording Type Info */}
+                {recording.recordingUrl.startsWith('local://') ? (
+                  <div className="mb-4 bg-yellow-900/20 border border-yellow-700/50 rounded-lg p-4">
+                    <p className="text-yellow-400 text-sm">
+                      📁 <strong>Local Recording:</strong> This recording was downloaded to your computer when you ended the show.
+                      Look for the file: <code className="bg-gray-800 px-2 py-1 rounded">{recording.recordingUrl.replace('local://', '')}</code>
+                    </p>
+                    <p className="text-gray-400 text-xs mt-2">
+                      💡 Tip: To enable cloud storage and playback from this page, configure AWS S3 in your environment variables.
+                    </p>
                   </div>
+                ) : (
+                  <>
+                    {/* Audio Player (if currently playing this recording) */}
+                    {playingId === recording.id && (
+                      <div className="mb-4 bg-gray-900 rounded-lg p-4">
+                        <audio 
+                          controls 
+                          autoPlay
+                          src={recording.recordingUrl}
+                          className="w-full"
+                          onEnded={() => setPlayingId(null)}
+                        >
+                          Your browser does not support audio playback.
+                        </audio>
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {/* Actions */}
                 <div className="flex gap-3">
-                  <button
-                    onClick={() => setPlayingId(playingId === recording.id ? null : recording.id)}
-                    className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                      playingId === recording.id
-                        ? 'bg-red-600 hover:bg-red-700'
-                        : 'bg-blue-600 hover:bg-blue-700'
-                    }`}
-                  >
-                    {playingId === recording.id ? '⏸️ Close Player' : '🎧 Play'}
-                  </button>
-                  <a
-                    href={recording.recordingUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold"
-                  >
-                    🔗 Open in New Tab
-                  </a>
-                  <a
-                    href={recording.recordingUrl}
-                    download={`${recording.showName}-${recording.title}.webm`}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold"
-                  >
-                    ⬇️ Download
-                  </a>
+                  {!recording.recordingUrl.startsWith('local://') && (
+                    <>
+                      <button
+                        onClick={() => setPlayingId(playingId === recording.id ? null : recording.id)}
+                        className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
+                          playingId === recording.id
+                            ? 'bg-red-600 hover:bg-red-700'
+                            : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                      >
+                        {playingId === recording.id ? '⏸️ Close Player' : '🎧 Play'}
+                      </button>
+                      <a
+                        href={recording.recordingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold"
+                      >
+                        🔗 Open in New Tab
+                      </a>
+                      <a
+                        href={recording.recordingUrl}
+                        download={`${recording.showName}-${recording.title}.webm`}
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold"
+                      >
+                        ⬇️ Download
+                      </a>
+                    </>
+                  )}
+                  {recording.recordingUrl.startsWith('local://') && (
+                    <div className="text-gray-500 italic">
+                      Recording saved locally on your computer
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

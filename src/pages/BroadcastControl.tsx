@@ -516,7 +516,8 @@ export default function BroadcastControl() {
         console.log('✅ Streaming stopped');
       }
 
-      // Stop recording and download (S3 upload optional for now)
+      // Stop recording and upload to server
+      let recordingUrl: string | null = null;
       if (broadcast.mixer && isRecording) {
         try {
           const now = new Date();
@@ -526,8 +527,48 @@ export default function BroadcastControl() {
           const filename = `${showSlug}-${dateStr}-${timeStr}.webm`;
           
           console.log('📴 [END] Stopping recording...');
-          await broadcast.mixer.downloadRecording(filename);
-          console.log('✅ [END] Recording downloaded:', filename);
+          
+          // Get the recording blob
+          const { blob } = await broadcast.mixer.stopRecordingAndGetBlob();
+          console.log('✅ [END] Recording blob created:', blob.size, 'bytes');
+          
+          // Upload to server
+          console.log('📤 [END] Uploading recording to server...');
+          const formData = new FormData();
+          formData.append('recording', blob, filename);
+          formData.append('episodeId', status.episodeId);
+          formData.append('showSlug', showSlug);
+          
+          const uploadRes = await fetch('/api/recordings/upload', {
+            method: 'POST',
+            body: formData
+          });
+          
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json();
+            recordingUrl = uploadData.url || `local://${filename}`;
+            console.log('✅ [END] Recording uploaded:', recordingUrl);
+            
+            // Also download to user's computer
+            const downloadUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(downloadUrl);
+            console.log('✅ [END] Recording downloaded to computer');
+          } else {
+            console.warn('⚠️ [END] Upload failed, saving local reference only');
+            recordingUrl = `local://${filename}`;
+            
+            // Still download to user's computer
+            const downloadUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(downloadUrl);
+          }
         } catch (recordError) {
           console.error('❌ [END] Error with recording:', recordError);
         }
@@ -538,12 +579,16 @@ export default function BroadcastControl() {
       await broadcast.destroyMixer();
       console.log('✅ [END] Mixer cleaned up');
 
-      // End the episode (even if it fails, continue cleanup)
+      // End the episode with recording URL
       try {
         console.log('📴 [END] Ending episode in database...');
-        const endRes = await fetch(`/api/episodes/${status.episodeId}/end`, { method: 'PATCH' });
+        const endRes = await fetch(`/api/episodes/${status.episodeId}/end`, { 
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recordingUrl })
+        });
         if (endRes.ok) {
-          console.log('✅ [END] Episode ended in database');
+          console.log('✅ [END] Episode ended in database with recording URL');
         } else {
           const errorData = await endRes.json().catch(() => ({}));
           console.warn('⚠️ [END] Episode end failed:', errorData);

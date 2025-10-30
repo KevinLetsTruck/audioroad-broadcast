@@ -15,7 +15,7 @@ const prisma = new PrismaClient();
 // Configure multer for audio uploads
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max
+  limits: { fileSize: 1024 * 1024 * 1024 } // 1GB max
 });
 
 /**

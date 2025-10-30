@@ -466,6 +466,16 @@ export class AudioMixerEngine {
   }
 
   /**
+   * Stop recording and return the blob (for uploading)
+   */
+  async stopRecordingAndGetBlob(): Promise<{ blob: Blob; filename: string }> {
+    const blob = await this.stopRecording();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `audioroad-${timestamp}.webm`;
+    return { blob, filename };
+  }
+
+  /**
    * Get the mixed output stream (for streaming to Radio.co)
    */
   getOutputStream(): MediaStream | null {

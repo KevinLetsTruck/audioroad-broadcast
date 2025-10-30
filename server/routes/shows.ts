@@ -9,7 +9,7 @@ const prisma = new PrismaClient();
 // Configure multer for file uploads (memory storage)
 const upload = multer({ 
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max
+  limits: { fileSize: 1024 * 1024 * 1024 } // 1GB max
 });
 
 router.get('/', async (req: Request, res: Response) => {

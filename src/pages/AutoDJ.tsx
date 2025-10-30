@@ -177,7 +177,7 @@ export default function AutoDJ() {
                 required
               />
               <p className="text-xs text-gray-500 mt-1">
-                Supported: MP3, WAV, AAC, OGG • Max 50MB
+                Supported: MP3, WAV, AAC, OGG • Max 1GB
               </p>
             </div>
 
