@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
+import { useBroadcast } from '../contexts/BroadcastContext';
 
 interface Participant {
   id: string;
@@ -26,6 +27,7 @@ interface ParticipantBoardProps {
 }
 
 export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
+  const broadcast = useBroadcast(); // Access broadcast context for Twilio connection
   const [participants, setParticipants] = useState<{
     onAir: Participant[];
     onHold: Participant[];
@@ -69,11 +71,41 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
   const putOnAir = async (callId: string) => {
     try {
       console.log('📡 Putting participant on air:', callId);
-      await fetch(`/api/participants/${callId}/on-air`, { method: 'PATCH' });
+      
+      // Find the participant to get their name
+      const participant = [...participants.onAir, ...participants.onHold, ...participants.screening]
+        .find(p => p.id === callId);
+      const callerName = participant?.caller?.name || 'Caller';
+      
+      // Check if host is already connected to conference
+      const isFirstConnection = broadcast.activeCalls.size === 0;
+      
+      if (isFirstConnection) {
+        // First participant: Host must join conference to hear them
+        console.log('🎙️ First call - connecting host to conference...');
+        if (!broadcast.twilioDevice) {
+          throw new Error('Twilio device not initialized. Please start a show first.');
+        }
+        
+        // Connect host to conference
+        await broadcast.connectToCall(callId, callerName, episodeId, 'host');
+        console.log('✅ Host connected to conference');
+        
+        // Wait a moment for connection to establish
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      
+      // Unmute the caller and put them on-air
+      const response = await fetch(`/api/participants/${callId}/on-air`, { method: 'PATCH' });
+      if (!response.ok) {
+        throw new Error('Failed to put participant on air');
+      }
+      
+      console.log('✅ Participant put on air');
       fetchParticipants();
     } catch (error) {
       console.error('Error putting on air:', error);
-      alert('Failed to put participant on air');
+      alert(`Failed to put participant on air: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
