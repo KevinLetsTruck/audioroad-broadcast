@@ -8,6 +8,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { FFmpegStreamEncoder } from './ffmpegStreamEncoder.js';
 import { HLSStreamServer } from './hlsStreamServer.js';
+import { AutoDJService } from './autoDJService.js';
 import { setHLSServer } from '../routes/stream.js';
 
 interface StreamConfig {
@@ -24,6 +25,8 @@ interface StreamConfig {
 // Store active stream sessions
 const activeRadioStreams = new Map<string, FFmpegStreamEncoder>();
 let hlsServer: HLSStreamServer | null = null;
+let autoDJ: AutoDJService | null = null;
+let isLiveBroadcasting = false;
 
 export function initializeStreamSocketHandlers(io: SocketIOServer): void {
   io.on('connection', (socket) => {
@@ -50,6 +53,15 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           setHLSServer(hlsServer);  // Make available to HTTP routes
           console.log('✅ [HLS] HLS server started - listeners can tune in at /listen');
         }
+        
+        // Stop Auto DJ if playing (live broadcast takes priority!)
+        if (autoDJ && autoDJ.getStatus().playing) {
+          console.log('📴 [AUTO DJ] Stopping Auto DJ - going live!');
+          await autoDJ.stop();
+        }
+        
+        // Mark as live broadcasting
+        isLiveBroadcasting = true;
 
         // ALSO start Radio.co if mode is 'radio.co'
         if (mode === 'radio.co') {
@@ -163,11 +175,24 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         activeRadioStreams.delete(socket.id);
       }
       
-      // Stop HLS server if no more active streams
-      if (hlsServer && activeRadioStreams.size === 0) {
-        console.log('📴 [HLS] No more active streams, stopping HLS server...');
-        await hlsServer.stop();
-        hlsServer = null;
+      // Mark as no longer live
+      if (activeRadioStreams.size === 0) {
+        isLiveBroadcasting = false;
+        
+        // Start Auto DJ to fill the silence!
+        if (hlsServer && !autoDJ) {
+          console.log('🎵 [AUTO DJ] Starting Auto DJ - broadcast ended...');
+          autoDJ = new AutoDJService();
+          
+          // Connect Auto DJ audio output to HLS server
+          autoDJ.on('audio-chunk', (stream) => {
+            // TODO: Pipe Auto DJ output to HLS server
+            console.log('🎵 [AUTO DJ] Audio chunk ready for HLS');
+          });
+          
+          await autoDJ.start();
+          console.log('✅ [AUTO DJ] Auto DJ started - keeping stream alive!');
+        }
       }
 
       if (callback) {
@@ -203,15 +228,23 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         activeRadioStreams.delete(socket.id);
       }
       
-      // Stop HLS if no more clients
-      if (hlsServer && activeRadioStreams.size === 0) {
-        console.log('📴 [HLS] Last client disconnected, stopping HLS server...');
-        await hlsServer.stop();
-        hlsServer = null;
+      // If no more live broadcasts, start Auto DJ
+      if (activeRadioStreams.size === 0) {
+        isLiveBroadcasting = false;
+        
+        // Start Auto DJ if HLS server is running and Auto DJ not already playing
+        if (hlsServer && (!autoDJ || !autoDJ.getStatus().playing)) {
+          console.log('🎵 [AUTO DJ] Last broadcaster disconnected, starting Auto DJ...');
+          if (!autoDJ) {
+            autoDJ = new AutoDJService();
+          }
+          await autoDJ.start();
+          console.log('✅ [AUTO DJ] Auto DJ resumed - keeping stream alive!');
+        }
       }
     });
   });
 
-  console.log('🎙️ Stream socket handlers initialized (Radio.co + HLS support enabled)');
+  console.log('🎙️ Stream socket handlers initialized (Radio.co + HLS + Auto DJ support enabled)');
 }
 
