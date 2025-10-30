@@ -262,28 +262,75 @@ export class ParticipantService {
         include: { episode: true }
       });
 
-      if (!call || !call.twilioConferenceSid) {
-        throw new Error('Call or conference not found');
+      if (!call) {
+        throw new Error(`Call ${callId} not found`);
       }
 
-      // Use episode's real conference SID (CF...)
-      const conferenceSid = call.episode?.twilioConferenceSid || call.twilioConferenceSid;
+      if (!call.twilioCallSid) {
+        throw new Error(`Call ${callId} has no Twilio CallSid`);
+      }
+
+      // Use episode's real conference SID (CF...) if available, otherwise use friendly name
+      const actualConferenceSid = call.episode?.twilioConferenceSid;
+      const conferenceSidToUse = actualConferenceSid || call.twilioConferenceSid;
+      
       console.log(`🔊 [PARTICIPANT] Unmuting: ${callId}`);
-      console.log(`   Using conference SID: ${conferenceSid}`);
+      console.log(`   Call Conference field: ${call.twilioConferenceSid}`);
+      console.log(`   Episode Conference SID: ${actualConferenceSid}`);
+      console.log(`   CallSid: ${call.twilioCallSid}`);
+      console.log(`   Using conference SID: ${conferenceSidToUse}`);
 
       try {
-        // Unmute in Twilio conference
-        await twilioClient
-          .conferences(conferenceSid)
-          .participants(call.twilioCallSid)
-          .update({
-            muted: false
+        // First, check if conference exists and list participants
+        const conference = await twilioClient
+          .conferences(conferenceSidToUse)
+          .fetch()
+          .catch((err) => {
+            console.log(`⚠️ [CONFERENCE] Conference not found: ${conferenceSidToUse}`);
+            return null;
           });
-        
-        console.log(`✅ [TWILIO] Successfully unmuted participant`);
+
+        if (conference) {
+          console.log(`📞 [CONFERENCE] Found conference: ${conference.sid}, Status: ${conference.status}`);
+          
+          // List all participants to find the right one
+          const participants = await twilioClient
+            .conferences(conferenceSidToUse)
+            .participants
+            .list();
+          
+          console.log(`👥 [CONFERENCE] ${participants.length} participants in conference`);
+          participants.forEach((p: any) => {
+            console.log(`   - ${p.callSid}: ${p.muted ? 'MUTED' : 'UNMUTED'}`);
+          });
+          
+          // Find participant by CallSid
+          const participant = participants.find((p: any) => p.callSid === call.twilioCallSid);
+          
+          if (!participant) {
+            console.warn(`⚠️ Participant ${call.twilioCallSid} not in conference yet - they may still be connecting`);
+            // Update database anyway - they'll be unmuted when they join
+          } else {
+            console.log(`✅ [CONFERENCE] Found participant: ${participant.callSid}, currently ${participant.muted ? 'MUTED' : 'UNMUTED'}`);
+            
+            // Unmute the participant using their call SID
+            await twilioClient
+              .conferences(conferenceSidToUse)
+              .participants(call.twilioCallSid)
+              .update({
+                muted: false
+              });
+            
+            console.log(`✅ [TWILIO] Successfully unmuted participant in conference`);
+          }
+        } else {
+          console.warn(`⚠️ [CONFERENCE] Conference ${conferenceSidToUse} doesn't exist yet`);
+          // Just update database state
+        }
       } catch (twilioError: any) {
-        console.error(`❌ [TWILIO] Failed to unmute:`, twilioError.message);
-        // Don't throw - just log and update database anyway
+        console.error(`❌ [TWILIO] Conference API error:`, twilioError.message);
+        console.error(`   Status: ${twilioError.status}, Code: ${twilioError.code}`);
+        // Don't throw - just log and continue with database update
       }
 
       // Update database
