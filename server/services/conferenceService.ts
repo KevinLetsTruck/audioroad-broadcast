@@ -47,7 +47,7 @@ export async function addCallerToHoldConference(
         to: callSid,
         earlyMedia: true,
         endConferenceOnExit: false,
-        beep: 'false' as any,
+        beep: false,  // DISABLE ALL BEEPS - boolean false, not string
         // Coach mode: can hear but not speak
         coaching: 'true' as any,
         statusCallback: `${process.env.APP_URL}/api/twilio/participant-status`,
@@ -194,7 +194,7 @@ export async function addHostToConference(
         earlyMedia: true,
         startConferenceOnEnter: 'true' as any,
         endConferenceOnExit: 'true' as any, // Host ending ends conference
-        beep: 'false' as any
+        beep: false  // DISABLE ALL BEEPS - boolean false, not string
       });
 
     console.log(`Host added to conference ${conferenceName}`);
