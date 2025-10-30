@@ -88,6 +88,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         )}
         
         <SidebarNavLink to="/platforms" icon="📡" label="Streaming Platforms" collapsed={collapsed} />
+        <SidebarNavLink to="/podcast" icon="🎙️" label="Podcast Distribution" collapsed={collapsed} />
         <SidebarNavLink to="/settings" icon="⚙️" label="Show Settings" collapsed={collapsed} />
       </nav>
 

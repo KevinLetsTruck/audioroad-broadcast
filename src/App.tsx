@@ -15,6 +15,7 @@ import Commercials from './pages/Commercials'
 import Listen from './pages/Listen'
 import AutoDJ from './pages/AutoDJ'
 import StreamingPlatforms from './pages/StreamingPlatforms'
+import PodcastSettings from './pages/PodcastSettings'
 
 // Get Clerk publishable key from environment
 const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
@@ -177,6 +178,13 @@ function AppContent() {
             <SignedIn>
               <RoleGate allowedRoles={['host', 'admin']}>
                 <StreamingPlatforms />
+              </RoleGate>
+            </SignedIn>
+          } />
+          <Route path="/podcast" element={
+            <SignedIn>
+              <RoleGate allowedRoles={['host', 'admin']}>
+                <PodcastSettings />
               </RoleGate>
             </SignedIn>
           } />
