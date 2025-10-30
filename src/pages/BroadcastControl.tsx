@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useBroadcast } from '../contexts/BroadcastContext';
 import { StreamEncoder, StreamConfig } from '../services/streamEncoder';
+import { VideoCapture } from '../services/videoCapture';
 import VUMeter from '../components/VUMeter';
 import ParticipantBoard from '../components/ParticipantBoard';
 import { detectCurrentShow, getShowDisplayName } from '../utils/showScheduler';
@@ -73,6 +74,7 @@ export default function BroadcastControl() {
 
   // Local refs (encoder still local, mixer from context)
   const encoderRef = useRef<StreamEncoder | null>(null);
+  const videoCaptureRef = useRef<VideoCapture | null>(null);
   
   // Get state from context
   const status = broadcast.state;
@@ -289,6 +291,25 @@ export default function BroadcastControl() {
       // IMPORTANT: Refresh audio sources so UI updates!
       broadcast.refreshAudioSources();
       console.log('🎚️ [START] Audio sources refreshed');
+
+      // Step 5.5: Start video capture (if enabled)
+      if (enableVideo && cameras.length > 0) {
+        console.log('📹 [START] Step 5.5: Starting video capture...');
+        console.log('   Camera ID:', selectedCameraId);
+        
+        try {
+          const videoCapture = new VideoCapture();
+          await videoCapture.startCapture(selectedCameraId !== 'default' ? selectedCameraId : undefined);
+          videoCaptureRef.current = videoCapture;
+          console.log('✅ [START] Video capture started');
+        } catch (videoError) {
+          console.error('⚠️ [START] Failed to start video:', videoError);
+          alert('⚠️ Could not start video capture. Will stream audio-only.\n\nMake sure you allowed camera access.');
+          // Continue without video - audio-only is fine!
+        }
+      } else if (enableVideo && cameras.length === 0) {
+        console.log('ℹ️ [START] Video enabled but no cameras found - streaming audio-only');
+      }
 
       // Step 6: Start recording (if enabled)
       if (autoRecord) {
