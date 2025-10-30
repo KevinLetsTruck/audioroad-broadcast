@@ -147,6 +147,7 @@ export default function ScreeningRoom() {
       
       // Close form if this is active call
       if (activeCall && data.callId === activeCall.id) {
+        console.log('🔴 Active call hung up - closing form');
         setActiveCall(null);
         setScreenerNotes({
           name: '',
@@ -160,6 +161,9 @@ export default function ScreeningRoom() {
           await broadcast.disconnectCurrentCall();
         }
       }
+      
+      // Always refresh the call list to remove hung up calls
+      fetchQueuedCalls();
     });
 
     // Auto-refresh every 2 seconds to catch missed events (more frequent!)
@@ -181,13 +185,26 @@ export default function ScreeningRoom() {
     if (!activeEpisode) return;
     
     try {
+      // Fetch all queued and screening calls (not completed/rejected)
       const response = await fetch(`/api/calls?episodeId=${activeEpisode.id}&status=queued`);
       const data = await response.json();
       
-      // Filter out any that shouldn't be shown
-      const activeCalls = data.filter((call: any) => 
-        call.status === 'queued' && !call.endedAt
-      );
+      // Filter out any that shouldn't be shown:
+      // - Must be queued or screening status
+      // - Must not have endedAt set (caller hung up)
+      // - Must not be completed or rejected
+      const activeCalls = data.filter((call: any) => {
+        const isActive = (call.status === 'queued' || call.status === 'screening') && 
+                         !call.endedAt && 
+                         call.status !== 'completed' && 
+                         call.status !== 'rejected';
+        
+        if (!isActive && call.endedAt) {
+          console.log(`🗑️ Filtering out completed call: ${call.id} (status: ${call.status}, endedAt: ${call.endedAt})`);
+        }
+        
+        return isActive;
+      });
       
       console.log('📋 Active queued calls:', activeCalls.length, '(filtered from', data.length, 'total)');
       setIncomingCalls(activeCalls);
