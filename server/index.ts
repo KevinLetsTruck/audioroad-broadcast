@@ -29,6 +29,7 @@ import contentRoutes from './routes/content.js';
 import voicesRoutes from './routes/voices.js';
 import streamRoutes from './routes/stream.js';
 import playlistRoutes from './routes/playlist.js';
+import platformsRoutes from './routes/platforms.js';
 // import broadcastRoutes from './routes/broadcast.js'; // Temporarily disabled until migration runs
 
 // Import services
@@ -138,6 +139,7 @@ app.use('/api/content', apiLimiter, contentRoutes); // Social media content gene
 app.use('/api/voices', apiLimiter, voicesRoutes); // ElevenLabs voices for commercial generation
 app.use('/api/stream', streamRoutes); // HLS streaming endpoints (public, no auth needed for listeners)
 app.use('/api/playlist', apiLimiter, playlistRoutes); // Auto DJ playlist management
+app.use('/api/platforms', apiLimiter, platformsRoutes); // Multi-platform streaming (YouTube, Facebook, X)
 // app.use('/api/broadcast', apiLimiter, broadcastRoutes); // Temporarily disabled until migration runs
 
 // NOTE: Route protection can be added gradually using requireAuth middleware

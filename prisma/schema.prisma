@@ -328,6 +328,26 @@ model ShowCommercial {
 }
 
 // ============================================
+// STREAMING PLATFORMS (YouTube, Facebook, X, etc.)
+// ============================================
+
+model StreamingPlatform {
+  id              String    @id @default(cuid())
+  name            String    // 'youtube' | 'facebook' | 'x' | 'custom'
+  streamKey       String    // RTMP stream key (encrypted in production)
+  enabled         Boolean   @default(false)
+  thirtyMinLimit  Boolean   @default(true)  // Auto-stop after 30 min
+  customUrl       String?   // For custom RTMP servers
+  
+  lastUsed        DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@unique([name])
+  @@index([enabled])
+}
+
+// ============================================
 // AUTO DJ PLAYLIST
 // ============================================
 
