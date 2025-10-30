@@ -242,8 +242,22 @@ export default function ScreeningRoom() {
     console.log('🎙️ Connecting screener to caller...');
     try {
       const callerName = call.caller?.name || 'Caller';
+      
+      // Connect screener to conference
       await broadcast.connectToCall(call.id, callerName, activeEpisode.id, 'screener');
       console.log('✅ Screener audio connection initiated');
+      
+      // UNMUTE the caller so screener can hear them!
+      console.log('🔊 Unmuting caller for screening...');
+      const unmuteResponse = await fetch(`/api/participants/${call.id}/unmute`, { 
+        method: 'PATCH' 
+      });
+      
+      if (!unmuteResponse.ok) {
+        console.warn('⚠️ Failed to unmute caller, but continuing...');
+      } else {
+        console.log('✅ Caller unmuted for screening');
+      }
     } catch (error) {
       console.error('❌ Error connecting to caller:', error);
       alert('Failed to connect audio. Please try again.');
