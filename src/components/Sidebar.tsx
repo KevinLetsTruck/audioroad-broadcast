@@ -74,6 +74,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             
             <SidebarNavLink to="/commercials" icon="🎬" label="Commercials" collapsed={collapsed} />
             <SidebarNavLink to="/content" icon="📱" label="Social Media" collapsed={collapsed} />
+            <SidebarNavLink to="/autodj" icon="🎵" label="Auto DJ" collapsed={collapsed} />
           </>
         )}
 

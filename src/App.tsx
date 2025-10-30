@@ -13,6 +13,7 @@ import ShowSettings from './pages/ShowSettings'
 import ContentDashboard from './pages/ContentDashboard'
 import Commercials from './pages/Commercials'
 import Listen from './pages/Listen'
+import AutoDJ from './pages/AutoDJ'
 
 // Get Clerk publishable key from environment
 const CLERK_PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
@@ -161,6 +162,13 @@ function AppContent() {
             <SignedIn>
               <RoleGate allowedRoles={['host', 'admin', 'producer']}>
                 <ContentDashboard />
+              </RoleGate>
+            </SignedIn>
+          } />
+          <Route path="/autodj" element={
+            <SignedIn>
+              <RoleGate allowedRoles={['host', 'admin', 'producer']}>
+                <AutoDJ />
               </RoleGate>
             </SignedIn>
           } />
