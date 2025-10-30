@@ -239,7 +239,7 @@ export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', opti
       const conferenceOptions: any = {
         startConferenceOnEnter: options.startConferenceOnEnter !== undefined ? options.startConferenceOnEnter : true,
         endConferenceOnExit: false,
-        beep: false,  // No beeps
+        beep: 'false',  // No beeps (Twilio requires string 'false' not boolean)
         maxParticipants: 40,
         waitUrl: options.waitUrl || undefined,
         muted: options.muted !== undefined ? options.muted : false,

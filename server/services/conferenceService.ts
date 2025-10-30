@@ -85,11 +85,8 @@ export async function promoteCallerToLive(
   const conferenceName = `episode-${episodeId}`;
 
   try {
-    // First, play "you're now live" tone
-    await playLiveTone(callSid);
-
-    // Wait for tone to finish (2 seconds)
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // NO TONE - Silent transition to live (removed annoying beep!)
+    // await playLiveTone(callSid); // DISABLED - no more annoying tones!
 
     // Update participant to remove coach mode
     const participant = await client
@@ -121,8 +118,15 @@ export async function promoteCallerToLive(
 
 /**
  * Play "you're now live" tone to caller
+ * 
+ * DISABLED - No more annoying tones!
+ * If you want to re-enable, uncomment the call in promoteCallerToLive()
  */
 async function playLiveTone(callSid: string) {
+  // DISABLED - Silent transitions only
+  return;
+  
+  /* ORIGINAL CODE (disabled):
   if (!client) return;
   try {
     // Play a simple beep tone (you can replace with custom audio file)
@@ -136,6 +140,7 @@ async function playLiveTone(callSid: string) {
   } catch (error) {
     console.error('Error playing live tone:', error);
   }
+  */
 }
 
 /**
