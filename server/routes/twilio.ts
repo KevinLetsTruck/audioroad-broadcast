@@ -85,11 +85,13 @@ router.post('/voice', async (req: Request, res: Response) => {
       
       console.log(`🎙️ ${role} joining conference:`, conferenceName);
 
+      // 🎧 HOST JOINS MUTED! This prevents feedback loop.
+      // Host uses mixer for their mic, only joins conference to HEAR callers
       const twiml = generateTwiML('conference', { 
         conferenceName,
         startConferenceOnEnter: startConference,
         endConferenceOnExit: false,  // DON'T end conference - keep alive for whole episode!
-        muted: false
+        muted: role === 'host' ? true : false  // Host joins muted to prevent feedback!
       });
 
       return res.type('text/xml').send(twiml);
