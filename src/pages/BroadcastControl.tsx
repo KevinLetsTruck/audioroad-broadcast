@@ -57,6 +57,19 @@ export default function BroadcastControl() {
   const [radioCoPassword, setRadioCoPassword] = useState(() => {
     return localStorage.getItem('radioCoPassword') || '';
   });
+  
+  // Video settings
+  const [enableVideo, setEnableVideo] = useState(() => {
+    const saved = localStorage.getItem('enableVideo');
+    return saved === 'true';
+  });
+  const [selectedCameraId, setSelectedCameraId] = useState(() => {
+    return localStorage.getItem('selectedCameraId') || 'default';
+  });
+  const [cameras, setCameras] = useState<any[]>([]);
+  
+  // Platform streaming
+  const [streamPlatforms, setStreamPlatforms] = useState<any[]>([]);
 
   // Local refs (encoder still local, mixer from context)
   const encoderRef = useRef<StreamEncoder | null>(null);
@@ -88,6 +101,41 @@ export default function BroadcastControl() {
       localStorage.setItem('radioCoPassword', radioCoPassword);
     }
   }, [radioCoPassword]);
+  
+  useEffect(() => {
+    localStorage.setItem('enableVideo', enableVideo.toString());
+  }, [enableVideo]);
+  
+  useEffect(() => {
+    localStorage.setItem('selectedCameraId', selectedCameraId);
+  }, [selectedCameraId]);
+  
+  // Load cameras and platforms on mount
+  useEffect(() => {
+    const loadVideoDevices = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDev = devices.filter(d => d.kind === 'videoinput');
+        setCameras(videoDev);
+        console.log('📹 Found', videoDev.length, 'cameras');
+      } catch (error) {
+        console.error('Error loading cameras:', error);
+      }
+    };
+    
+    const loadPlatforms = async () => {
+      try {
+        const response = await fetch('/api/platforms');
+        const data = await response.json();
+        setStreamPlatforms(data.filter((p: any) => p.enabled));
+      } catch (error) {
+        console.error('Error loading platforms:', error);
+      }
+    };
+    
+    loadVideoDevices();
+    loadPlatforms();
+  }, []);
 
   /**
    * Fetch shows and auto-detect current show on mount
@@ -746,6 +794,61 @@ export default function BroadcastControl() {
                         </button>
                       )}
                     </div>
+                  </div>
+                )}
+                
+                {/* Video Settings */}
+                <div className="border-t border-gray-700 pt-4">
+                  <label className="flex items-center gap-3 mb-3">
+                    <input
+                      type="checkbox"
+                      checked={enableVideo}
+                      onChange={(e) => setEnableVideo(e.target.checked)}
+                      className="w-5 h-5"
+                    />
+                    <span className="text-sm">📹 Enable Video (optional)</span>
+                  </label>
+
+                  {enableVideo && cameras.length > 0 && (
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">Camera</label>
+                      <select
+                        value={selectedCameraId}
+                        onChange={(e) => setSelectedCameraId(e.target.value)}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded text-sm"
+                      >
+                        <option value="default">Default Camera</option>
+                        {cameras.map(cam => (
+                          <option key={cam.deviceId} value={cam.deviceId}>
+                            {cam.label || `Camera ${cam.deviceId.substring(0, 8)}`}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  
+                  {enableVideo && cameras.length === 0 && (
+                    <p className="text-xs text-yellow-500">No cameras detected. Will stream audio-only.</p>
+                  )}
+                </div>
+                
+                {/* Platform Streaming Info */}
+                {streamPlatforms.length > 0 && (
+                  <div className="border-t border-gray-700 pt-4">
+                    <p className="text-xs text-gray-400 mb-2">📡 Multi-Platform Streaming:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {streamPlatforms.map((p: any) => (
+                        <span 
+                          key={p.id}
+                          className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs"
+                        >
+                          {p.name.toUpperCase()} {p.thirtyMinLimit && '(30min)'}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      💡 Manage in Settings → Streaming Platforms
+                    </p>
                   </div>
                 )}
               </div>
