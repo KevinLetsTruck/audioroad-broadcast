@@ -133,14 +133,18 @@ export class HLSStreamServer extends EventEmitter {
       this.ffmpeg.stderr!.on('data', (data: Buffer) => {
         const message = data.toString();
         
-        // Log segment creation
+        // Track segment creation (but don't log every single one - too verbose!)
         if (message.includes('Opening') && message.includes('.ts')) {
           const match = message.match(/segment-(\d+)\.ts/);
           if (match) {
             const segNum = parseInt(match[1]);
-            console.log(`📦 [HLS] Created segment ${segNum}`);
             this.currentSequence = segNum;
             this.emit('segment-created', segNum);
+            
+            // Only log every 100 segments (~200 seconds / 3 minutes)
+            if (segNum % 100 === 0) {
+              console.log(`📦 [HLS] Segment ${segNum} created (playlist active)`);
+            }
           }
         }
         

@@ -42,12 +42,18 @@ export class AutoDJService extends EventEmitter {
     this.isPlaying = false;
     this.currentTrack = null;
 
+    // CRITICAL: Kill FFmpeg immediately to prevent duplicate segments!
     if (this.ffmpeg) {
-      this.ffmpeg.kill('SIGTERM');
+      console.log('   Killing FFmpeg process...');
+      this.ffmpeg.kill('SIGKILL'); // Force kill, not graceful SIGTERM
       this.ffmpeg = null;
+      console.log('   ✓ FFmpeg killed');
     }
 
-    console.log('✅ [AUTO DJ] Auto DJ stopped');
+    // Wait a moment for FFmpeg to fully die
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    console.log('✅ [AUTO DJ] Auto DJ stopped - FFmpeg terminated');
   }
 
   /**
