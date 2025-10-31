@@ -288,19 +288,22 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         if (hlsServer && (!autoDJ || !autoDJ.getStatus().playing)) {
           console.log('🎵 [AUTO DJ] Last broadcaster disconnected, starting Auto DJ...');
           
-          if (!autoDJ) {
-            autoDJ = new AutoDJService();
-            
-            // Wire Auto DJ audio output to HLS server (ONLY on creation!)
-            autoDJ.on('audio-chunk', (audioData: Float32Array) => {
-              if (hlsServer && hlsServer.getStatus().streaming) {
-                hlsServer.processAudioChunk(audioData);
-              }
-            });
-          } else {
-            // Auto DJ exists but was stopped - just restart (listeners already wired)
-            console.log('   Restarting existing Auto DJ (listeners already wired)...');
+          // ALWAYS create fresh instance (match nuclear approach)
+          if (autoDJ) {
+            console.log('   Destroying old Auto DJ instance...');
+            autoDJ.removeAllListeners();
+            await autoDJ.stop();
           }
+          
+          console.log('   Creating FRESH Auto DJ instance...');
+          autoDJ = new AutoDJService();
+          
+          // Wire Auto DJ audio output to HLS server
+          autoDJ.on('audio-chunk', (audioData: Float32Array) => {
+            if (hlsServer && hlsServer.getStatus().streaming) {
+              hlsServer.processAudioChunk(audioData);
+            }
+          });
           
           await autoDJ.start();
           console.log('✅ [AUTO DJ] Auto DJ started - keeping stream alive 24/7!');
