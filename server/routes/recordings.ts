@@ -95,15 +95,15 @@ router.post('/upload', upload.single('recording'), async (req: Request, res: Res
     console.log(`📤 Uploading recording to S3: ${filename}`);
 
     try {
-      // Upload to S3
+      // Upload to S3 (no ACL - use bucket policy for public access)
       const uploadTask = new Upload({
         client: s3Client,
         params: {
           Bucket: process.env.S3_BUCKET_NAME,
           Key: filename,
           Body: file.buffer,
-          ContentType: file.mimetype,
-          ACL: 'public-read'
+          ContentType: file.mimetype
+          // ACL removed - modern S3 buckets use bucket policies instead
         }
       });
 
