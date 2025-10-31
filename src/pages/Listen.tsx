@@ -96,6 +96,12 @@ export default function Listen() {
 
     try {
       setError(null);
+      
+      // For Safari/native HLS, we need to load the source
+      if (audioRef.current.src) {
+        audioRef.current.load();
+      }
+      
       await audioRef.current.play();
       setIsPlaying(true);
     } catch (err: any) {
