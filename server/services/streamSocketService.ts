@@ -308,6 +308,23 @@ export async function startHLSServerOnBoot(): Promise<void> {
   console.log('🎬 [STARTUP] Initializing 24/7 HLS streaming server...');
   
   try {
+    // CRITICAL: Stop any existing HLS/Auto DJ first (prevents duplicate FFmpeg!)
+    if (autoDJ) {
+      console.log('🧹 [STARTUP] Stopping existing Auto DJ...');
+      await autoDJ.stop();
+      autoDJ = null;
+    }
+    
+    if (hlsServer) {
+      console.log('🧹 [STARTUP] Stopping existing HLS server...');
+      await hlsServer.stop();
+      hlsServer = null;
+    }
+    
+    // Wait for processes to fully terminate
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    console.log('✅ [STARTUP] Clean slate - starting fresh');
+    
     // Create HLS server
     hlsServer = new HLSStreamServer({
       segmentDuration: 10,
