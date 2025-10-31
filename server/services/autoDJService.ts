@@ -122,26 +122,29 @@ export class AutoDJService extends EventEmitter {
     try {
       console.log(`📥 [AUTO DJ] Downloading: ${track.title}`);
       console.log(`   URL: ${track.audioUrl}`);
-      console.log(`   Expected duration: ${track.duration} seconds`);
+      console.log(`   Expected duration: ${track.duration} seconds (${Math.floor(track.duration / 60)} minutes)`);
       
-      // Download audio file with NO timeout (15 hour track!)
+      // Download ENTIRE file to memory first (prevents stream cutoff issues)
+      console.log(`   Downloading full file...`);
       const response = await axios.get(track.audioUrl, {
-        responseType: 'stream',
-        timeout: 0, // No timeout - track could be 15+ hours!
+        responseType: 'arraybuffer', // Download full file, not stream
+        timeout: 120000, // 2 minute download timeout (224MB file)
         maxRedirects: 5,
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity
+        maxContentLength: 500 * 1024 * 1024, // 500MB max
+        maxBodyLength: 500 * 1024 * 1024
       });
+      
+      console.log(`   ✓ Downloaded ${(response.data.byteLength / 1024 / 1024).toFixed(1)} MB`);
       
       return new Promise((resolve, reject) => {
         try {
-          console.log(`🎬 [AUTO DJ] Starting FFmpeg for track playback...`);
+          console.log(`🎬 [AUTO DJ] Decoding with FFmpeg...`);
           let chunkCount = 0;
           let errorOutput = '';
 
           // FFmpeg to decode and output PCM
           const ffmpeg = spawn('ffmpeg', [
-            '-i', 'pipe:0',           // Input from stream
+            '-i', 'pipe:0',           // Input from stdin
             '-f', 'f32le',            // Output as Float32 PCM
             '-ar', '48000',           // Sample rate to match HLS server
             '-ac', '2',               // Stereo
@@ -149,16 +152,11 @@ export class AutoDJService extends EventEmitter {
             'pipe:1'                  // Output to stdout
           ]);
 
-          // Pipe download to FFmpeg and handle errors
-          response.data.on('error', (error: any) => {
-            console.error('❌ [AUTO DJ] Download stream error:', error);
-            reject(error);
-          });
-          
-          response.data.pipe(ffmpeg.stdin).on('error', (error: any) => {
-            console.error('❌ [AUTO DJ] Pipe to FFmpeg error:', error);
-            reject(error);
-          });
+          // Write entire downloaded file to FFmpeg stdin at once
+          const buffer = Buffer.from(response.data);
+          ffmpeg.stdin.write(buffer);
+          ffmpeg.stdin.end(); // Signal end of input
+          console.log(`   ✓ File sent to FFmpeg for decoding`);
 
           // Read FFmpeg output and emit as Float32Array chunks for HLS server
           let lastLogTime = Date.now();
