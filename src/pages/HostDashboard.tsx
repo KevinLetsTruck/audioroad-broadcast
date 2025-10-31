@@ -219,7 +219,6 @@ export default function HostDashboard() {
       }
     } catch (error) {
       console.error('Error starting episode:', error);
-      alert('Failed to start episode. Check console for details.');
     }
   };
 

@@ -124,7 +124,6 @@ export default function ScreeningRoom() {
       // If this is the call being screened, close the form
       if (activeCall && data.callId === activeCall.id) {
         console.log('🔴 Active call completed - closing form');
-        alert('Caller has hung up');
         setActiveCall(null);
         setScreenerNotes({
           name: '',
@@ -177,9 +176,6 @@ export default function ScreeningRoom() {
           priority: 'normal',
           notes: ''
         });
-        
-        // Show alert so screener knows what happened
-        alert('📴 Caller has hung up');
       }
       
       // Always refresh the call list to remove hung up calls
@@ -236,7 +232,7 @@ export default function ScreeningRoom() {
   const handlePickUpCall = async (call: any) => {
     // Prevent picking up multiple calls
     if (activeCall) {
-      alert('You are already screening a call. Please finish it first.');
+      console.warn('⚠️ Already screening a call - ignoring pick up request');
       return;
     }
 
@@ -271,7 +267,7 @@ export default function ScreeningRoom() {
     
     // Connect screener's audio to the caller using global device
     if (!screenerReady) {
-      alert('⚠️ Phone system not ready. Please wait a moment and try again.');
+      console.error('⚠️ Phone system not ready');
       setActiveCall(null);
       return;
     }
@@ -291,7 +287,6 @@ export default function ScreeningRoom() {
       console.log('✅ Caller already unmuted (joined conference unmuted to avoid beeps)')
     } catch (error) {
       console.error('❌ Error connecting to caller:', error);
-      alert('Failed to connect audio. Please try again.');
       setActiveCall(null);
     }
   };
@@ -300,8 +295,8 @@ export default function ScreeningRoom() {
     if (!activeCall) return;
     
     if (!screenerNotes.name || !screenerNotes.topic) {
-      alert('⚠️ Please fill in at least Name and Topic before approving');
-      return;
+      console.warn('⚠️ Name and Topic required before approving');
+      return; // Silently prevent - button should be disabled anyway
     }
 
     setApproving(true);
@@ -368,11 +363,9 @@ export default function ScreeningRoom() {
       // Force immediate refresh
       fetchQueuedCalls();
       
-      // Then show success message
-      alert('✅ Call approved! Caller is now in host queue.');
+      console.log('✅ Call approved and queued for host');
     } catch (error) {
       console.error('❌ Error approving call:', error);
-      alert('❌ Failed to approve call. Please try again.');
     } finally {
       setApproving(false);
     }
@@ -381,9 +374,8 @@ export default function ScreeningRoom() {
   const handleRejectCall = async () => {
     if (!activeCall) return;
 
-    if (!confirm('Reject this call? The caller will be disconnected.')) {
-      return;
-    }
+    // No confirmation popup - just reject immediately
+    console.log('🚫 Rejecting call:', activeCall.id);
 
     setRejecting(true);
     try{
@@ -408,7 +400,6 @@ export default function ScreeningRoom() {
 
       if (response.ok) {
         console.log('✅ Call rejected successfully');
-        alert('Call rejected and ended');
       }
 
       // Clear form
@@ -423,7 +414,6 @@ export default function ScreeningRoom() {
       fetchQueuedCalls();
     } catch (error) {
       console.error('Error rejecting call:', error);
-      alert('Failed to reject call. Please try again.');
     } finally {
       setRejecting(false);
     }

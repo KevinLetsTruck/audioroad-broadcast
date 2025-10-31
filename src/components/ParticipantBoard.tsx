@@ -113,7 +113,6 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
       fetchParticipants();
     } catch (error) {
       console.error('Error putting on air:', error);
-      alert(`Failed to put participant on air: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -124,7 +123,6 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
       fetchParticipants();
     } catch (error) {
       console.error('Error putting on hold:', error);
-      alert('Failed to put participant on hold');
     }
   };
 
@@ -135,7 +133,6 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
       fetchParticipants();
     } catch (error) {
       console.error('Error moving to screening:', error);
-      alert('Failed to move to screening');
     }
   };
 
@@ -146,7 +143,6 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
       fetchParticipants();
     } catch (error) {
       console.error('Error muting participant:', error);
-      alert('Failed to mute participant');
     }
   };
 
@@ -157,7 +153,6 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
       fetchParticipants();
     } catch (error) {
       console.error('Error unmuting participant:', error);
-      alert('Failed to unmute participant');
     }
   };
 
@@ -175,7 +170,6 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
       fetchParticipants();
     } catch (error) {
       console.error('Error ending call:', error);
-      alert('Failed to end call');
     }
   };
 
