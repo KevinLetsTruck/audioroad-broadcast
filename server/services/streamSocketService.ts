@@ -180,20 +180,16 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
       if (activeRadioStreams.size === 0) {
         isLiveBroadcasting = false;
         
-        // Start Auto DJ to fill the silence!
-        if (hlsServer && !autoDJ) {
-          console.log('🎵 [AUTO DJ] Starting Auto DJ - broadcast ended...');
-          autoDJ = new AutoDJService();
-          
-          // Connect Auto DJ audio output to HLS server
-          autoDJ.on('audio-chunk', (_stream) => {
-            // TODO: Pipe Auto DJ output to HLS server
-            console.log('🎵 [AUTO DJ] Audio chunk ready for HLS');
-          });
-          
-          await autoDJ.start();
-          console.log('✅ [AUTO DJ] Auto DJ started - keeping stream alive!');
+        // STOP HLS SERVER - This prevents audio looping!
+        if (hlsServer) {
+          console.log('📴 [HLS] Stopping HLS server - no more live broadcasts');
+          await hlsServer.stop();
+          hlsServer = null;
+          console.log('✅ [HLS] HLS server stopped - stream is now offline');
         }
+        
+        // Note: Auto DJ integration can be added later if you want 24/7 streaming
+        // For now, stream goes offline when show ends (prevents looping audio)
       }
 
       if (callback) {
@@ -229,19 +225,20 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         activeRadioStreams.delete(socket.id);
       }
       
-      // If no more live broadcasts, start Auto DJ
+      // If no more live broadcasts, stop HLS server
       if (activeRadioStreams.size === 0) {
         isLiveBroadcasting = false;
         
-        // Start Auto DJ if HLS server is running and Auto DJ not already playing
-        if (hlsServer && (!autoDJ || !autoDJ.getStatus().playing)) {
-          console.log('🎵 [AUTO DJ] Last broadcaster disconnected, starting Auto DJ...');
-          if (!autoDJ) {
-            autoDJ = new AutoDJService();
-          }
-          await autoDJ.start();
-          console.log('✅ [AUTO DJ] Auto DJ resumed - keeping stream alive!');
+        // STOP HLS SERVER - This prevents audio looping!
+        if (hlsServer) {
+          console.log('📴 [HLS] Last broadcaster disconnected, stopping HLS server');
+          await hlsServer.stop();
+          hlsServer = null;
+          console.log('✅ [HLS] HLS server stopped - stream is now offline');
         }
+        
+        // Note: Auto DJ integration can be added later if you want 24/7 streaming
+        // For now, stream goes offline when broadcaster disconnects
       }
     });
   });
