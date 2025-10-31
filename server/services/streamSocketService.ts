@@ -26,6 +26,7 @@ interface StreamConfig {
 const activeRadioStreams = new Map<string, FFmpegStreamEncoder>();
 let hlsServer: HLSStreamServer | null = null;
 let autoDJ: AutoDJService | null = null;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 let isLiveBroadcasting = false;
 
 export function initializeStreamSocketHandlers(io: SocketIOServer): void {
@@ -185,7 +186,7 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           autoDJ = new AutoDJService();
           
           // Connect Auto DJ audio output to HLS server
-          autoDJ.on('audio-chunk', (stream) => {
+          autoDJ.on('audio-chunk', (_stream) => {
             // TODO: Pipe Auto DJ output to HLS server
             console.log('🎵 [AUTO DJ] Audio chunk ready for HLS');
           });

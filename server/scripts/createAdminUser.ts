@@ -30,7 +30,7 @@ async function main() {
   }
 
   try {
-    const admin = await createUser({
+    await createUser({
       email: adminEmail,
       password: adminPassword,
       name: adminName,

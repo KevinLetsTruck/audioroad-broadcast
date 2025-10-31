@@ -68,7 +68,7 @@ router.post('/', async (req: Request, res: Response) => {
     console.log(`✅ [PLATFORMS] Saved ${name} configuration`);
     
     // Don't send stream key back
-    const { streamKey: _, ...platformWithoutKey } = platform;
+    const { streamKey: _unused, ...platformWithoutKey } = platform;
     res.json(platformWithoutKey);
 
   } catch (error) {

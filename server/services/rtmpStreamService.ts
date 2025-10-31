@@ -101,7 +101,7 @@ export class RTMPStreamService extends EventEmitter {
     }
 
     // Monitor output
-    ffmpeg.stdout.on('data', (data) => {
+    ffmpeg.stdout.on('data', () => {
       // Could log streaming stats here
     });
 

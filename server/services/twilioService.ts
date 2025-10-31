@@ -14,7 +14,7 @@ const client = (accountSid && authToken && accountSid !== 'not_configured')
 /**
  * Generate Twilio access token for WebRTC connection
  */
-export function generateAccessToken(identity: string, roomName?: string): string {
+export function generateAccessToken(identity: string, _roomName?: string): string {
   if (!accountSid || !apiKey || !apiSecret) {
     throw new Error('Twilio credentials not configured');
   }
@@ -45,7 +45,7 @@ export function generateAccessToken(identity: string, roomName?: string): string
 /**
  * Create a conference for the episode
  */
-export async function createConference(conferenceName: string, options: any = {}) {
+export async function createConference(conferenceName: string, _options: any = {}) {
   if (!client) throw new Error('Twilio not configured');
   
   try {
@@ -231,7 +231,7 @@ export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', opti
       }, options.queueName || 'default-queue');
       break;
 
-    case 'conference':
+    case 'conference': {
       // Don't say anything - just connect silently
       const dial = twiml.dial();
       
@@ -249,6 +249,7 @@ export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', opti
       
       dial.conference(conferenceOptions, options.conferenceName);
       break;
+    }
 
     case 'voicemail':
       twiml.say('Please leave a message after the tone.');

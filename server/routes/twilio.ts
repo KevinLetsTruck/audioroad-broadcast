@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { generateAccessToken, generateTwiML, twilioClient } from '../services/twilioService.js';
+import { generateAccessToken, generateTwiML } from '../services/twilioService.js';
 import { processRecording } from '../services/audioService.js';
 import { verifyTwilioWebhook } from '../middleware/twilioWebhookAuth.js';
 import { z } from 'zod';
@@ -13,13 +13,6 @@ const tokenRequestSchema = z.object({
   identity: z.string().min(1).max(100)
 });
 
-const voiceRequestSchema = z.object({
-  callerId: z.string().optional(),
-  CallSid: z.string().optional(),
-  role: z.enum(['screener', 'host', 'caller']).optional(),
-  callId: z.string().optional(),
-  episodeId: z.string().optional()
-});
 
 /**
  * POST /api/twilio/token - Generate access token for WebRTC
@@ -466,7 +459,7 @@ router.post('/wait-music', (req: Request, res: Response) => {
  */
 router.post('/screener-connect', async (req: Request, res: Response) => {
   try {
-    const { callId, role } = req.body;
+    const { callId } = req.body;
     
     console.log('🎙️ Screener connecting to call:', callId);
 

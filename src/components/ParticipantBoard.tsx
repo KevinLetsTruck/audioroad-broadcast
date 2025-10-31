@@ -76,12 +76,33 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
         .find(p => p.id === callId);
       const callerName = participant?.caller?.name || 'Caller';
       
-      if (broadcast.activeCalls.size === 0) {
+      // Ensure host is connected to Twilio conference to hear callers
+      // All callers for the same episode join the same conference (episode-${episodeId})
+      // The host only needs ONE connection per episode to hear all callers
+      // Check if host is already connected by checking Twilio device state
+      const hostNeedsConnection = !broadcast.twilioDevice || 
+        broadcast.activeCalls.size === 0 ||
+        !Array.from(broadcast.activeCalls.values()).some(call => {
+          // Check if there's an active call for this episode
+          // Since all calls for same episode use same conference, any call means host is connected
+          return call.twilioCall && call.twilioCall.status() !== 'closed';
+        });
+      
+      if (hostNeedsConnection) {
         if (!broadcast.twilioDevice) {
           throw new Error('Twilio device not initialized. Please start a show first.');
         }
-        await broadcast.connectToCall(callId, callerName, episodeId, 'host');
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        console.log('🔌 Connecting host to Twilio conference to hear callers...');
+        try {
+          await broadcast.connectToCall(callId, callerName, episodeId, 'host');
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          console.log('✅ Host connected to conference');
+        } catch (error) {
+          console.warn('⚠️ Host connection attempt failed (may already be connected):', error);
+          // Continue anyway - host might already be connected
+        }
+      } else {
+        console.log(`✅ Host already connected to conference (${broadcast.activeCalls.size} active call(s))`);
       }
       
       const response = await fetch(`/api/participants/${callId}/on-air`, { method: 'PATCH' });

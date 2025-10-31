@@ -1,7 +1,5 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { extractClip, generateWaveform } from '../services/audioService.js';
-import { generateSocialContent } from '../services/aiService.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();

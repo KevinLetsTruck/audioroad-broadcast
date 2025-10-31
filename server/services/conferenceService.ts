@@ -122,7 +122,8 @@ export async function promoteCallerToLive(
  * DISABLED - No more annoying tones!
  * If you want to re-enable, uncomment the call in promoteCallerToLive()
  */
-async function playLiveTone(callSid: string) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function playLiveTone(_callSid: string) {
   // DISABLED - Silent transitions only
   return;
   

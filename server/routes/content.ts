@@ -6,7 +6,6 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { analyzeEpisodeForContent, generateSocialCaptions } from '../services/contentAnalysisService.js';
-import { extractClip } from '../services/audioService.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();

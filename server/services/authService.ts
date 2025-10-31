@@ -76,7 +76,7 @@ export async function authenticateUser(email: string, password: string) {
   }
 
   // Don't include password in the response
-  const { password: _, ...userWithoutPassword } = user;
+  const { password: _unused, ...userWithoutPassword } = user;
   return userWithoutPassword;
 }
 
@@ -105,7 +105,7 @@ export async function createUser(data: {
   });
 
   // Don't include password in the response
-  const { password: _, ...userWithoutPassword } = user;
+  const { password: _unused, ...userWithoutPassword } = user;
   return userWithoutPassword;
 }
 

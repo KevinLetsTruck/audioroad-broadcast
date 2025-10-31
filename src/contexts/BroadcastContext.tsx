@@ -284,8 +284,8 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
       // TODO: Implement proper audio routing without breaking Twilio
       
       // Get audio stream from call (for future mixer integration)
-      // @ts-ignore - Twilio SDK internal API  
-      const remoteStream = null; // Disabled for now: call.getRemoteStream();
+      // Disabled for now: call.getRemoteStream();
+      // Placeholder for future audio stream capture
       
       console.log('⚠️ [CALL] Mixer audio capture DISABLED - using Twilio native audio');
       console.log('💡 [CALL] Volume controls will be added once audio routing is fixed');

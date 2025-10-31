@@ -28,6 +28,7 @@ router.get('/config/:showId', async (req, res) => {
       }
 
       // Don't send the password to the client
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { password, ...safeConfig } = config;
 
       res.json(safeConfig);
@@ -88,7 +89,7 @@ router.post('/config', async (req, res) => {
     });
 
     // Don't send the password back
-    const { password: _, ...safeConfig } = config;
+    const { password: _unused, ...safeConfig } = config;
 
     res.json(safeConfig);
   } catch (error) {

@@ -193,7 +193,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Error handling middleware
-app.use((err: any, req: Request, res: Response, next: any) => {
+app.use((err: any, _req: Request, res: Response) => {
   console.error('Error:', err);
   res.status(err.status || 500).json({
     error: process.env.NODE_ENV === 'production' 

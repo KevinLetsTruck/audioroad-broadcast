@@ -94,10 +94,11 @@ export async function processRecording(
  * Mix multiple audio tracks into one
  */
 export async function mixAudioTracks(tracks: AudioTrack[], outputFilename: string): Promise<string> {
-  return new Promise(async (resolve, reject) => {
+  const tempDir = '/tmp/audio-mixing';
+  await fs.mkdir(tempDir, { recursive: true });
+  
+  return new Promise((resolve, reject) => {
     try {
-      const tempDir = '/tmp/audio-mixing';
-      await fs.mkdir(tempDir, { recursive: true });
 
       const outputPath = path.join(tempDir, outputFilename);
       const command = ffmpeg();
@@ -162,10 +163,11 @@ export async function extractClip(
   duration: number,
   outputFilename: string
 ): Promise<string> {
-  return new Promise(async (resolve, reject) => {
+  const tempDir = '/tmp/audio-clips';
+  await fs.mkdir(tempDir, { recursive: true });
+  
+  return new Promise((resolve, reject) => {
     try {
-      const tempDir = '/tmp/audio-clips';
-      await fs.mkdir(tempDir, { recursive: true });
 
       const outputPath = path.join(tempDir, outputFilename);
 
@@ -211,10 +213,11 @@ export async function enhanceAudio(
     compress?: boolean;
   } = {}
 ): Promise<string> {
-  return new Promise(async (resolve, reject) => {
+  const tempDir = '/tmp/audio-enhancement';
+  await fs.mkdir(tempDir, { recursive: true });
+  
+  return new Promise((resolve, reject) => {
     try {
-      const tempDir = '/tmp/audio-enhancement';
-      await fs.mkdir(tempDir, { recursive: true });
 
       const outputPath = path.join(tempDir, `enhanced-${Date.now()}.mp3`);
       const command = ffmpeg(sourceUrl);
@@ -276,10 +279,11 @@ export async function generateWaveform(
   width: number = 1800,
   height: number = 280
 ): Promise<string> {
-  return new Promise(async (resolve, reject) => {
+  const tempDir = '/tmp/waveforms';
+  await fs.mkdir(tempDir, { recursive: true });
+  
+  return new Promise((resolve, reject) => {
     try {
-      const tempDir = '/tmp/waveforms';
-      await fs.mkdir(tempDir, { recursive: true });
 
       const outputPath = path.join(tempDir, `waveform-${Date.now()}.png`);
 

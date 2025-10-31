@@ -1,8 +1,6 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { generateCallerSummary } from '../services/aiService.js';
 import { emitToEpisode } from '../services/socketService.js';
-import { z } from 'zod';
 import { createCallSchema, updateCallStatusSchema, sanitizeString } from '../utils/validation.js';
 
 const router = express.Router();
@@ -83,7 +81,8 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     // Validate input
     const validated = createCallSchema.parse(req.body);
-    let { episodeId, callerId, twilioCallSid, topic, status } = validated;
+    let { episodeId, topic } = validated;
+    const { callerId, twilioCallSid, status } = validated;
     
     // Sanitize text inputs
     if (topic) topic = sanitizeString(topic, 500);
@@ -195,7 +194,8 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
   try {
     // Validate input
     const validated = updateCallStatusSchema.parse(req.body);
-    let { screenerNotes, topic, priority } = validated;
+    let { screenerNotes, topic } = validated;
+    const { priority } = validated;
     
     // Sanitize text inputs
     if (screenerNotes) screenerNotes = sanitizeString(screenerNotes, 1000);

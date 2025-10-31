@@ -120,57 +120,61 @@ export class AutoDJService extends EventEmitter {
    * Play a single track
    */
   private async playTrack(track: any): Promise<void> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        console.log(`📥 [AUTO DJ] Downloading: ${track.audioUrl}`);
-        
-        // Download audio file
-        const response = await axios.get(track.audioUrl, {
-          responseType: 'stream'
-        });
+    try {
+      console.log(`📥 [AUTO DJ] Downloading: ${track.audioUrl}`);
+      
+      // Download audio file
+      const response = await axios.get(track.audioUrl, {
+        responseType: 'stream'
+      });
+      
+      return new Promise((resolve, reject) => {
+        try {
+          console.log(`🎬 [AUTO DJ] Playing track with FFmpeg...`);
 
-        console.log(`🎬 [AUTO DJ] Playing track with FFmpeg...`);
+          // FFmpeg to decode and output PCM
+          const ffmpeg = spawn('ffmpeg', [
+            '-i', 'pipe:0',           // Input from stream
+            '-f', 'f32le',            // Output as Float32 PCM
+            '-ar', '48000',           // Sample rate to match HLS server
+            '-ac', '2',               // Stereo
+            'pipe:1'                  // Output to stdout
+          ]);
 
-        // FFmpeg to decode and output PCM
-        const ffmpeg = spawn('ffmpeg', [
-          '-i', 'pipe:0',           // Input from stream
-          '-f', 'f32le',            // Output as Float32 PCM
-          '-ar', '48000',           // Sample rate to match HLS server
-          '-ac', '2',               // Stereo
-          'pipe:1'                  // Output to stdout
-        ]);
+          // Pipe download to FFmpeg
+          response.data.pipe(ffmpeg.stdin);
 
-        // Pipe download to FFmpeg
-        response.data.pipe(ffmpeg.stdin);
+          // Create output stream for HLS server
+          this.outputStream = new PassThrough();
+          ffmpeg.stdout.pipe(this.outputStream);
 
-        // Create output stream for HLS server
-        this.outputStream = new PassThrough();
-        ffmpeg.stdout.pipe(this.outputStream);
+          // Emit stream for HLS server to consume
+          this.emit('audio-chunk', this.outputStream);
 
-        // Emit stream for HLS server to consume
-        this.emit('audio-chunk', this.outputStream);
+          ffmpeg.on('exit', () => {
+            console.log(`✅ [AUTO DJ] Track finished (${track.title})`);
+            if (this.outputStream) {
+              this.outputStream.end();
+              this.outputStream = null;
+            }
+            resolve();
+          });
 
-        ffmpeg.on('exit', (code) => {
-          console.log(`✅ [AUTO DJ] Track finished (${track.title})`);
-          if (this.outputStream) {
-            this.outputStream.end();
-            this.outputStream = null;
-          }
-          resolve();
-        });
+          ffmpeg.on('error', (error) => {
+            console.error('❌ [AUTO DJ] FFmpeg error:', error);
+            reject(error);
+          });
 
-        ffmpeg.on('error', (error) => {
-          console.error('❌ [AUTO DJ] FFmpeg error:', error);
+          this.ffmpeg = ffmpeg;
+        } catch (error) {
+          console.error('❌ [AUTO DJ] Error setting up playback:', error);
           reject(error);
-        });
-
-        this.ffmpeg = ffmpeg;
-
-      } catch (error) {
-        console.error('❌ [AUTO DJ] Error setting up playback:', error);
-        reject(error);
-      }
-    });
+        }
+      });
+    } catch (error) {
+      console.error('❌ [AUTO DJ] Error downloading track:', error);
+      throw error;
+    }
   }
 
   /**

@@ -1,5 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 interface CallEvent {
   episodeId: string;
   callId: string;

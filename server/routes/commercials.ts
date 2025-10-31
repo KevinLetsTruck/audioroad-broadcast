@@ -6,8 +6,8 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { fetchAllProducts, getFeaturedProducts } from '../services/shopifyService.js';
-import { generateCommercialScript, generateBatchScripts, scoreProductsForCommercials } from '../services/commercialGeneratorService.js';
-import { generateCommercialAudio, generateBatchCommercials } from '../services/textToSpeechService.js';
+import { generateCommercialScript, scoreProductsForCommercials } from '../services/commercialGeneratorService.js';
+import { generateCommercialAudio } from '../services/textToSpeechService.js';
 import { uploadToS3 } from '../services/audioService.js';
 import fs from 'fs/promises';
 

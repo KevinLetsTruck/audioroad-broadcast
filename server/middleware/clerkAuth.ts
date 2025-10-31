@@ -23,6 +23,7 @@ export interface ClerkUser {
 
 // Extend Express Request type to include Clerk auth
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       auth?: {

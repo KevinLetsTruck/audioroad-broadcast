@@ -98,8 +98,8 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
         
         try {
           // Disconnect any active calls first
-          // @ts-ignore
-          const activeConnections = twilioDevice.calls || [];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const activeConnections = (twilioDevice as any).calls || [];
           if (activeConnections.length > 0) {
             console.log('📴 [DEVICE] Disconnecting active calls:', activeConnections.length);
             activeConnections.forEach((call: any) => {
@@ -264,8 +264,8 @@ export function useTwilioCall({ identity, onCallConnected, onCallDisconnected, o
 
     try {
       // Get the remote stream from the Twilio call
-      // @ts-ignore - Twilio SDK internal API
-      const remoteStream = call.getRemoteStream();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const remoteStream = (call as any).getRemoteStream();
       return remoteStream || null;
     } catch (error) {
       console.warn('Could not get remote stream:', error);

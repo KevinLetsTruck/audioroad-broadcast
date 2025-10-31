@@ -8,6 +8,7 @@ import { verifyToken, UserPayload } from '../services/authService.js';
 
 // Extend Express Request type to include user
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       user?: UserPayload;

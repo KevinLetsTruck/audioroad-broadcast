@@ -53,7 +53,7 @@ export class ParticipantService {
         const conference = await twilioClient
           .conferences(conferenceSidToUse)
           .fetch()
-          .catch((err) => {
+          .catch(() => {
             console.log(`⚠️ [CONFERENCE] Conference not found: ${conferenceSidToUse}`);
             return null;
           });
@@ -289,7 +289,7 @@ export class ParticipantService {
         const conference = await twilioClient
           .conferences(conferenceSidToUse)
           .fetch()
-          .catch((err) => {
+          .catch(() => {
             console.log(`⚠️ [CONFERENCE] Conference not found: ${conferenceSidToUse}`);
             return null;
           });
