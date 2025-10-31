@@ -57,10 +57,10 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           console.log('✅ [HLS] HLS server already running (24/7 mode) - switching to live broadcast');
         }
         
-        // Stop Auto DJ if playing (live broadcast takes priority!)
+        // Pause Auto DJ if playing (live broadcast takes priority!)
         if (autoDJ && autoDJ.getStatus().playing) {
-          console.log('📴 [AUTO DJ] Stopping Auto DJ - going live!');
-          await autoDJ.stop();
+          console.log('⏸️ [AUTO DJ] Pausing Auto DJ - going live!');
+          await autoDJ.pause(); // Use pause() to save position for resume!
         }
         
         // Mark as live broadcasting

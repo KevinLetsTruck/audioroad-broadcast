@@ -25,6 +25,11 @@ export class AutoDJService extends EventEmitter {
   private playlistPosition = 0;
   private instanceId: string;
   
+  // Pause/Resume support
+  private pausedAt: number = 0; // Seconds into track when paused
+  private startTime: number = 0; // When current track started playing
+  private tempFilePath: string | null = null; // Current temp file
+  
   // Static counter to detect multiple instances
   private static instanceCounter = 0;
   
@@ -58,21 +63,64 @@ export class AutoDJService extends EventEmitter {
   /**
    * Stop Auto DJ
    */
+  /**
+   * Pause Auto DJ (saves position for resume)
+   */
+  async pause(): Promise<void> {
+    console.log(`⏸️ [AUTO DJ ${this.instanceId}] Pausing Auto DJ...`);
+    
+    this.isPlaying = false;
+
+    // Calculate how far into the track we are
+    if (this.startTime > 0) {
+      const elapsedSeconds = Math.floor((Date.now() - this.startTime) / 1000);
+      this.pausedAt += elapsedSeconds;
+      console.log(`   Paused at: ${Math.floor(this.pausedAt / 60)}:${String(Math.floor(this.pausedAt % 60)).padStart(2, '0')}`);
+    }
+
+    // Kill FFmpeg but keep track and temp file
+    if (this.ffmpeg) {
+      console.log(`   Killing FFmpeg process...`);
+      this.ffmpeg.kill('SIGKILL');
+      this.ffmpeg = null;
+      console.log('   ✓ FFmpeg killed');
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    console.log(`✅ [AUTO DJ ${this.instanceId}] Paused - will resume from ${Math.floor(this.pausedAt / 60)}m ${Math.floor(this.pausedAt % 60)}s`);
+  }
+  
+  /**
+   * Stop Auto DJ completely (clears position and temp file)
+   */
   async stop(): Promise<void> {
     console.log(`📴 [AUTO DJ ${this.instanceId}] Stopping Auto DJ...`);
     
     this.isPlaying = false;
     this.currentTrack = null;
+    this.pausedAt = 0; // Reset position
+    this.startTime = 0;
 
-    // CRITICAL: Kill FFmpeg immediately to prevent duplicate segments!
+    // Kill FFmpeg
     if (this.ffmpeg) {
       console.log(`   Killing FFmpeg process (PID: ${this.ffmpeg.pid})...`);
-      this.ffmpeg.kill('SIGKILL'); // Force kill, not graceful SIGTERM
+      this.ffmpeg.kill('SIGKILL');
       this.ffmpeg = null;
       console.log('   ✓ FFmpeg killed');
     }
+    
+    // Clean up temp file
+    if (this.tempFilePath) {
+      try {
+        await unlink(this.tempFilePath);
+        console.log(`   ✓ Temp file deleted`);
+      } catch (e) {
+        // File might already be deleted
+      }
+      this.tempFilePath = null;
+    }
 
-    // Wait a moment for FFmpeg to fully die
     await new Promise(resolve => setTimeout(resolve, 500));
     
     AutoDJService.instanceCounter--;
@@ -142,28 +190,34 @@ export class AutoDJService extends EventEmitter {
    * Play a single track
    */
   private async playTrack(track: any): Promise<void> {
-    let tempFilePath: string | null = null;
-    
     try {
       console.log(`📥 [AUTO DJ] Downloading: ${track.title}`);
       console.log(`   URL: ${track.audioUrl}`);
       console.log(`   Expected duration: ${track.duration} seconds (${Math.floor(track.duration / 60)} minutes)`);
       
-      // Download to TEMP FILE (much more reliable than memory buffer!)
-      tempFilePath = path.join('/tmp', `autodj-${Date.now()}.m4a`);
-      console.log(`   Downloading to temp file: ${tempFilePath}`);
+      // Check if we're resuming this track (already downloaded)
+      const isResuming = this.tempFilePath && this.pausedAt > 0;
       
-      const response = await axios.get(track.audioUrl, {
-        responseType: 'arraybuffer',
-        timeout: 120000, // 2 minute timeout
-        maxContentLength: 500 * 1024 * 1024,
-        maxBodyLength: 500 * 1024 * 1024
-      });
+      if (isResuming) {
+        console.log(`   ⏩ Resuming from ${Math.floor(this.pausedAt / 60)}:${String(Math.floor(this.pausedAt % 60)).padStart(2, '0')} (temp file exists)`);
+      } else {
+        // Download to TEMP FILE (much more reliable than memory buffer!)
+        this.tempFilePath = path.join('/tmp', `autodj-${Date.now()}.m4a`);
+        console.log(`   Downloading to temp file: ${this.tempFilePath}`);
       
-      // Save to temp file
-      await writeFile(tempFilePath, Buffer.from(response.data));
-      const fileSizeMB = (response.data.byteLength / 1024 / 1024).toFixed(1);
-      console.log(`   ✓ Downloaded ${fileSizeMB} MB to temp file`);
+        const response = await axios.get(track.audioUrl, {
+          responseType: 'arraybuffer',
+          timeout: 120000, // 2 minute timeout
+          maxContentLength: 500 * 1024 * 1024,
+          maxBodyLength: 500 * 1024 * 1024
+        });
+        
+        // Save to temp file
+        await writeFile(this.tempFilePath, Buffer.from(response.data));
+        const fileSizeMB = (response.data.byteLength / 1024 / 1024).toFixed(1);
+        console.log(`   ✓ Downloaded ${fileSizeMB} MB to temp file`);
+        this.pausedAt = 0; // Starting from beginning
+      }
       
       return new Promise((resolve, reject) => {
         try {
@@ -172,16 +226,30 @@ export class AutoDJService extends EventEmitter {
           let errorOutput = '';
 
           // FFmpeg reads directly from TEMP FILE at correct speed
-          const ffmpeg = spawn('ffmpeg', [
+          const ffmpegArgs = [
             '-readrate', '1',         // Read input at native frame rate (prevents rushing!)
-            '-i', tempFilePath!,      // Input from temp file  
-            '-f', 'f32le',            // Output as Float32 PCM
-            '-ar', '48000',           // Sample rate to match HLS server
-            '-ac', '2',               // Stereo
-            '-vn',                    // No video
-            '-loglevel', 'warning',   // Less verbose
-            'pipe:1'                  // Output to stdout
-          ]);
+          ];
+          
+          // If resuming, seek to saved position
+          if (this.pausedAt > 0) {
+            ffmpegArgs.push('-ss', this.pausedAt.toString());
+            console.log(`   ⏩ Seeking to ${this.pausedAt} seconds`);
+          }
+          
+          ffmpegArgs.push(
+            '-i', this.tempFilePath!,  // Input from temp file  
+            '-f', 'f32le',             // Output as Float32 PCM
+            '-ar', '48000',            // Sample rate to match HLS server
+            '-ac', '2',                // Stereo
+            '-vn',                     // No video
+            '-loglevel', 'warning',    // Less verbose
+            'pipe:1'                   // Output to stdout
+          );
+          
+          const ffmpeg = spawn('ffmpeg', ffmpegArgs);
+          
+          // Track when this playback started
+          this.startTime = Date.now();
 
           console.log(`   ✓ FFmpeg reading from file`);
 
@@ -213,13 +281,17 @@ export class AutoDJService extends EventEmitter {
           });
 
           ffmpeg.on('exit', async (code) => {
-            // Clean up temp file
-            if (tempFilePath) {
+            // Only clean up temp file if track fully finished (not paused)
+            // If paused, we keep the file for resume
+            if (code === 0 && this.tempFilePath) {
+              // Track finished successfully - clean up
               try {
-                await unlink(tempFilePath);
-                console.log(`   ✓ Temp file deleted: ${tempFilePath}`);
+                await unlink(this.tempFilePath);
+                console.log(`   ✓ Temp file deleted`);
+                this.tempFilePath = null;
+                this.pausedAt = 0; // Reset position for next track
               } catch (unlinkError) {
-                console.warn(`   ⚠️ Could not delete temp file: ${tempFilePath}`);
+                console.warn(`   ⚠️ Could not delete temp file`);
               }
             }
             
