@@ -317,6 +317,7 @@ export async function cleanupOnShutdown(): Promise<void> {
     // Stop Auto DJ
     if (autoDJ) {
       console.log('   Stopping Auto DJ...');
+      autoDJ.removeAllListeners('audio-chunk'); // Remove ALL event listeners!
       await autoDJ.stop();
       autoDJ = null;
     }
@@ -351,6 +352,7 @@ export async function startHLSServerOnBoot(): Promise<void> {
     // CRITICAL: Stop any existing HLS/Auto DJ first (prevents duplicate FFmpeg!)
     if (autoDJ) {
       console.log('🧹 [STARTUP] Stopping existing Auto DJ...');
+      autoDJ.removeAllListeners('audio-chunk'); // Remove ALL event listeners!
       await autoDJ.stop();
       autoDJ = null;
     }
