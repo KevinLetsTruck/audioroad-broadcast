@@ -168,9 +168,12 @@ export class AutoDJService extends EventEmitter {
       // Move to next track
       this.playlistPosition++;
       
-      // Play next track when current finishes
-      if (this.isPlaying) {
+      // Play next track when current finishes (ONLY if still supposed to be playing)
+      // Don't auto-restart if we were paused!
+      if (this.isPlaying && !this.pausedAt) {
         this.playNextTrack();
+      } else if (this.pausedAt > 0) {
+        console.log(`⏸️ [AUTO DJ] Track interrupted (paused at ${this.pausedAt}s) - not auto-restarting`);
       }
 
     } catch (error) {
@@ -300,15 +303,21 @@ export class AutoDJService extends EventEmitter {
               }
             }
             
-            if (code !== 0) {
+            if (code !== 0 && code !== null) {
+              // Code can be null when killed via SIGKILL (pause/stop)
               console.error(`❌ [AUTO DJ] FFmpeg exited with code ${code}`);
               console.error(`   Error output: ${errorOutput}`);
               console.error(`   Chunks processed: ${chunkCount}`);
               reject(new Error(`FFmpeg exit code ${code}`));
-            } else {
+            } else if (code === 0) {
               console.log(`✅ [AUTO DJ] Track finished (${track.title})`);
               console.log(`   Total chunks: ${chunkCount}, Exit code: ${code}`);
               resolve();
+            } else {
+              // code === null (killed by SIGKILL during pause/stop)
+              console.log(`⏸️ [AUTO DJ] Track playback stopped (paused or killed)`);
+              console.log(`   Chunks processed: ${chunkCount}`);
+              resolve(); // Resolve anyway to prevent hanging
             }
           });
 
