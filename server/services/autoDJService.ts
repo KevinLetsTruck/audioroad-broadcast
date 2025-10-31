@@ -257,6 +257,11 @@ export class AutoDJService extends EventEmitter {
           let lastLogTime = Date.now();
           
           ffmpeg.stdout.on('data', (chunk: Buffer) => {
+            // CRITICAL: Only emit if still playing (prevents buffered chunks after pause)
+            if (!this.isPlaying) {
+              return; // Stop emitting immediately when paused
+            }
+            
             chunkCount++;
             
             // Convert Buffer to Float32Array
