@@ -192,6 +192,15 @@ router.get('/', async (req: Request, res: Response) => {
       where.showId = showId as string;
     }
 
+    // First, check total episodes
+    const totalEpisodes = await prisma.episode.count();
+    const episodesWithRecordings = await prisma.episode.count({
+      where: { recordingUrl: { not: null } }
+    });
+    
+    console.log(`📁 [RECORDINGS] Total episodes: ${totalEpisodes}`);
+    console.log(`📁 [RECORDINGS] Episodes with recordings: ${episodesWithRecordings}`);
+
     const episodes = await prisma.episode.findMany({
       where,
       include: {
@@ -206,6 +215,14 @@ router.get('/', async (req: Request, res: Response) => {
     });
 
     console.log(`📁 [RECORDINGS] Fetched ${episodes.length} recordings`);
+    
+    // Log sample of what we found
+    if (episodes.length > 0) {
+      console.log(`   Sample: ${episodes[0].title}, URL: ${episodes[0].recordingUrl?.substring(0, 50)}...`);
+    } else {
+      console.log(`   No recordings found. Have you ended any shows yet?`);
+    }
+    
     res.json(episodes);
   } catch (error) {
     console.error('Error fetching recordings:', error);
