@@ -103,7 +103,8 @@ export class HLSStreamServer extends EventEmitter {
         '-f', 'hls',
         '-hls_time', this.config.segmentDuration.toString(),
         '-hls_list_size', this.config.playlistSize.toString(),
-        '-hls_flags', 'delete_segments+temp_file',
+        // REMOVED delete_segments flag - causes 416 errors when segments delete too fast
+        '-hls_flags', 'temp_file',
         '-hls_segment_type', 'mpegts',
         '-hls_segment_filename', path.join(this.streamPath, 'segment-%03d.ts'),
         '-method', 'PUT',
