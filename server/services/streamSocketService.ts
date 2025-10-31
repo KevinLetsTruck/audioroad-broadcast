@@ -7,9 +7,10 @@
 
 import { Server as SocketIOServer } from 'socket.io';
 import { FFmpegStreamEncoder } from './ffmpegStreamEncoder.js';
-import { HLSStreamServer } from './hlsStreamServer.js';
-import { AutoDJService } from './autoDJService.js';
-import { setHLSServer } from '../routes/stream.js';
+import { io as ioClient } from 'socket.io-client';
+
+// Connection to dedicated streaming server
+let streamingServerSocket: any = null;
 
 interface StreamConfig {
   serverUrl: string;
@@ -24,13 +25,36 @@ interface StreamConfig {
 
 // Store active stream sessions
 const activeRadioStreams = new Map<string, FFmpegStreamEncoder>();
-let hlsServer: HLSStreamServer | null = null;
-let autoDJ: AutoDJService | null = null;
-let autoDJCreationLock = false; // Prevent simultaneous Auto DJ creation
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-let isLiveBroadcasting = false;
+
+// Connect to dedicated streaming server on startup
+function connectToStreamingServer() {
+  const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
+  
+  console.log(`📡 [STREAMING] Connecting to dedicated streaming server: ${streamServerUrl}`);
+  
+  streamingServerSocket = ioClient(streamServerUrl, {
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionAttempts: Infinity
+  });
+  
+  streamingServerSocket.on('connect', () => {
+    console.log('✅ [STREAMING] Connected to dedicated streaming server');
+  });
+  
+  streamingServerSocket.on('disconnect', () => {
+    console.warn('⚠️ [STREAMING] Disconnected from streaming server - will auto-reconnect');
+  });
+  
+  streamingServerSocket.on('connect_error', (error: any) => {
+    console.error('❌ [STREAMING] Connection error:', error.message);
+  });
+}
 
 export function initializeStreamSocketHandlers(io: SocketIOServer): void {
+  // Connect to dedicated streaming server on initialization
+  connectToStreamingServer();
+  
   io.on('connection', (socket) => {
     console.log(`🔌 Client connected for streaming: ${socket.id}`);
 
@@ -40,35 +64,17 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
     socket.on('stream:start', async (config: StreamConfig, callback) => {
       try {
         const mode = config.mode || 'hls';  // Default to HLS (our platform!)
-        console.log(`🎙️ [STREAM] Starting stream in ${mode} mode...`);
+        console.log(`🎙️ [STREAM] Starting live broadcast - forwarding to dedicated streaming server...`);
 
-        // Check if HLS server is already running (24/7 mode)
-        if (!hlsServer) {
-          console.log('🎬 [HLS] HLS server not running, creating new instance...');
-          hlsServer = new HLSStreamServer({
-            segmentDuration: 10,
-            playlistSize: 6,
-            bitrate: config.bitrate
-          });
-          
-          await hlsServer.start();
-          setHLSServer(hlsServer);  // Make available to HTTP routes
-          console.log('✅ [HLS] HLS server started - listeners can tune in at /listen');
+        // Notify dedicated streaming server that live show is starting
+        if (streamingServerSocket && streamingServerSocket.connected) {
+          streamingServerSocket.emit('live-start');
+          console.log('✅ [STREAM] Dedicated streaming server notified - Auto DJ will pause');
         } else {
-          console.log('✅ [HLS] HLS server already running (24/7 mode) - switching to live broadcast');
+          console.warn('⚠️ [STREAM] Cannot notify streaming server (not connected)');
         }
         
-        // DESTROY and recreate Auto DJ to prevent listener accumulation
-        if (autoDJ) {
-          console.log('🧹 [AUTO DJ] Destroying Auto DJ instance before going live...');
-          autoDJ.removeAllListeners(); // Remove ALL listeners
-          await autoDJ.stop(); // Full stop, not pause (temporary fix for distortion)
-          autoDJ = null;
-          console.log('   ✓ Auto DJ destroyed');
-        }
-        
-        // Mark as live broadcasting
-        isLiveBroadcasting = true;
+        // Mark as live broadcasting (tracked by dedicated streaming server now)
 
         // ALSO start Radio.co if mode is 'radio.co'
         if (mode === 'radio.co') {
@@ -163,29 +169,23 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           lastLogTime = now;
         }
         
-        // Send to Radio.co encoder if active
+        // Send to Radio.co encoder if active (optional third-party streaming)
         if (radioCoEncoder) {
           radioCoEncoder.processAudioChunk(float32Data);
         }
         
-        // Send to HLS server if active
-        if (hlsServer && hlsServer.getStatus().streaming) {
-          hlsServer.processAudioChunk(float32Data);
+        // Forward to dedicated streaming server (handles all HLS + Auto DJ)
+        if (streamingServerSocket && streamingServerSocket.connected) {
+          streamingServerSocket.emit('live-audio', float32Data);
         } else {
-          // This is a problem - log once
+          // Log connection issues once
           if (audioChunkCount === 1) {
-            console.error('❌ [STREAM] HLS server not streaming! Audio will not reach listeners.');
-            console.error('   HLS server exists:', !!hlsServer);
-            console.error('   HLS streaming status:', hlsServer ? hlsServer.getStatus() : 'null');
+            console.error('❌ [STREAM] Not connected to dedicated streaming server!');
+            console.error('   Will attempt reconnection automatically...');
           }
         }
         
-        // Warn if no destination
-        if (!radioCoEncoder && (!hlsServer || !hlsServer.getStatus().streaming)) {
-          if (audioChunkCount === 1) {
-            console.warn('⚠️ [STREAM] No active stream destination for audio data');
-          }
-        }
+        // Audio forwarded to dedicated streaming server (always available)
       } catch (error) {
         console.error('❌ [STREAM] Error processing audio chunk:', error);
         socket.emit('stream:error', { message: 'Failed to process audio data' });
@@ -207,56 +207,14 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
       
       // Mark as no longer live
       if (activeRadioStreams.size === 0) {
-        isLiveBroadcasting = false;
-        console.log('📴 [STREAM] No more live broadcasts, transitioning to Auto DJ...');
+        console.log('📴 [STREAM] Live show ended - notifying dedicated streaming server...');
         
-        // KEEP HLS SERVER RUNNING! Start Auto DJ for 24/7 streaming
-        if (hlsServer) {
-          const autoDJStatus = autoDJ?.getStatus();
-          console.log(`   HLS server running: true`);
-          console.log(`   Auto DJ status: ${autoDJStatus ? (autoDJStatus.playing ? 'PLAYING' : 'STOPPED') : 'NOT CREATED'}`);
-          
-          if (!autoDJ || !autoDJStatus || !autoDJStatus.playing) {
-            // CRITICAL: Prevent simultaneous creation with lock
-            if (autoDJCreationLock) {
-              console.warn('⚠️ [AUTO DJ] Creation already in progress - skipping duplicate request');
-              return;
-            }
-            
-            autoDJCreationLock = true;
-            
-            try {
-              console.log('🎵 [AUTO DJ] Starting Auto DJ to fill airtime...');
-              
-              // ALWAYS create fresh instance (prevents listener accumulation)
-              if (autoDJ) {
-                console.log('   Destroying old Auto DJ instance...');
-                autoDJ.removeAllListeners();
-                await autoDJ.stop();
-              }
-              
-              console.log('   Creating FRESH Auto DJ instance...');
-              autoDJ = new AutoDJService();
-              
-              // Wire Auto DJ audio output to HLS server
-              console.log('   Wiring Auto DJ audio to HLS server...');
-              autoDJ.on('audio-chunk', (audioData: Float32Array) => {
-                if (hlsServer && hlsServer.getStatus().streaming) {
-                  hlsServer.processAudioChunk(audioData);
-                }
-              });
-              
-              await autoDJ.start();
-              console.log('✅ [AUTO DJ] Auto DJ started - stream stays alive 24/7!');
-              console.log('   Listeners will now hear Auto DJ content');
-            } finally {
-              autoDJCreationLock = false;
-            }
-          } else {
-            console.log('✅ [AUTO DJ] Auto DJ already playing - no action needed');
-          }
+        // Notify dedicated streaming server that live show ended
+        if (streamingServerSocket && streamingServerSocket.connected) {
+          streamingServerSocket.emit('live-stop');
+          console.log('✅ [STREAM] Dedicated streaming server notified - Auto DJ will resume');
         } else {
-          console.warn('⚠️ [STREAM] HLS server not running - stream will be offline');
+          console.warn('⚠️ [STREAM] Cannot notify streaming server (not connected)');
         }
       }
 
@@ -270,12 +228,11 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
      */
     socket.on('stream:status', (callback) => {
       const radioCoEncoder = activeRadioStreams.get(socket.id);
-      const hlsStatus = hlsServer ? hlsServer.getStatus() : null;
 
       callback({ 
         success: true, 
         radioCo: radioCoEncoder ? radioCoEncoder.getStatus() : null,
-        hls: hlsStatus
+        streamingServer: streamingServerSocket ? streamingServerSocket.connected : false
       });
     });
 
@@ -293,47 +250,13 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         activeRadioStreams.delete(socket.id);
       }
       
-      // If no more live broadcasts, start Auto DJ to keep stream alive
-      // BUT: Check if there's actually a live episode before restarting Auto DJ!
+      // Notify dedicated streaming server on disconnect (for tracking)
       if (activeRadioStreams.size === 0) {
-        // Check database for active episode (prevents Auto DJ restart during temporary disconnects)
-        const { PrismaClient } = await import('@prisma/client');
-        const prisma = new PrismaClient();
+        console.log('📴 [STREAM] Last broadcaster disconnected');
         
-        const liveEpisode = await prisma.episode.findFirst({
-          where: { status: 'live' }
-        });
-        
-        if (liveEpisode) {
-          console.log(`⚠️ [AUTO DJ] Not restarting - Episode ${liveEpisode.id} is still live (temporary socket disconnect)`);
-          return; // Don't restart Auto DJ!
-        }
-        
-        isLiveBroadcasting = false;
-        
-        // Start Auto DJ if HLS server is running
-        if (hlsServer && (!autoDJ || !autoDJ.getStatus().playing)) {
-          console.log('🎵 [AUTO DJ] Last broadcaster disconnected, starting Auto DJ...');
-          
-          // ALWAYS create fresh instance (match nuclear approach)
-          if (autoDJ) {
-            console.log('   Destroying old Auto DJ instance...');
-            autoDJ.removeAllListeners();
-            await autoDJ.stop();
-          }
-          
-          console.log('   Creating FRESH Auto DJ instance...');
-          autoDJ = new AutoDJService();
-          
-          // Wire Auto DJ audio output to HLS server
-          autoDJ.on('audio-chunk', (audioData: Float32Array) => {
-            if (hlsServer && hlsServer.getStatus().streaming) {
-              hlsServer.processAudioChunk(audioData);
-            }
-          });
-          
-          await autoDJ.start();
-          console.log('✅ [AUTO DJ] Auto DJ started - keeping stream alive 24/7!');
+        // Let dedicated streaming server know (it will handle Auto DJ resume)
+        if (streamingServerSocket && streamingServerSocket.connected) {
+          streamingServerSocket.emit('live-stop');
         }
       }
     });
@@ -349,27 +272,18 @@ export async function cleanupOnShutdown(): Promise<void> {
   console.log('🧹 [SHUTDOWN] Cleaning up all streaming processes...');
   
   try {
-    // Stop Auto DJ
-    if (autoDJ) {
-      console.log('   Stopping Auto DJ...');
-      autoDJ.removeAllListeners('audio-chunk'); // Remove ALL event listeners!
-      await autoDJ.stop();
-      autoDJ = null;
-    }
-    
-    // Stop HLS server
-    if (hlsServer) {
-      console.log('   Stopping HLS server...');
-      await hlsServer.stop();
-      hlsServer = null;
-    }
-    
     // Stop all Radio.co streams
     for (const [socketId, encoder] of activeRadioStreams.entries()) {
       console.log(`   Stopping Radio.co stream: ${socketId}`);
       await encoder.stop();
     }
     activeRadioStreams.clear();
+    
+    // Disconnect from dedicated streaming server
+    if (streamingServerSocket) {
+      streamingServerSocket.disconnect();
+      streamingServerSocket = null;
+    }
     
     console.log('✅ [SHUTDOWN] All streaming processes stopped');
   } catch (error) {
@@ -379,57 +293,11 @@ export async function cleanupOnShutdown(): Promise<void> {
 
 /**
  * Start HLS server on boot for 24/7 streaming
+ * NOW HANDLED BY DEDICATED STREAMING MICROSERVICE
+ * This function kept for backwards compatibility but does nothing
  */
 export async function startHLSServerOnBoot(): Promise<void> {
-  console.log('🎬 [STARTUP] Initializing 24/7 HLS streaming server...');
-  
-  try {
-    // CRITICAL: Stop any existing HLS/Auto DJ first (prevents duplicate FFmpeg!)
-    if (autoDJ) {
-      console.log('🧹 [STARTUP] Stopping existing Auto DJ...');
-      autoDJ.removeAllListeners('audio-chunk'); // Remove ALL event listeners!
-      await autoDJ.stop();
-      autoDJ = null;
-    }
-    
-    if (hlsServer) {
-      console.log('🧹 [STARTUP] Stopping existing HLS server...');
-      await hlsServer.stop();
-      hlsServer = null;
-    }
-    
-    // Wait for processes to fully terminate
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    console.log('✅ [STARTUP] Clean slate - starting fresh');
-    
-    // Create HLS server
-    hlsServer = new HLSStreamServer({
-      segmentDuration: 10,
-      playlistSize: 6,
-      bitrate: 128
-    });
-    
-    await hlsServer.start();
-    setHLSServer(hlsServer);
-    console.log('✅ [STARTUP] HLS server started - stream is live at /api/stream/live.m3u8');
-    
-    // Start Auto DJ immediately
-    console.log('🎵 [STARTUP] Starting Auto DJ...');
-    autoDJ = new AutoDJService();
-    
-    // Wire Auto DJ to HLS server
-    autoDJ.on('audio-chunk', (audioData: Float32Array) => {
-      if (hlsServer && hlsServer.getStatus().streaming) {
-        hlsServer.processAudioChunk(audioData);
-      }
-    });
-    
-    await autoDJ.start();
-    console.log('✅ [STARTUP] Auto DJ started - 24/7 streaming is now active!');
-    
-  } catch (error) {
-    console.error('❌ [STARTUP] Failed to start 24/7 streaming:', error);
-    throw error;
-  }
+  // No-op: Streaming handled by dedicated audioroad-streaming-server
+  console.log('ℹ️ [STARTUP] 24/7 streaming handled by dedicated microservice');
 }
 
