@@ -47,7 +47,8 @@ export async function addCallerToHoldConference(
         to: callSid,
         earlyMedia: true,
         endConferenceOnExit: false,
-        beep: false as any,  // Suppress all beeps
+        // Use silent audio URL as workaround - beep:false doesn't always work
+        beep: 'http://twimlets.com/echo?Twiml=%3CResponse%3E%3C%2FResponse%3E' as any,
         // NO COACHING MODE - it causes beeps when changed!
         // Use regular mute instead for silent transitions
         muted: true,
@@ -195,7 +196,8 @@ export async function addHostToConference(
         earlyMedia: true,
         startConferenceOnEnter: 'true' as any,
         endConferenceOnExit: 'true' as any, // Host ending ends conference
-        beep: false as any  // DISABLE ALL BEEPS - Twilio types wrong, needs boolean not string
+        // Use silent audio URL as workaround - beep:false doesn't always work
+        beep: 'http://twimlets.com/echo?Twiml=%3CResponse%3E%3C%2FResponse%3E' as any
       });
 
     console.log(`Host added to conference ${conferenceName}`);

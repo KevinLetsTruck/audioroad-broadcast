@@ -238,9 +238,8 @@ export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', opti
       const conferenceOptions: any = {
         startConferenceOnEnter: options.startConferenceOnEnter !== undefined ? options.startConferenceOnEnter : true,
         endConferenceOnExit: false,
-        beep: false,
-        beepOnEnter: false,
-        beepOnExit: false,
+        // Use silent audio file URL as workaround - beep:false sometimes doesn't work
+        beep: 'http://twimlets.com/echo?Twiml=%3CResponse%3E%3C%2FResponse%3E',
         maxParticipants: 40,
         waitUrl: options.waitUrl || undefined,
         muted: options.muted !== undefined ? options.muted : false,
