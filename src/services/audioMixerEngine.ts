@@ -319,22 +319,30 @@ export class AudioMixerEngine {
     const source = this.sources.get(sourceId);
     if (!source) return;
 
+    console.log(`🗑️ Removing audio source: ${sourceId} (type: ${source.type})`);
+
     // Disconnect all nodes
     try {
       source.sourceNode?.disconnect();
       source.gainNode?.disconnect();
       source.analyserNode?.disconnect();
 
-      // Stop stream tracks if it's a MediaStream
+      // Stop stream tracks if it's a MediaStream (e.g., microphone)
       if (source.stream) {
-        source.stream.getTracks().forEach(track => track.stop());
+        const tracks = source.stream.getTracks();
+        console.log(`🎤 Stopping ${tracks.length} media track(s) for ${sourceId}`);
+        tracks.forEach(track => {
+          console.log(`  - Stopping ${track.kind} track: ${track.label}`);
+          track.stop();
+          console.log(`  ✅ Track stopped: readyState = ${track.readyState}`);
+        });
       }
     } catch (error) {
       console.warn('Error disconnecting source:', error);
     }
 
     this.sources.delete(sourceId);
-    console.log(`➖ Removed audio source: ${sourceId}`);
+    console.log(`✅ Removed audio source: ${sourceId}`);
   }
 
   /**

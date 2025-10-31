@@ -169,8 +169,10 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     console.trace('Destroy mixer called from:'); // Show stack trace
     
     if (mixer) {
+      console.log('🎤 [CONTEXT] Destroying mixer - this will stop all audio sources including microphone');
       await mixer.destroy();
       setMixer(null);
+      console.log('✅ [CONTEXT] Mixer destroyed - microphone should now be OFF');
     }
     if (encoder) {
       await encoder.destroy();
@@ -178,7 +180,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     }
     setAudioSources([]);
     setLevels({});
-    console.log('✅ [CONTEXT] Mixer destroyed');
+    console.log('✅ [CONTEXT] All audio cleanup complete - mic indicator should turn off');
   };
 
   const setVolumeFunc = (sourceId: string, volume: number) => {
