@@ -49,9 +49,17 @@ router.post('/upload', upload.single('recording'), async (req: Request, res: Res
     const timestamp = Date.now();
     const filename = `recordings/${showSlug || 'show'}/${timestamp}-${file.originalname}`;
 
-    // Check if S3 is configured
+    // Check if S3 is configured (need ALL 3 variables!)
     const s3Configured = process.env.S3_BUCKET_NAME && 
-                        (process.env.AWS_ACCESS_KEY_ID || process.env.AWS_REGION);
+                        process.env.AWS_ACCESS_KEY_ID && 
+                        process.env.AWS_SECRET_ACCESS_KEY;
+    
+    console.log('🔍 [S3 CHECK]');
+    console.log(`   S3_BUCKET_NAME: ${process.env.S3_BUCKET_NAME ? 'SET' : 'MISSING'}`);
+    console.log(`   AWS_ACCESS_KEY_ID: ${process.env.AWS_ACCESS_KEY_ID ? 'SET' : 'MISSING'}`);
+    console.log(`   AWS_SECRET_ACCESS_KEY: ${process.env.AWS_SECRET_ACCESS_KEY ? 'SET' : 'MISSING'}`);
+    console.log(`   AWS_REGION: ${process.env.AWS_REGION || 'not set (will use us-east-1)'}`);
+    console.log(`   S3 Configured: ${s3Configured ? 'YES ✓' : 'NO ✗'}`);
 
     if (!s3Configured) {
       console.log('⚠️ S3 not configured, skipping cloud upload (local only)');
