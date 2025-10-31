@@ -218,15 +218,18 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
             if (!autoDJ) {
               console.log('   Creating new Auto DJ instance...');
               autoDJ = new AutoDJService();
+              
+              // Wire Auto DJ audio output to HLS server (ONLY on creation!)
+              console.log('   Wiring Auto DJ audio to HLS server...');
+              autoDJ.on('audio-chunk', (audioData: Float32Array) => {
+                if (hlsServer && hlsServer.getStatus().streaming) {
+                  hlsServer.processAudioChunk(audioData);
+                }
+              });
+            } else {
+              // Auto DJ exists but was stopped - just restart it (listeners already wired)
+              console.log('   Restarting existing Auto DJ instance (listeners already wired)...');
             }
-            
-            // Wire Auto DJ audio output to HLS server
-            console.log('   Wiring Auto DJ audio to HLS server...');
-            autoDJ.on('audio-chunk', (audioData: Float32Array) => {
-              if (hlsServer && hlsServer.getStatus().streaming) {
-                hlsServer.processAudioChunk(audioData);
-              }
-            });
             
             await autoDJ.start();
             console.log('✅ [AUTO DJ] Auto DJ started - stream stays alive 24/7!');
@@ -282,14 +285,17 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           
           if (!autoDJ) {
             autoDJ = new AutoDJService();
+            
+            // Wire Auto DJ audio output to HLS server (ONLY on creation!)
+            autoDJ.on('audio-chunk', (audioData: Float32Array) => {
+              if (hlsServer && hlsServer.getStatus().streaming) {
+                hlsServer.processAudioChunk(audioData);
+              }
+            });
+          } else {
+            // Auto DJ exists but was stopped - just restart (listeners already wired)
+            console.log('   Restarting existing Auto DJ (listeners already wired)...');
           }
-          
-          // Wire Auto DJ audio output to HLS server
-          autoDJ.on('audio-chunk', (audioData: Float32Array) => {
-            if (hlsServer && hlsServer.getStatus().streaming) {
-              hlsServer.processAudioChunk(audioData);
-            }
-          });
           
           await autoDJ.start();
           console.log('✅ [AUTO DJ] Auto DJ started - keeping stream alive 24/7!');
