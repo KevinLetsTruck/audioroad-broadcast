@@ -124,10 +124,13 @@ export class AutoDJService extends EventEmitter {
       console.log(`   URL: ${track.audioUrl}`);
       console.log(`   Expected duration: ${track.duration} seconds`);
       
-      // Download audio file
+      // Download audio file with NO timeout (15 hour track!)
       const response = await axios.get(track.audioUrl, {
         responseType: 'stream',
-        timeout: 30000 // 30 second timeout
+        timeout: 0, // No timeout - track could be 15+ hours!
+        maxRedirects: 5,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
       });
       
       return new Promise((resolve, reject) => {
@@ -146,8 +149,16 @@ export class AutoDJService extends EventEmitter {
             'pipe:1'                  // Output to stdout
           ]);
 
-          // Pipe download to FFmpeg
-          response.data.pipe(ffmpeg.stdin);
+          // Pipe download to FFmpeg and handle errors
+          response.data.on('error', (error: any) => {
+            console.error('❌ [AUTO DJ] Download stream error:', error);
+            reject(error);
+          });
+          
+          response.data.pipe(ffmpeg.stdin).on('error', (error: any) => {
+            console.error('❌ [AUTO DJ] Pipe to FFmpeg error:', error);
+            reject(error);
+          });
 
           // Read FFmpeg output and emit as Float32Array chunks for HLS server
           let lastLogTime = Date.now();
