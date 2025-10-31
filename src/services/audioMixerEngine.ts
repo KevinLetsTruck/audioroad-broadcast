@@ -561,36 +561,44 @@ export class AudioMixerEngine {
    * Clean up and destroy mixer
    */
   async destroy(): Promise<void> {
+    console.log('🧹 [MIXER] Destroying mixer and stopping all audio sources...');
+    
     // Stop monitoring
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
+      console.log('  ✓ Animation frame cancelled');
     }
 
     // Stop recording if active
     if (this.isRecording) {
       try {
         await this.stopRecording();
+        console.log('  ✓ Recording stopped');
       } catch (error) {
-        console.warn('Error stopping recording:', error);
+        console.warn('  ⚠️ Error stopping recording:', error);
       }
     }
 
-    // Remove all sources
+    // CRITICAL: Remove all sources (this stops microphone tracks!)
+    console.log(`  🎤 Removing ${this.sources.size} audio source(s)...`);
     this.sources.forEach((_, id) => this.removeSource(id));
     this.sources.clear();
+    console.log('  ✓ All sources removed and tracks stopped');
 
     // Close audio context
     if (this.audioContext && this.audioContext.state !== 'closed') {
       await this.audioContext.close();
+      console.log('  ✓ Audio context closed');
     }
 
+    // Null out all references
     this.audioContext = null;
     this.masterGain = null;
     this.masterAnalyser = null;
     this.destination = null;
     this.compressor = null;
 
-    console.log('🧹 Audio Mixer destroyed');
+    console.log('✅ [MIXER] Mixer destroyed - microphone should now be OFF');
   }
 }
 
