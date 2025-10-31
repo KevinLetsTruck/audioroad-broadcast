@@ -28,8 +28,8 @@ export async function createEpisodeConference(episodeId: string) {
 }
 
 /**
- * Add caller to conference as "coach" (listen-only)
- * They hear the show but can't speak
+ * Add caller to conference (muted, no coaching mode to avoid beeps)
+ * They join muted - screener/host will unmute when ready
  */
 export async function addCallerToHoldConference(
   callSid: string,
@@ -48,14 +48,15 @@ export async function addCallerToHoldConference(
         earlyMedia: true,
         endConferenceOnExit: false,
         beep: false as any,
-        // Coach mode: can hear but not speak
-        coaching: 'true' as any,
+        // NO COACHING MODE - it causes beeps when changed!
+        // Use regular mute instead for silent transitions
+        muted: true,
         statusCallback: `${process.env.APP_URL}/api/twilio/participant-status`,
         statusCallbackMethod: 'POST',
         statusCallbackEvent: ['joined', 'left', 'muted', 'unmuted']
       });
 
-    console.log(`Caller ${callSid} added to hold queue (coach mode)`);
+    console.log(`Caller ${callSid} added to conference (muted, no coaching mode)`);
 
     // Update call record
     await prisma.call.update({
@@ -74,8 +75,8 @@ export async function addCallerToHoldConference(
 }
 
 /**
- * Promote caller from coach to participant (goes live on-air)
- * Plays tone to indicate they're live
+ * Promote caller to live (unmute only, no coaching mode changes to avoid beeps)
+ * Silent transition - no state changes that trigger tones
  */
 export async function promoteCallerToLive(
   callSid: string,
@@ -88,17 +89,16 @@ export async function promoteCallerToLive(
     // NO TONE - Silent transition to live (removed annoying beep!)
     // await playLiveTone(callSid); // DISABLED - no more annoying tones!
 
-    // Update participant to remove coach mode (silently, no beeps)
+    // Update participant - just unmute (NO coaching mode changes = NO beeps!)
     const participant = await client
       .conferences(conferenceName)
       .participants(callSid)
       .update({
-        coaching: 'false' as any, // Can now speak
-        hold: 'false' as any,
-        muted: 'false' as any
+        muted: false,
+        hold: false
       });
 
-    console.log(`Caller ${callSid} promoted to live`);
+    console.log(`Caller ${callSid} promoted to live (unmuted silently)`);
 
     // Update call record
     await prisma.call.update({
