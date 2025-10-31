@@ -75,11 +75,11 @@ export default function Listen() {
     }
   }, []);
 
-  // Check stream status
+  // Check stream status from dedicated streaming server
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const response = await fetch('/api/stream/status');
+        const response = await fetch('https://audioroad-streaming-server-production.up.railway.app/health');
         const data = await response.json();
         setStreamStatus(data);
       } catch (err) {
@@ -222,7 +222,7 @@ export default function Listen() {
             Your iOS/Android app will use this same stream URL:
           </p>
           <code className="block bg-slate-900 p-2 rounded text-xs text-green-400 mb-3 break-all">
-            {window.location.origin}/api/stream/live.m3u8
+            https://audioroad-streaming-server-production.up.railway.app/live.m3u8
           </code>
           <p className="text-gray-400 text-xs">
             Use AVPlayer (iOS), ExoPlayer (Android), or react-native-video
@@ -233,9 +233,9 @@ export default function Listen() {
         <div className="mt-6 bg-slate-800/50 rounded-lg p-4 border border-slate-700">
           <h3 className="text-gray-400 text-sm font-semibold mb-2">Debug Info</h3>
           <div className="text-xs text-gray-500 space-y-1">
-            <p>• Stream URL: /api/stream/live.m3u8</p>
-            <p>• Segment duration: 2 seconds</p>
-            <p>• Playlist size: 3 segments (6 seconds total)</p>
+            <p>• Stream URL: https://audioroad-streaming-server-production.up.railway.app/live.m3u8</p>
+            <p>• Architecture: Dedicated streaming microservice</p>
+            <p>• Segment duration: 2 seconds (ultra-low latency)</p>
             <p>• Expected latency: 4-6 seconds</p>
             <p>• Auto DJ: Enabled (24/7 streaming)</p>
           </div>
