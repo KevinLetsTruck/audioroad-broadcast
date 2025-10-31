@@ -88,7 +88,7 @@ export async function promoteCallerToLive(
     // NO TONE - Silent transition to live (removed annoying beep!)
     // await playLiveTone(callSid); // DISABLED - no more annoying tones!
 
-    // Update participant to remove coach mode
+    // Update participant to remove coach mode (silently, no beeps)
     const participant = await client
       .conferences(conferenceName)
       .participants(callSid)

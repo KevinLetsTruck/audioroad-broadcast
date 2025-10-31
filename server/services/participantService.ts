@@ -81,7 +81,7 @@ export class ParticipantService {
           } else {
             console.log(`✅ [CONFERENCE] Found participant: ${participant.callSid}`);
             
-            // Unmute the participant using their call SID
+            // Unmute the participant using their call SID (silently)
             await twilioClient
               .conferences(conferenceSidToUse)
               .participants(call.twilioCallSid)
@@ -140,7 +140,7 @@ export class ParticipantService {
       console.log(`   Using conference SID: ${conferenceSid}`);
 
       try {
-        // Mute in Twilio conference (can still hear)
+        // Mute in Twilio conference (can still hear, silently)
         await twilioClient
           .conferences(conferenceSid)
           .participants(call.twilioCallSid)
@@ -223,7 +223,7 @@ export class ParticipantService {
       console.log(`   Using conference SID: ${conferenceSid}`);
 
       try {
-        // Mute in Twilio conference
+        // Mute in Twilio conference (silently)
         await twilioClient
           .conferences(conferenceSid)
           .participants(call.twilioCallSid)
@@ -317,7 +317,7 @@ export class ParticipantService {
           } else {
             console.log(`✅ [CONFERENCE] Found participant: ${participant.callSid}, currently ${participant.muted ? 'MUTED' : 'UNMUTED'}`);
             
-            // Unmute the participant using their call SID
+            // Unmute the participant using their call SID (silently)
             await twilioClient
               .conferences(conferenceSidToUse)
               .participants(call.twilioCallSid)
