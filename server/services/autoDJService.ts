@@ -152,11 +152,25 @@ export class AutoDJService extends EventEmitter {
             'pipe:1'                  // Output to stdout
           ]);
 
-          // Write entire downloaded file to FFmpeg stdin at once
-          const buffer = Buffer.from(response.data);
-          ffmpeg.stdin.write(buffer);
+          // Write entire downloaded file to FFmpeg stdin
+          // Convert ArrayBuffer to Buffer properly
+          const arrayBuffer = response.data as ArrayBuffer;
+          const buffer = Buffer.from(arrayBuffer);
+          
+          console.log(`   Writing ${(buffer.length / 1024 / 1024).toFixed(1)} MB to FFmpeg...`);
+          
+          // Write in chunks to avoid overwhelming stdin
+          const chunkSize = 1024 * 1024; // 1MB chunks
+          let offset = 0;
+          
+          while (offset < buffer.length) {
+            const chunk = buffer.slice(offset, offset + chunkSize);
+            ffmpeg.stdin.write(chunk);
+            offset += chunkSize;
+          }
+          
           ffmpeg.stdin.end(); // Signal end of input
-          console.log(`   ✓ File sent to FFmpeg for decoding`);
+          console.log(`   ✓ Full file sent to FFmpeg (${(buffer.length / 1024 / 1024).toFixed(1)} MB)`);
 
           // Read FFmpeg output and emit as Float32Array chunks for HLS server
           let lastLogTime = Date.now();
