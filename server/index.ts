@@ -35,7 +35,7 @@ import podcastRoutes from './routes/podcast.js';
 
 // Import services
 import { initializeSocketHandlers } from './services/socketService.js';
-import { initializeStreamSocketHandlers } from './services/streamSocketService.js';
+import { initializeStreamSocketHandlers, startHLSServerOnBoot } from './services/streamSocketService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -219,12 +219,22 @@ const startServer = async () => {
     console.log(`🔐 Clerk: ${process.env.CLERK_SECRET_KEY ? 'Configured' : 'Not configured'}`);
     console.log(`🛡️  Security: Helmet enabled, CORS restricted, Input validation active`);
     
-    httpServer.listen(PORT, '0.0.0.0', () => {
+    httpServer.listen(PORT, '0.0.0.0', async () => {
       console.log(`\n✅ Server running on port ${PORT}`);
       console.log(`📊 API available at http://localhost:${PORT}/api`);
       console.log(`🔌 WebSocket available at http://localhost:${PORT}`);
       console.log(`🌐 Frontend proxy: ${process.env.APP_URL || 'http://localhost:5173'}`);
       console.log(`🔒 Security hardening: ACTIVE\n`);
+      
+      // Start 24/7 HLS streaming with Auto DJ
+      console.log('🎵 [STARTUP] Initializing 24/7 streaming...');
+      try {
+        await startHLSServerOnBoot();
+        console.log('✅ [STARTUP] 24/7 streaming active - listeners can tune in!\n');
+      } catch (error) {
+        console.error('⚠️ [STARTUP] Failed to start 24/7 streaming:', error);
+        console.error('   Stream will start when first show goes live\n');
+      }
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

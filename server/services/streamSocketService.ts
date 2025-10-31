@@ -41,9 +41,9 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         const mode = config.mode || 'hls';  // Default to HLS (our platform!)
         console.log(`🎙️ [STREAM] Starting stream in ${mode} mode...`);
 
-        // ALWAYS start HLS server (this is now your primary streaming platform!)
+        // Check if HLS server is already running (24/7 mode)
         if (!hlsServer) {
-          console.log('🎬 [HLS] Creating HLS streaming server (your custom platform)...');
+          console.log('🎬 [HLS] HLS server not running, creating new instance...');
           hlsServer = new HLSStreamServer({
             segmentDuration: 10,
             playlistSize: 6,
@@ -53,6 +53,8 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           await hlsServer.start();
           setHLSServer(hlsServer);  // Make available to HTTP routes
           console.log('✅ [HLS] HLS server started - listeners can tune in at /listen');
+        } else {
+          console.log('✅ [HLS] HLS server already running (24/7 mode) - switching to live broadcast');
         }
         
         // Stop Auto DJ if playing (live broadcast takes priority!)
@@ -260,5 +262,43 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
   });
 
   console.log('🎙️ Stream socket handlers initialized (Radio.co + HLS + Auto DJ support enabled)');
+}
+
+/**
+ * Start HLS server on boot for 24/7 streaming
+ */
+export async function startHLSServerOnBoot(): Promise<void> {
+  console.log('🎬 [STARTUP] Initializing 24/7 HLS streaming server...');
+  
+  try {
+    // Create HLS server
+    hlsServer = new HLSStreamServer({
+      segmentDuration: 10,
+      playlistSize: 6,
+      bitrate: 128
+    });
+    
+    await hlsServer.start();
+    setHLSServer(hlsServer);
+    console.log('✅ [STARTUP] HLS server started - stream is live at /api/stream/live.m3u8');
+    
+    // Start Auto DJ immediately
+    console.log('🎵 [STARTUP] Starting Auto DJ...');
+    autoDJ = new AutoDJService();
+    
+    // Wire Auto DJ to HLS server
+    autoDJ.on('audio-chunk', (audioData: Float32Array) => {
+      if (hlsServer && hlsServer.getStatus().streaming) {
+        hlsServer.processAudioChunk(audioData);
+      }
+    });
+    
+    await autoDJ.start();
+    console.log('✅ [STARTUP] Auto DJ started - 24/7 streaming is now active!');
+    
+  } catch (error) {
+    console.error('❌ [STARTUP] Failed to start 24/7 streaming:', error);
+    throw error;
+  }
 }
 
