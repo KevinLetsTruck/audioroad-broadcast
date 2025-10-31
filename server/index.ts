@@ -208,6 +208,7 @@ const startServer = async () => {
     console.log('🎙️  Starting AudioRoad Broadcast Platform...');
     console.log(`📡 Port: ${PORT}`);
     console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`🔄 Clean start - all FFmpeg processes will be fresh`);
     
     // Validate required environment variables
     console.log('🔐 [SECURITY] Validating environment...');
