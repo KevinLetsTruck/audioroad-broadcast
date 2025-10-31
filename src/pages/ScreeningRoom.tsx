@@ -144,10 +144,31 @@ export default function ScreeningRoom() {
 
     socket.on('call:hungup', async (data) => {
       console.log('📴 Caller hung up event:', data);
+      console.log('   Current active call:', activeCall?.id);
+      console.log('   Hung up call ID:', data.callId);
       
-      // Close form if this is active call
-      if (activeCall && data.callId === activeCall.id) {
-        console.log('🔴 Active call hung up - closing form');
+      // Close form if this is active call (check both callId formats)
+      const isActiveCall = activeCall && (
+        data.callId === activeCall.id || 
+        data.id === activeCall.id ||
+        data.callId === activeCall.twilioCallSid
+      );
+      
+      if (isActiveCall) {
+        console.log('🔴 Active call hung up - closing form and disconnecting');
+        
+        // Disconnect screener audio immediately
+        if (screenerConnected) {
+          try {
+            await broadcast.disconnectCurrentCall();
+            setScreenerConnected(false);
+            console.log('✓ Screener disconnected');
+          } catch (error) {
+            console.error('Error disconnecting screener:', error);
+          }
+        }
+        
+        // Clear the form
         setActiveCall(null);
         setScreenerNotes({
           name: '',
@@ -157,9 +178,9 @@ export default function ScreeningRoom() {
           priority: 'normal',
           notes: ''
         });
-        if (screenerConnected) {
-          await broadcast.disconnectCurrentCall();
-        }
+        
+        // Show alert so screener knows what happened
+        alert('📴 Caller has hung up');
       }
       
       // Always refresh the call list to remove hung up calls
