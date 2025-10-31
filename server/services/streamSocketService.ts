@@ -127,6 +127,10 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
     /**
      * Receive audio data from browser (as Float32Array binary data)
      */
+    // Track audio chunk count for debugging
+    let audioChunkCount = 0;
+    let lastLogTime = Date.now();
+    
     socket.on('stream:audio-data', (data: Float32Array | Buffer) => {
       const radioCoEncoder = activeRadioStreams.get(socket.id);
 
@@ -145,6 +149,16 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           return;
         }
         
+        audioChunkCount++;
+        
+        // Log every 5 seconds to confirm audio is flowing
+        const now = Date.now();
+        if (now - lastLogTime > 5000) {
+          console.log(`🎵 [LIVE STREAM] Received ${audioChunkCount} audio chunks in last 5 seconds`);
+          audioChunkCount = 0;
+          lastLogTime = now;
+        }
+        
         // Send to Radio.co encoder if active
         if (radioCoEncoder) {
           radioCoEncoder.processAudioChunk(float32Data);
@@ -153,11 +167,20 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         // Send to HLS server if active
         if (hlsServer && hlsServer.getStatus().streaming) {
           hlsServer.processAudioChunk(float32Data);
+        } else {
+          // This is a problem - log once
+          if (audioChunkCount === 1) {
+            console.error('❌ [STREAM] HLS server not streaming! Audio will not reach listeners.');
+            console.error('   HLS server exists:', !!hlsServer);
+            console.error('   HLS streaming status:', hlsServer ? hlsServer.getStatus() : 'null');
+          }
         }
         
         // Warn if no destination
         if (!radioCoEncoder && (!hlsServer || !hlsServer.getStatus().streaming)) {
-          console.warn('⚠️ [STREAM] No active stream destination for audio data');
+          if (audioChunkCount === 1) {
+            console.warn('⚠️ [STREAM] No active stream destination for audio data');
+          }
         }
       } catch (error) {
         console.error('❌ [STREAM] Error processing audio chunk:', error);
@@ -181,24 +204,38 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
       // Mark as no longer live
       if (activeRadioStreams.size === 0) {
         isLiveBroadcasting = false;
+        console.log('📴 [STREAM] No more live broadcasts, transitioning to Auto DJ...');
         
         // KEEP HLS SERVER RUNNING! Start Auto DJ for 24/7 streaming
-        if (hlsServer && (!autoDJ || !autoDJ.getStatus().playing)) {
-          console.log('🎵 [AUTO DJ] Live show ended, starting Auto DJ for 24/7 streaming...');
+        if (hlsServer) {
+          const autoDJStatus = autoDJ?.getStatus();
+          console.log(`   HLS server running: true`);
+          console.log(`   Auto DJ status: ${autoDJStatus ? (autoDJStatus.playing ? 'PLAYING' : 'STOPPED') : 'NOT CREATED'}`);
           
-          if (!autoDJ) {
-            autoDJ = new AutoDJService();
-          }
-          
-          // Wire Auto DJ audio output to HLS server
-          autoDJ.on('audio-chunk', (audioData: Float32Array) => {
-            if (hlsServer && hlsServer.getStatus().streaming) {
-              hlsServer.processAudioChunk(audioData);
+          if (!autoDJ || !autoDJStatus || !autoDJStatus.playing) {
+            console.log('🎵 [AUTO DJ] Starting Auto DJ to fill airtime...');
+            
+            if (!autoDJ) {
+              console.log('   Creating new Auto DJ instance...');
+              autoDJ = new AutoDJService();
             }
-          });
-          
-          await autoDJ.start();
-          console.log('✅ [AUTO DJ] Auto DJ started - stream stays alive 24/7!');
+            
+            // Wire Auto DJ audio output to HLS server
+            console.log('   Wiring Auto DJ audio to HLS server...');
+            autoDJ.on('audio-chunk', (audioData: Float32Array) => {
+              if (hlsServer && hlsServer.getStatus().streaming) {
+                hlsServer.processAudioChunk(audioData);
+              }
+            });
+            
+            await autoDJ.start();
+            console.log('✅ [AUTO DJ] Auto DJ started - stream stays alive 24/7!');
+            console.log('   Listeners will now hear Auto DJ content');
+          } else {
+            console.log('✅ [AUTO DJ] Auto DJ already playing - no action needed');
+          }
+        } else {
+          console.warn('⚠️ [STREAM] HLS server not running - stream will be offline');
         }
       }
 
