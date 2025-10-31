@@ -54,8 +54,15 @@ router.post('/upload', upload.single('recording'), async (req: Request, res: Res
                         (process.env.AWS_ACCESS_KEY_ID || process.env.AWS_REGION);
 
     if (!s3Configured) {
-      console.log('⚠️ S3 not configured, skipping upload');
-      // Still update episode with a placeholder
+      console.log('⚠️ S3 not configured, skipping cloud upload (local only)');
+      
+      // Get episode details
+      const episode = await prisma.episode.findUnique({
+        where: { id: episodeId },
+        include: { show: true }
+      });
+      
+      // Update episode with a local placeholder
       await prisma.episode.update({
         where: { id: episodeId },
         data: {
@@ -63,12 +70,17 @@ router.post('/upload', upload.single('recording'), async (req: Request, res: Res
         }
       });
 
+      // Note: Can't add local files to Auto DJ (need accessible URL)
+      // User can manually upload to S3/CDN later if desired
+      console.log('ℹ️ [AUTO DJ] Local recording not added to playlist (needs S3 URL)');
+
       return res.json({
         success: true,
         url: null,
-        message: 'S3 not configured, recording not uploaded',
+        message: 'S3 not configured, recording saved locally only',
         filename,
-        size: file.size
+        size: file.size,
+        addedToPlaylist: false
       });
     }
 
@@ -92,6 +104,12 @@ router.post('/upload', upload.single('recording'), async (req: Request, res: Res
 
       console.log(`✅ Recording uploaded: ${s3Url}`);
 
+      // Get episode details for playlist entry
+      const episode = await prisma.episode.findUnique({
+        where: { id: episodeId },
+        include: { show: true }
+      });
+
       // Update episode with recording URL
       await prisma.episode.update({
         where: { id: episodeId },
@@ -100,11 +118,40 @@ router.post('/upload', upload.single('recording'), async (req: Request, res: Res
         }
       });
 
+      // AUTOMATICALLY add to Auto DJ playlist for 24/7 rebroadcast!
+      if (episode) {
+        const trackTitle = episode.show?.name 
+          ? `${episode.show.name} - ${new Date(episode.date).toLocaleDateString()}`
+          : `Show Recording - ${new Date(episode.date).toLocaleDateString()}`;
+        
+        // Calculate duration (approximate from episode times)
+        const duration = episode.actualEnd && episode.actualStart
+          ? Math.floor((new Date(episode.actualEnd).getTime() - new Date(episode.actualStart).getTime()) / 1000)
+          : 3600; // Default 1 hour if not available
+
+        const playlistTrack = await prisma.playlistTrack.create({
+          data: {
+            title: trackTitle,
+            artist: 'AudioRoad Network',
+            audioUrl: s3Url,
+            duration: duration,
+            fileSize: file.size,
+            category: 'recorded-show',
+            tags: [episode.show?.slug || 'show', episode.show?.name || 'unknown'],
+            sortOrder: Math.floor(Date.now() / 1000), // Use timestamp for chronological order
+            isActive: true
+          }
+        });
+
+        console.log(`🎵 [AUTO DJ] Added recording to playlist: ${playlistTrack.title}`);
+      }
+
       res.json({
         success: true,
         url: s3Url,
         filename,
-        size: file.size
+        size: file.size,
+        addedToPlaylist: !!episode
       });
     } catch (s3Error) {
       console.error('❌ S3 upload failed:', s3Error);
