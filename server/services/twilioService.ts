@@ -239,6 +239,8 @@ export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', opti
         startConferenceOnEnter: options.startConferenceOnEnter !== undefined ? options.startConferenceOnEnter : true,
         endConferenceOnExit: false,
         beep: false,
+        beepOnEnter: false,
+        beepOnExit: false,
         maxParticipants: 40,
         waitUrl: options.waitUrl || undefined,
         muted: options.muted !== undefined ? options.muted : false,

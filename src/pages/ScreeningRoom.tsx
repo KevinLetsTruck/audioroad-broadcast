@@ -267,33 +267,8 @@ export default function ScreeningRoom() {
       // Wait a moment for screener to fully connect to conference
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // UNMUTE the caller so screener can hear them!
-      console.log('🔊 Unmuting caller for screening...');
-      const unmuteResponse = await fetch(`/api/participants/${call.id}/unmute`, { 
-        method: 'PATCH' 
-      });
-      
-      if (!unmuteResponse.ok) {
-        const errorText = await unmuteResponse.text();
-        console.warn('⚠️ Failed to unmute caller:', errorText);
-        console.warn('⚠️ Response status:', unmuteResponse.status);
-        
-        // Retry after another delay
-        console.log('🔄 Retrying unmute after delay...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const retryResponse = await fetch(`/api/participants/${call.id}/unmute`, { 
-          method: 'PATCH' 
-        });
-        
-        if (!retryResponse.ok) {
-          console.error('❌ Failed to unmute caller after retry');
-          alert('Warning: Caller may still be muted. Check console for details.');
-        } else {
-          console.log('✅ Caller unmuted on retry');
-        }
-      } else {
-        console.log('✅ Caller unmuted for screening');
-      }
+      // NOTE: Caller joins unmuted now (set in TwiML) to avoid beeps from unmute operations
+      console.log('✅ Caller already unmuted (joined conference unmuted to avoid beeps)')
     } catch (error) {
       console.error('❌ Error connecting to caller:', error);
       alert('Failed to connect audio. Please try again.');

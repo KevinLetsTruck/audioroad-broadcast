@@ -47,7 +47,7 @@ export async function addCallerToHoldConference(
         to: callSid,
         earlyMedia: true,
         endConferenceOnExit: false,
-        beep: false as any,
+        beep: false as any,  // Suppress all beeps
         // NO COACHING MODE - it causes beeps when changed!
         // Use regular mute instead for silent transitions
         muted: true,

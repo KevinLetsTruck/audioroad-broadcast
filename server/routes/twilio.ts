@@ -205,7 +205,7 @@ router.post('/voice', async (req: Request, res: Response) => {
       startConferenceOnEnter: startConference,
       endConferenceOnExit: false,
       waitUrl: '/api/twilio/wait-music',
-      muted: true  // 🔇 Join MUTED - screener will talk to them first
+      muted: false  // Join UNMUTED to avoid needing to unmute later (which causes beeps)
     });
     
     res.type('text/xml').send(twiml);
@@ -289,7 +289,7 @@ router.post('/incoming-call', verifyTwilioWebhook, async (req: Request, res: Res
       startConferenceOnEnter: startConference,  // Join active conference immediately
       endConferenceOnExit: false,
       waitUrl: '/api/twilio/wait-music',
-      muted: true  // 🔇 Join MUTED - host will unmute when ready
+      muted: false  // Join UNMUTED to avoid needing to unmute later (which causes beeps)
     });
     
     res.type('text/xml').send(twiml);
