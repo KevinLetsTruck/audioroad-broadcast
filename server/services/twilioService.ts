@@ -235,14 +235,10 @@ export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', opti
       // Don't say anything - just connect silently
       const dial = twiml.dial();
       
-      // Merge options but FORCE critical settings
-      // CRITICAL: beep must be explicitly set to false to disable ALL beeps
-      // Twilio TwiML library converts boolean to string in XML
       const conferenceOptions: any = {
         startConferenceOnEnter: options.startConferenceOnEnter !== undefined ? options.startConferenceOnEnter : true,
         endConferenceOnExit: false,
-        beep: false,  // DISABLE ALL BEEPS - Twilio SDK converts boolean to "false" string in TwiML
-        beepOnExit: false,  // Also disable exit beeps explicitly
+        beep: false,
         maxParticipants: 40,
         waitUrl: options.waitUrl || undefined,
         muted: options.muted !== undefined ? options.muted : false,

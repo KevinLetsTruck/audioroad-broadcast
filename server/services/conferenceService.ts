@@ -47,7 +47,7 @@ export async function addCallerToHoldConference(
         to: callSid,
         earlyMedia: true,
         endConferenceOnExit: false,
-        beep: false as any,  // DISABLE ALL BEEPS - Twilio types wrong, needs boolean not string
+        beep: false as any,
         // Coach mode: can hear but not speak
         coaching: 'true' as any,
         statusCallback: `${process.env.APP_URL}/api/twilio/participant-status`,

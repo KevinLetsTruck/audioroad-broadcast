@@ -116,11 +116,8 @@ export class AudioMixerEngine {
       throw new Error('Audio context not initialized');
     }
 
-    // Try multiple constraint strategies to handle OverconstrainedError
     const strategies = [
-      // Strategy 1: Try with exact device ID and all preferred settings
       {
-        name: 'exact-device-with-preferences',
         constraints: {
           deviceId: deviceId && deviceId !== 'default' ? { exact: deviceId } : undefined,
           echoCancellation: true,
@@ -130,9 +127,7 @@ export class AudioMixerEngine {
           channelCount: 1
         }
       },
-      // Strategy 2: Try with ideal device ID (not exact) and preferences
       {
-        name: 'ideal-device-with-preferences',
         constraints: {
           deviceId: deviceId && deviceId !== 'default' ? { ideal: deviceId } : undefined,
           echoCancellation: true,
@@ -142,9 +137,7 @@ export class AudioMixerEngine {
           channelCount: { ideal: 1 }
         }
       },
-      // Strategy 3: Try with just device ID and basic audio quality
       {
-        name: 'device-with-basics',
         constraints: {
           deviceId: deviceId && deviceId !== 'default' ? { ideal: deviceId } : undefined,
           echoCancellation: true,
@@ -152,9 +145,7 @@ export class AudioMixerEngine {
           autoGainControl: true
         }
       },
-      // Strategy 4: Fallback to default with minimal constraints
       {
-        name: 'default-minimal',
         constraints: {
           echoCancellation: true,
           noiseSuppression: true
@@ -166,7 +157,6 @@ export class AudioMixerEngine {
 
     for (const strategy of strategies) {
       try {
-        // Remove undefined values from constraints
         const cleanConstraints: MediaTrackConstraints = {};
         Object.entries(strategy.constraints).forEach(([key, value]) => {
           if (value !== undefined) {
@@ -174,20 +164,12 @@ export class AudioMixerEngine {
           }
         });
 
-        console.log(`🎤 Trying microphone strategy: ${strategy.name}`);
-        if (deviceId && deviceId !== 'default') {
-          console.log(`   Device ID: ${deviceId}`);
-        }
-
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: cleanConstraints
         });
 
-        console.log(`✅ Microphone connected using strategy: ${strategy.name}`);
-        
-        const sourceId = 'host-mic';
         return this.addSource({
-          id: sourceId,
+          id: 'host-mic',
           type: 'host',
           label: 'Host Microphone',
           stream,
@@ -195,29 +177,22 @@ export class AudioMixerEngine {
           muted: false
         });
       } catch (error: any) {
-        console.warn(`⚠️ Strategy "${strategy.name}" failed:`, error.name, error.message);
         lastError = error;
         
-        // If it's a permission error, don't try other strategies
         if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-          throw new Error('Microphone access denied. Please enable microphone permissions in your browser settings.');
+          throw new Error('Microphone access denied. Please enable microphone permissions.');
         }
         
-        // Continue to next strategy for OverconstrainedError
         if (error.name === 'OverconstrainedError') {
           continue;
         }
-        
-        // For other errors, try next strategy
         continue;
       }
     }
 
-    // If all strategies failed
-    console.error('❌ All microphone connection strategies failed');
     throw new Error(
       lastError?.name === 'OverconstrainedError'
-        ? 'Could not access microphone with selected device. Please try selecting a different microphone or use default.'
+        ? 'Could not access microphone with selected device. Please try a different microphone.'
         : 'Microphone access denied. Please enable microphone permissions.'
     );
   }
