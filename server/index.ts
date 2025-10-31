@@ -248,12 +248,30 @@ const startServer = async () => {
 console.log('Initializing server...');
 startServer();
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM signal received: closing HTTP server');
+// Graceful shutdown - CRITICAL for Railway restarts!
+process.on('SIGTERM', async () => {
+  console.log('🛑 SIGTERM signal received: graceful shutdown starting...');
+  
+  try {
+    // Import cleanup function
+    const { cleanupOnShutdown } = await import('./services/streamSocketService.js');
+    
+    // Kill all FFmpeg processes before shutdown
+    await cleanupOnShutdown();
+    console.log('✅ All streaming processes cleaned up');
+  } catch (error) {
+    console.error('⚠️ Error during cleanup:', error);
+  }
+  
   httpServer.close(() => {
-    console.log('HTTP server closed');
+    console.log('✅ HTTP server closed gracefully');
     process.exit(0);
   });
+  
+  // Force exit after 10 seconds if graceful shutdown fails
+  setTimeout(() => {
+    console.error('❌ Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
 });
 

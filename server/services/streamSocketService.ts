@@ -302,6 +302,40 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
 }
 
 /**
+ * Cleanup all streaming processes on shutdown
+ */
+export async function cleanupOnShutdown(): Promise<void> {
+  console.log('🧹 [SHUTDOWN] Cleaning up all streaming processes...');
+  
+  try {
+    // Stop Auto DJ
+    if (autoDJ) {
+      console.log('   Stopping Auto DJ...');
+      await autoDJ.stop();
+      autoDJ = null;
+    }
+    
+    // Stop HLS server
+    if (hlsServer) {
+      console.log('   Stopping HLS server...');
+      await hlsServer.stop();
+      hlsServer = null;
+    }
+    
+    // Stop all Radio.co streams
+    for (const [socketId, encoder] of activeRadioStreams.entries()) {
+      console.log(`   Stopping Radio.co stream: ${socketId}`);
+      await encoder.stop();
+    }
+    activeRadioStreams.clear();
+    
+    console.log('✅ [SHUTDOWN] All streaming processes stopped');
+  } catch (error) {
+    console.error('❌ [SHUTDOWN] Error during cleanup:', error);
+  }
+}
+
+/**
  * Start HLS server on boot for 24/7 streaming
  */
 export async function startHLSServerOnBoot(): Promise<void> {
