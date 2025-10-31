@@ -35,9 +35,24 @@ export class HLSStreamServer extends EventEmitter {
   private streamPath: string;
   private sampleRate = 48000;
   private channels = 2;
+  private instanceId: string; // Track which instance this is
+
+  // Static counter to detect multiple instances
+  private static instanceCounter = 0;
 
   constructor(config: HLSConfig) {
     super();
+    // Track instance
+    HLSStreamServer.instanceCounter++;
+    this.instanceId = `HLS-${HLSStreamServer.instanceCounter}`;
+    
+    console.log(`🆕 [HLS] Creating instance #${HLSStreamServer.instanceCounter} (ID: ${this.instanceId})`);
+    
+    if (HLSStreamServer.instanceCounter > 1) {
+      console.warn(`⚠️ [HLS] WARNING: Multiple HLS instances detected! This will cause duplicate segments!`);
+      console.warn(`   Current count: ${HLSStreamServer.instanceCounter} instances`);
+    }
+    
     // Override config for ultra-low latency
     this.config = {
       segmentDuration: 2,      // 2 seconds (was 10) - much lower latency!
@@ -45,14 +60,14 @@ export class HLSStreamServer extends EventEmitter {
       bitrate: config.bitrate
     };
     this.streamPath = '/tmp/hls-stream';
-    console.log('🎯 [HLS] Configured for LOW LATENCY: 2-sec segments, 3-segment playlist');
+    console.log(`🎯 [HLS ${this.instanceId}] Configured for LOW LATENCY: 2-sec segments, 3-segment playlist`);
   }
 
   /**
    * Start HLS streaming
    */
   async start(): Promise<void> {
-    console.log('🎙️ [HLS] Starting HLS streaming server...');
+    console.log(`🎙️ [HLS ${this.instanceId}] Starting HLS streaming server...`);
     console.log('   Segment duration:', this.config.segmentDuration, 'seconds');
     console.log('   Playlist size:', this.config.playlistSize, 'segments');
     console.log('   Bitrate:', this.config.bitrate, 'kbps');
@@ -256,7 +271,10 @@ export class HLSStreamServer extends EventEmitter {
    * Stop streaming
    */
   async stop(): Promise<void> {
-    console.log('📴 [HLS] Stopping HLS stream...');
+    console.log(`📴 [HLS ${this.instanceId}] Stopping HLS stream...`);
+    
+    HLSStreamServer.instanceCounter--;
+    console.log(`   Instance count after stop: ${HLSStreamServer.instanceCounter}`);
     
     this.isStreaming = false;
 
