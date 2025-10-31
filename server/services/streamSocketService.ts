@@ -26,6 +26,7 @@ interface StreamConfig {
 const activeRadioStreams = new Map<string, FFmpegStreamEncoder>();
 let hlsServer: HLSStreamServer | null = null;
 let autoDJ: AutoDJService | null = null;
+let autoDJCreationLock = false; // Prevent simultaneous Auto DJ creation
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 let isLiveBroadcasting = false;
 
@@ -216,29 +217,41 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           console.log(`   Auto DJ status: ${autoDJStatus ? (autoDJStatus.playing ? 'PLAYING' : 'STOPPED') : 'NOT CREATED'}`);
           
           if (!autoDJ || !autoDJStatus || !autoDJStatus.playing) {
-            console.log('🎵 [AUTO DJ] Starting Auto DJ to fill airtime...');
-            
-            // ALWAYS create fresh instance (prevents listener accumulation)
-            if (autoDJ) {
-              console.log('   Destroying old Auto DJ instance...');
-              autoDJ.removeAllListeners();
-              await autoDJ.stop();
+            // CRITICAL: Prevent simultaneous creation with lock
+            if (autoDJCreationLock) {
+              console.warn('⚠️ [AUTO DJ] Creation already in progress - skipping duplicate request');
+              return;
             }
             
-            console.log('   Creating FRESH Auto DJ instance...');
-            autoDJ = new AutoDJService();
+            autoDJCreationLock = true;
             
-            // Wire Auto DJ audio output to HLS server
-            console.log('   Wiring Auto DJ audio to HLS server...');
-            autoDJ.on('audio-chunk', (audioData: Float32Array) => {
-              if (hlsServer && hlsServer.getStatus().streaming) {
-                hlsServer.processAudioChunk(audioData);
+            try {
+              console.log('🎵 [AUTO DJ] Starting Auto DJ to fill airtime...');
+              
+              // ALWAYS create fresh instance (prevents listener accumulation)
+              if (autoDJ) {
+                console.log('   Destroying old Auto DJ instance...');
+                autoDJ.removeAllListeners();
+                await autoDJ.stop();
               }
-            });
-            
-            await autoDJ.start();
-            console.log('✅ [AUTO DJ] Auto DJ started - stream stays alive 24/7!');
-            console.log('   Listeners will now hear Auto DJ content');
+              
+              console.log('   Creating FRESH Auto DJ instance...');
+              autoDJ = new AutoDJService();
+              
+              // Wire Auto DJ audio output to HLS server
+              console.log('   Wiring Auto DJ audio to HLS server...');
+              autoDJ.on('audio-chunk', (audioData: Float32Array) => {
+                if (hlsServer && hlsServer.getStatus().streaming) {
+                  hlsServer.processAudioChunk(audioData);
+                }
+              });
+              
+              await autoDJ.start();
+              console.log('✅ [AUTO DJ] Auto DJ started - stream stays alive 24/7!');
+              console.log('   Listeners will now hear Auto DJ content');
+            } finally {
+              autoDJCreationLock = false;
+            }
           } else {
             console.log('✅ [AUTO DJ] Auto DJ already playing - no action needed');
           }
