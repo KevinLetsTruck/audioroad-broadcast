@@ -144,6 +144,8 @@ export class AutoDJService extends EventEmitter {
           response.data.pipe(ffmpeg.stdin);
 
           // Read FFmpeg output and emit as Float32Array chunks for HLS server
+          let lastLogTime = Date.now();
+          
           ffmpeg.stdout.on('data', (chunk: Buffer) => {
             chunkCount++;
             
@@ -155,9 +157,11 @@ export class AutoDJService extends EventEmitter {
             // Emit for HLS server to consume
             this.emit('audio-chunk', float32Data);
             
-            // Log progress every 100 chunks (~2 seconds)
-            if (chunkCount % 100 === 0) {
-              console.log(`  🎵 [AUTO DJ] Playing... (${chunkCount} chunks processed)`);
+            // Log progress every 30 seconds (not every 100 chunks - too verbose!)
+            const now = Date.now();
+            if (now - lastLogTime > 30000) {
+              console.log(`  🎵 [AUTO DJ] Playing ${track.title}... (${chunkCount} chunks)`);
+              lastLogTime = now;
             }
           });
 

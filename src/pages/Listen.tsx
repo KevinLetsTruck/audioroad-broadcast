@@ -5,12 +5,74 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import Hls from 'hls.js';
 
 export default function Listen() {
   const audioRef = useRef<HTMLAudioElement>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [streamStatus, setStreamStatus] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Initialize HLS.js for browsers that don't support native HLS (Chrome, Firefox)
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const streamUrl = '/api/stream/live.m3u8';
+
+    // Check if browser natively supports HLS (Safari, iOS)
+    if (audio.canPlayType('application/vnd.apple.mpegurl')) {
+      console.log('✅ Native HLS support detected (Safari/iOS)');
+      audio.src = streamUrl;
+    } 
+    // Use hls.js for browsers that don't support HLS (Chrome, Firefox)
+    else if (Hls.isSupported()) {
+      console.log('✅ Using hls.js for HLS playback');
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: true,
+        backBufferLength: 90
+      });
+      
+      hls.loadSource(streamUrl);
+      hls.attachMedia(audio);
+      
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        console.log('✅ HLS manifest loaded');
+      });
+      
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          console.error('❌ Fatal HLS error:', data);
+          setError(`Stream error: ${data.type}`);
+          
+          switch (data.type) {
+            case Hls.ErrorTypes.NETWORK_ERROR:
+              console.error('Network error, trying to recover...');
+              hls.startLoad();
+              break;
+            case Hls.ErrorTypes.MEDIA_ERROR:
+              console.error('Media error, trying to recover...');
+              hls.recoverMediaError();
+              break;
+            default:
+              console.error('Cannot recover from error');
+              hls.destroy();
+              break;
+          }
+        }
+      });
+      
+      hlsRef.current = hls;
+      
+      return () => {
+        hls.destroy();
+      };
+    } else {
+      setError('HLS not supported in this browser');
+    }
+  }, []);
 
   // Check stream status
   useEffect(() => {
@@ -103,19 +165,17 @@ export default function Listen() {
             )}
           </div>
 
-          {/* Hidden audio element for HLS */}
+          {/* Audio element for HLS (hls.js will attach to this) */}
           <audio
             ref={audioRef}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
             onError={(e) => {
               console.error('Audio error:', e);
-              setError('Stream playback error');
+              setError('Stream playback error - check console for details');
               setIsPlaying(false);
             }}
-          >
-            <source src="/api/stream/live.m3u8" type="application/x-mpegURL" />
-          </audio>
+          />
 
           {/* Play/Pause Button */}
           <div className="flex justify-center">
