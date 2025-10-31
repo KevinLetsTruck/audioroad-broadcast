@@ -57,10 +57,13 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           console.log('✅ [HLS] HLS server already running (24/7 mode) - switching to live broadcast');
         }
         
-        // Pause Auto DJ if playing (live broadcast takes priority!)
-        if (autoDJ && autoDJ.getStatus().playing) {
-          console.log('⏸️ [AUTO DJ] Pausing Auto DJ - going live!');
-          await autoDJ.pause(); // Use pause() to save position for resume!
+        // DESTROY and recreate Auto DJ to prevent listener accumulation
+        if (autoDJ) {
+          console.log('🧹 [AUTO DJ] Destroying Auto DJ instance before going live...');
+          autoDJ.removeAllListeners(); // Remove ALL listeners
+          await autoDJ.stop(); // Full stop, not pause (temporary fix for distortion)
+          autoDJ = null;
+          console.log('   ✓ Auto DJ destroyed');
         }
         
         // Mark as live broadcasting
@@ -215,21 +218,23 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           if (!autoDJ || !autoDJStatus || !autoDJStatus.playing) {
             console.log('🎵 [AUTO DJ] Starting Auto DJ to fill airtime...');
             
-            if (!autoDJ) {
-              console.log('   Creating new Auto DJ instance...');
-              autoDJ = new AutoDJService();
-              
-              // Wire Auto DJ audio output to HLS server (ONLY on creation!)
-              console.log('   Wiring Auto DJ audio to HLS server...');
-              autoDJ.on('audio-chunk', (audioData: Float32Array) => {
-                if (hlsServer && hlsServer.getStatus().streaming) {
-                  hlsServer.processAudioChunk(audioData);
-                }
-              });
-            } else {
-              // Auto DJ exists but was stopped - just restart it (listeners already wired)
-              console.log('   Restarting existing Auto DJ instance (listeners already wired)...');
+            // ALWAYS create fresh instance (prevents listener accumulation)
+            if (autoDJ) {
+              console.log('   Destroying old Auto DJ instance...');
+              autoDJ.removeAllListeners();
+              await autoDJ.stop();
             }
+            
+            console.log('   Creating FRESH Auto DJ instance...');
+            autoDJ = new AutoDJService();
+            
+            // Wire Auto DJ audio output to HLS server
+            console.log('   Wiring Auto DJ audio to HLS server...');
+            autoDJ.on('audio-chunk', (audioData: Float32Array) => {
+              if (hlsServer && hlsServer.getStatus().streaming) {
+                hlsServer.processAudioChunk(audioData);
+              }
+            });
             
             await autoDJ.start();
             console.log('✅ [AUTO DJ] Auto DJ started - stream stays alive 24/7!');
