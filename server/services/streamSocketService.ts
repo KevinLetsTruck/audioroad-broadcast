@@ -281,7 +281,21 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
       }
       
       // If no more live broadcasts, start Auto DJ to keep stream alive
+      // BUT: Check if there's actually a live episode before restarting Auto DJ!
       if (activeRadioStreams.size === 0) {
+        // Check database for active episode (prevents Auto DJ restart during temporary disconnects)
+        const { PrismaClient } = await import('@prisma/client');
+        const prisma = new PrismaClient();
+        
+        const liveEpisode = await prisma.episode.findFirst({
+          where: { status: 'live' }
+        });
+        
+        if (liveEpisode) {
+          console.log(`⚠️ [AUTO DJ] Not restarting - Episode ${liveEpisode.id} is still live (temporary socket disconnect)`);
+          return; // Don't restart Auto DJ!
+        }
+        
         isLiveBroadcasting = false;
         
         // Start Auto DJ if HLS server is running
