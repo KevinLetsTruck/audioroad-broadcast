@@ -58,8 +58,18 @@ export class HLSStreamServer extends EventEmitter {
     console.log('   Bitrate:', this.config.bitrate, 'kbps');
 
     try {
-      // Create temp directory for HLS segments
+      // CRITICAL: Clean out old segments from previous runs!
+      console.log('🧹 [HLS] Cleaning old segment files...');
+      try {
+        await fs.rm(this.streamPath, { recursive: true, force: true });
+        console.log('   ✓ Old segments removed');
+      } catch (cleanError) {
+        console.log('   ℹ️ No old segments to clean (first run)');
+      }
+      
+      // Create fresh temp directory for HLS segments
       await fs.mkdir(this.streamPath, { recursive: true });
+      console.log('   ✓ Fresh segment directory created');
 
       // Start FFmpeg HLS encoder
       await this.startFFmpegHLS();
