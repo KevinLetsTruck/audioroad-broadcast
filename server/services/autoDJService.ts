@@ -154,16 +154,15 @@ export class AutoDJService extends EventEmitter {
           let chunkCount = 0;
           let errorOutput = '';
 
-          // FFmpeg reads directly from TEMP FILE
+          // FFmpeg reads directly from TEMP FILE at correct speed
           const ffmpeg = spawn('ffmpeg', [
+            '-readrate', '1',         // Read input at native frame rate (prevents rushing!)
             '-i', tempFilePath!,      // Input from temp file  
             '-f', 'f32le',            // Output as Float32 PCM
             '-ar', '48000',           // Sample rate to match HLS server
             '-ac', '2',               // Stereo
             '-vn',                    // No video
-            '-acodec', 'pcm_f32le',   // Explicit codec
             '-loglevel', 'warning',   // Less verbose
-            '-bufsize', '512k',       // Buffer size for smooth output
             'pipe:1'                  // Output to stdout
           ]);
 
