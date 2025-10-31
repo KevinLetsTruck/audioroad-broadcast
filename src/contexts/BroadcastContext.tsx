@@ -231,10 +231,17 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
 
       const { token } = await response.json();
 
-      // Create device
+      // Create device with ALL sounds disabled (use silent data URL)
+      const silentSound = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
       const device = new Device(token, {
         enableImprovedSignalingErrorPrecision: true,
-        logLevel: 'error'
+        logLevel: 'error',
+        // DISABLE ALL TWILIO DEVICE SOUNDS - these cause beeps when connecting/disconnecting
+        sounds: {
+          disconnect: silentSound,
+          incoming: silentSound,
+          outgoing: silentSound
+        }
       });
       
       console.log('🎤 [CONTEXT] Twilio Device created (browser handles noise suppression automatically)');
