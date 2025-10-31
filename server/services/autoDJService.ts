@@ -154,15 +154,16 @@ export class AutoDJService extends EventEmitter {
           let chunkCount = 0;
           let errorOutput = '';
 
-          // FFmpeg reads directly from TEMP FILE with proper M4A handling
+          // FFmpeg reads directly from TEMP FILE
           const ffmpeg = spawn('ffmpeg', [
-            '-re',                    // Read at native frame rate (prevents rushing through file!)
             '-i', tempFilePath!,      // Input from temp file  
             '-f', 'f32le',            // Output as Float32 PCM
             '-ar', '48000',           // Sample rate to match HLS server
             '-ac', '2',               // Stereo
             '-vn',                    // No video
-            '-loglevel', 'info',      // Show detailed info to diagnose
+            '-acodec', 'pcm_f32le',   // Explicit codec
+            '-loglevel', 'warning',   // Less verbose
+            '-bufsize', '512k',       // Buffer size for smooth output
             'pipe:1'                  // Output to stdout
           ]);
 
