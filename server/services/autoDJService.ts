@@ -114,16 +114,21 @@ export class AutoDJService extends EventEmitter {
    */
   private async playTrack(track: any): Promise<void> {
     try {
-      console.log(`📥 [AUTO DJ] Downloading: ${track.audioUrl}`);
+      console.log(`📥 [AUTO DJ] Downloading: ${track.title}`);
+      console.log(`   URL: ${track.audioUrl}`);
+      console.log(`   Expected duration: ${track.duration} seconds`);
       
       // Download audio file
       const response = await axios.get(track.audioUrl, {
-        responseType: 'stream'
+        responseType: 'stream',
+        timeout: 30000 // 30 second timeout
       });
       
       return new Promise((resolve, reject) => {
         try {
-          console.log(`🎬 [AUTO DJ] Playing track with FFmpeg...`);
+          console.log(`🎬 [AUTO DJ] Starting FFmpeg for track playback...`);
+          let chunkCount = 0;
+          let errorOutput = '';
 
           // FFmpeg to decode and output PCM
           const ffmpeg = spawn('ffmpeg', [
@@ -131,6 +136,7 @@ export class AutoDJService extends EventEmitter {
             '-f', 'f32le',            // Output as Float32 PCM
             '-ar', '48000',           // Sample rate to match HLS server
             '-ac', '2',               // Stereo
+            '-loglevel', 'warning',   // Show warnings/errors
             'pipe:1'                  // Output to stdout
           ]);
 
@@ -139,6 +145,8 @@ export class AutoDJService extends EventEmitter {
 
           // Read FFmpeg output and emit as Float32Array chunks for HLS server
           ffmpeg.stdout.on('data', (chunk: Buffer) => {
+            chunkCount++;
+            
             // Convert Buffer to Float32Array
             const float32Data = new Float32Array(
               chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength)
@@ -146,15 +154,33 @@ export class AutoDJService extends EventEmitter {
             
             // Emit for HLS server to consume
             this.emit('audio-chunk', float32Data);
+            
+            // Log progress every 100 chunks (~2 seconds)
+            if (chunkCount % 100 === 0) {
+              console.log(`  🎵 [AUTO DJ] Playing... (${chunkCount} chunks processed)`);
+            }
+          });
+
+          // Capture FFmpeg errors
+          ffmpeg.stderr.on('data', (data: Buffer) => {
+            errorOutput += data.toString();
           });
 
           ffmpeg.on('exit', (code) => {
-            console.log(`✅ [AUTO DJ] Track finished (${track.title}), exit code: ${code}`);
-            resolve();
+            if (code !== 0) {
+              console.error(`❌ [AUTO DJ] FFmpeg exited with code ${code}`);
+              console.error(`   Error output: ${errorOutput}`);
+              console.error(`   Chunks processed: ${chunkCount}`);
+              reject(new Error(`FFmpeg exit code ${code}`));
+            } else {
+              console.log(`✅ [AUTO DJ] Track finished (${track.title})`);
+              console.log(`   Total chunks: ${chunkCount}, Exit code: ${code}`);
+              resolve();
+            }
           });
 
           ffmpeg.on('error', (error) => {
-            console.error('❌ [AUTO DJ] FFmpeg error:', error);
+            console.error('❌ [AUTO DJ] FFmpeg spawn error:', error);
             reject(error);
           });
 
@@ -164,8 +190,9 @@ export class AutoDJService extends EventEmitter {
           reject(error);
         }
       });
-    } catch (error) {
-      console.error('❌ [AUTO DJ] Error downloading track:', error);
+    } catch (error: any) {
+      console.error('❌ [AUTO DJ] Error downloading track:', error.message);
+      console.error('   URL:', track.audioUrl);
       throw error;
     }
   }
