@@ -81,8 +81,8 @@ router.get('/:segment', async (req: Request, res: Response) => {
 
     const { segment } = req.params;
     
-    // Validate segment filename (security)
-    if (!/^segment-\d{3}\.ts$/.test(segment)) {
+    // Validate segment filename (security) - now supports both 3-digit and 5-digit
+    if (!/^segment-\d{3,5}\.ts$/.test(segment)) {
       return res.status(400).send('Invalid segment');
     }
 
