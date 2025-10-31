@@ -9,6 +9,12 @@ import { PrismaClient } from '@prisma/client';
 import { EventEmitter } from 'events';
 import { spawn, ChildProcess } from 'child_process';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
+import { promisify } from 'util';
+
+const writeFile = promisify(fs.writeFile);
+const unlink = promisify(fs.unlink);
 
 const prisma = new PrismaClient();
 
@@ -119,32 +125,38 @@ export class AutoDJService extends EventEmitter {
    * Play a single track
    */
   private async playTrack(track: any): Promise<void> {
+    let tempFilePath: string | null = null;
+    
     try {
       console.log(`📥 [AUTO DJ] Downloading: ${track.title}`);
       console.log(`   URL: ${track.audioUrl}`);
       console.log(`   Expected duration: ${track.duration} seconds (${Math.floor(track.duration / 60)} minutes)`);
       
-      // Download ENTIRE file to memory first (prevents stream cutoff issues)
-      console.log(`   Downloading full file...`);
+      // Download to TEMP FILE (much more reliable than memory buffer!)
+      tempFilePath = path.join('/tmp', `autodj-${Date.now()}.m4a`);
+      console.log(`   Downloading to temp file: ${tempFilePath}`);
+      
       const response = await axios.get(track.audioUrl, {
-        responseType: 'arraybuffer', // Download full file, not stream
-        timeout: 120000, // 2 minute download timeout (224MB file)
-        maxRedirects: 5,
-        maxContentLength: 500 * 1024 * 1024, // 500MB max
+        responseType: 'arraybuffer',
+        timeout: 120000, // 2 minute timeout
+        maxContentLength: 500 * 1024 * 1024,
         maxBodyLength: 500 * 1024 * 1024
       });
       
-      console.log(`   ✓ Downloaded ${(response.data.byteLength / 1024 / 1024).toFixed(1)} MB`);
+      // Save to temp file
+      await writeFile(tempFilePath, Buffer.from(response.data));
+      const fileSizeMB = (response.data.byteLength / 1024 / 1024).toFixed(1);
+      console.log(`   ✓ Downloaded ${fileSizeMB} MB to temp file`);
       
       return new Promise((resolve, reject) => {
         try {
-          console.log(`🎬 [AUTO DJ] Decoding with FFmpeg...`);
+          console.log(`🎬 [AUTO DJ] Playing from temp file with FFmpeg...`);
           let chunkCount = 0;
           let errorOutput = '';
 
-          // FFmpeg to decode and output PCM
+          // FFmpeg reads directly from TEMP FILE (much more reliable!)
           const ffmpeg = spawn('ffmpeg', [
-            '-i', 'pipe:0',           // Input from stdin
+            '-i', tempFilePath!,      // Input from temp file  
             '-f', 'f32le',            // Output as Float32 PCM
             '-ar', '48000',           // Sample rate to match HLS server
             '-ac', '2',               // Stereo
@@ -152,25 +164,7 @@ export class AutoDJService extends EventEmitter {
             'pipe:1'                  // Output to stdout
           ]);
 
-          // Write entire downloaded file to FFmpeg stdin
-          // Convert ArrayBuffer to Buffer properly
-          const arrayBuffer = response.data as ArrayBuffer;
-          const buffer = Buffer.from(arrayBuffer);
-          
-          console.log(`   Writing ${(buffer.length / 1024 / 1024).toFixed(1)} MB to FFmpeg...`);
-          
-          // Write in chunks to avoid overwhelming stdin
-          const chunkSize = 1024 * 1024; // 1MB chunks
-          let offset = 0;
-          
-          while (offset < buffer.length) {
-            const chunk = buffer.slice(offset, offset + chunkSize);
-            ffmpeg.stdin.write(chunk);
-            offset += chunkSize;
-          }
-          
-          ffmpeg.stdin.end(); // Signal end of input
-          console.log(`   ✓ Full file sent to FFmpeg (${(buffer.length / 1024 / 1024).toFixed(1)} MB)`);
+          console.log(`   ✓ FFmpeg reading from file`);
 
           // Read FFmpeg output and emit as Float32Array chunks for HLS server
           let lastLogTime = Date.now();
@@ -199,7 +193,17 @@ export class AutoDJService extends EventEmitter {
             errorOutput += data.toString();
           });
 
-          ffmpeg.on('exit', (code) => {
+          ffmpeg.on('exit', async (code) => {
+            // Clean up temp file
+            if (tempFilePath) {
+              try {
+                await unlink(tempFilePath);
+                console.log(`   ✓ Temp file deleted: ${tempFilePath}`);
+              } catch (unlinkError) {
+                console.warn(`   ⚠️ Could not delete temp file: ${tempFilePath}`);
+              }
+            }
+            
             if (code !== 0) {
               console.error(`❌ [AUTO DJ] FFmpeg exited with code ${code}`);
               console.error(`   Error output: ${errorOutput}`);
