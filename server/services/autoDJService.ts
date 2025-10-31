@@ -8,7 +8,6 @@
 import { PrismaClient } from '@prisma/client';
 import { EventEmitter } from 'events';
 import { spawn, ChildProcess } from 'child_process';
-import { PassThrough } from 'stream';
 import axios from 'axios';
 
 const prisma = new PrismaClient();
@@ -17,7 +16,6 @@ export class AutoDJService extends EventEmitter {
   private isPlaying = false;
   private currentTrack: any = null;
   private ffmpeg: ChildProcess | null = null;
-  private outputStream: PassThrough | null = null;
   private playlistPosition = 0;
 
   /**
@@ -47,11 +45,6 @@ export class AutoDJService extends EventEmitter {
     if (this.ffmpeg) {
       this.ffmpeg.kill('SIGTERM');
       this.ffmpeg = null;
-    }
-
-    if (this.outputStream) {
-      this.outputStream.end();
-      this.outputStream = null;
     }
 
     console.log('✅ [AUTO DJ] Auto DJ stopped');
@@ -144,19 +137,19 @@ export class AutoDJService extends EventEmitter {
           // Pipe download to FFmpeg
           response.data.pipe(ffmpeg.stdin);
 
-          // Create output stream for HLS server
-          this.outputStream = new PassThrough();
-          ffmpeg.stdout.pipe(this.outputStream);
+          // Read FFmpeg output and emit as Float32Array chunks for HLS server
+          ffmpeg.stdout.on('data', (chunk: Buffer) => {
+            // Convert Buffer to Float32Array
+            const float32Data = new Float32Array(
+              chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength)
+            );
+            
+            // Emit for HLS server to consume
+            this.emit('audio-chunk', float32Data);
+          });
 
-          // Emit stream for HLS server to consume
-          this.emit('audio-chunk', this.outputStream);
-
-          ffmpeg.on('exit', () => {
-            console.log(`✅ [AUTO DJ] Track finished (${track.title})`);
-            if (this.outputStream) {
-              this.outputStream.end();
-              this.outputStream = null;
-            }
+          ffmpeg.on('exit', (code) => {
+            console.log(`✅ [AUTO DJ] Track finished (${track.title}), exit code: ${code}`);
             resolve();
           });
 
