@@ -179,13 +179,18 @@ export class AutoDJService extends EventEmitter {
     } catch (error) {
       console.error('❌ [AUTO DJ] Error playing track:', error);
       
-      // Try next track after a delay
-      setTimeout(() => {
-        if (this.isPlaying) {
-          this.playlistPosition++;
-          this.playNextTrack();
-        }
-      }, 5000);
+      // Only retry if we're actually supposed to be playing (not paused!)
+      if (this.isPlaying && !this.pausedAt) {
+        console.log('   Retrying next track in 5 seconds...');
+        setTimeout(() => {
+          if (this.isPlaying && !this.pausedAt) {
+            this.playlistPosition++;
+            this.playNextTrack();
+          }
+        }, 5000);
+      } else {
+        console.log('   ⏸️ Not retrying - Auto DJ is paused');
+      }
     }
   }
 
