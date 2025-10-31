@@ -11,7 +11,7 @@ import { createRequire } from 'module';
 
 // Use CommonJS require to load lamejs (works perfectly, avoids ES6 module issues)
 const require = createRequire(import.meta.url);
-// @ts-expect-error - lamejs doesn't have types
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const lamejs = require('lamejs');
 
 console.log('🔍 [DEBUG] lamejs loaded, exports:', Object.keys(lamejs));
