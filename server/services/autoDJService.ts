@@ -23,6 +23,22 @@ export class AutoDJService extends EventEmitter {
   private currentTrack: any = null;
   private ffmpeg: ChildProcess | null = null;
   private playlistPosition = 0;
+  private instanceId: string;
+  
+  // Static counter to detect multiple instances
+  private static instanceCounter = 0;
+  
+  constructor() {
+    super();
+    AutoDJService.instanceCounter++;
+    this.instanceId = `AutoDJ-${AutoDJService.instanceCounter}`;
+    console.log(`🆕 [AUTO DJ] Creating instance #${AutoDJService.instanceCounter} (ID: ${this.instanceId})`);
+    
+    if (AutoDJService.instanceCounter > 1) {
+      console.warn(`⚠️ [AUTO DJ] WARNING: Multiple Auto DJ instances! This causes audio overlap/distortion!`);
+      console.warn(`   Instance count: ${AutoDJService.instanceCounter}`);
+    }
+  }
 
   /**
    * Start Auto DJ
@@ -43,14 +59,14 @@ export class AutoDJService extends EventEmitter {
    * Stop Auto DJ
    */
   async stop(): Promise<void> {
-    console.log('📴 [AUTO DJ] Stopping Auto DJ...');
+    console.log(`📴 [AUTO DJ ${this.instanceId}] Stopping Auto DJ...`);
     
     this.isPlaying = false;
     this.currentTrack = null;
 
     // CRITICAL: Kill FFmpeg immediately to prevent duplicate segments!
     if (this.ffmpeg) {
-      console.log('   Killing FFmpeg process...');
+      console.log(`   Killing FFmpeg process (PID: ${this.ffmpeg.pid})...`);
       this.ffmpeg.kill('SIGKILL'); // Force kill, not graceful SIGTERM
       this.ffmpeg = null;
       console.log('   ✓ FFmpeg killed');
@@ -58,8 +74,9 @@ export class AutoDJService extends EventEmitter {
 
     // Wait a moment for FFmpeg to fully die
     await new Promise(resolve => setTimeout(resolve, 500));
-
-    console.log('✅ [AUTO DJ] Auto DJ stopped - FFmpeg terminated');
+    
+    AutoDJService.instanceCounter--;
+    console.log(`✅ [AUTO DJ ${this.instanceId}] Stopped - Instance count: ${AutoDJService.instanceCounter}`);
   }
 
   /**
