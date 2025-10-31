@@ -227,12 +227,7 @@ const startServer = async () => {
       console.log(`🌐 Frontend proxy: ${process.env.APP_URL || 'http://localhost:5173'}`);
       console.log(`🔒 Security hardening: ACTIVE\n`);
       
-      // 24/7 streaming DISABLED - causing Railway crash loops
-      // HLS stream will start automatically when you begin a live show
-      // To re-enable: uncomment the code below and upgrade Railway plan
-      console.log('ℹ️ [STARTUP] 24/7 Auto DJ disabled - stream starts when show goes live\n');
-      
-      /*
+      // Start 24/7 HLS streaming with Auto DJ
       console.log('🎵 [STARTUP] Initializing 24/7 streaming...');
       try {
         await startHLSServerOnBoot();
@@ -241,7 +236,6 @@ const startServer = async () => {
         console.error('⚠️ [STARTUP] Failed to start 24/7 streaming:', error);
         console.error('   Stream will start when first show goes live\n');
       }
-      */
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
