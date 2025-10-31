@@ -19,7 +19,8 @@ export default function Listen() {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const streamUrl = '/api/stream/live.m3u8';
+    // Stream URL points to dedicated streaming server
+    const streamUrl = 'https://audioroad-streaming-server-production.up.railway.app/live.m3u8';
 
     // Check if browser natively supports HLS (Safari, iOS)
     if (audio.canPlayType('application/vnd.apple.mpegurl')) {

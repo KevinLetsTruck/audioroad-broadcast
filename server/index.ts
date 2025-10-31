@@ -227,15 +227,10 @@ const startServer = async () => {
       console.log(`🌐 Frontend proxy: ${process.env.APP_URL || 'http://localhost:5173'}`);
       console.log(`🔒 Security hardening: ACTIVE\n`);
       
-      // Start 24/7 HLS streaming with Auto DJ
-      console.log('🎵 [STARTUP] Initializing 24/7 streaming...');
-      try {
-        await startHLSServerOnBoot();
-        console.log('✅ [STARTUP] 24/7 streaming active - listeners can tune in!\n');
-      } catch (error) {
-        console.error('⚠️ [STARTUP] Failed to start 24/7 streaming:', error);
-        console.error('   Stream will start when first show goes live\n');
-      }
+      // 24/7 STREAMING MOVED TO DEDICATED MICROSERVICE
+      // audioroad-streaming-server handles HLS and Auto DJ
+      // This app only sends audio to the streaming server via Socket.IO
+      console.log('📡 [STREAMING] Using dedicated streaming server (microservice architecture)\n');
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
