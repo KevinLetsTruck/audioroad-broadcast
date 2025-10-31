@@ -161,7 +161,6 @@ export default function ScreeningRoom() {
         if (screenerConnected) {
           try {
             await broadcast.disconnectCurrentCall();
-            setScreenerConnected(false);
             console.log('✓ Screener disconnected');
           } catch (error) {
             console.error('Error disconnecting screener:', error);
