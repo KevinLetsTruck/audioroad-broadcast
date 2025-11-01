@@ -918,17 +918,11 @@ router.get('/live-show-audio-stream', (req: Request, res: Response) => {
         converterActive = false;
       });
 
-      // Wait a moment for converter to start, then serve
-      setTimeout(() => {
-        if (!mp3Converter || !converterActive) {
-          console.log('⚠️ [LIVE-AUDIO-STREAM] Converter failed to start, sending 503');
-          if (!res.headersSent) {
-            return res.status(503).send('Stream not available');
-          }
-        } else {
-          serveStream(res);
-        }
-      }, 1500);
+      // Start serving immediately (with -re flag, FFmpeg outputs at realtime from start)
+      // No delay needed - audio will start flowing immediately
+      console.log('✅ [HLS→MP3] FFmpeg converter started with -re flag (realtime output)');
+      serveStream(res);
+      return;
       
       return;
     }
