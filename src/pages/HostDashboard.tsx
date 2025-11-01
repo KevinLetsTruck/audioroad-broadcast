@@ -3,6 +3,7 @@ import { io } from 'socket.io-client';
 import ChatPanel from '../components/ChatPanel';
 import ParticipantBoard from '../components/ParticipantBoard';
 import { useBroadcast } from '../contexts/BroadcastContext';
+import { Card, Button, Badge, Tabs, Tab, EmptyState } from '../components/ui';
 
 export default function HostDashboard() {
   const broadcast = useBroadcast(); // Access global mixer
@@ -252,52 +253,41 @@ export default function HostDashboard() {
   };
 
 
-  return (
-    <div className="min-h-screen flex flex-col">
-      {/* Compact Header */}
-      <div className="px-6 py-3 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {isLive && <span className="inline-block w-3 h-3 bg-red-500 rounded-full animate-pulse" />}
-          <h2 className="text-lg font-bold">{activeEpisode?.title || 'Host Control Center'}</h2>
-          {activeEpisode && <span className="text-sm text-gray-500">Episode {activeEpisode.episodeNumber}</span>}
-        </div>
-        <div className="flex items-center gap-4">
-          {/* Tab Switcher */}
-          <div className="flex gap-1 bg-gray-900 rounded p-1">
-            <button
-              onClick={() => setActiveTab('calls')}
-              className={`px-3 py-1 rounded text-xs font-semibold ${
-                activeTab === 'calls' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              Calls
-            </button>
-            <button
-              onClick={() => setActiveTab('documents')}
-              className={`px-3 py-1 rounded text-xs font-semibold ${
-                activeTab === 'documents' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              Documents
-            </button>
-          </div>
+  const tabs: Tab[] = [
+    { id: 'calls', label: 'Calls' },
+    { id: 'documents', label: 'Documents' },
+  ];
 
-          {!isLive && activeEpisode && (
-            <button
-              onClick={startEpisode}
-              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-sm font-semibold"
-            >
-              GO LIVE
-            </button>
-          )}
-          {isLive && (
-            <button
-              onClick={endEpisode}
-              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-sm font-semibold"
-            >
-              END SHOW
-            </button>
-          )}
+  return (
+    <div className="min-h-screen flex flex-col bg-gray-2 dark:bg-dark">
+      {/* TailAdmin Header */}
+      <div className="px-6 py-4 bg-white dark:bg-gray-dark border-b border-stroke dark:border-dark-3 shadow-1">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            {isLive && <Badge variant="danger" dot className="animate-pulse">LIVE</Badge>}
+            <h2 className="text-title-md text-dark dark:text-white">
+              {activeEpisode?.title || 'Host Control Center'}
+            </h2>
+            {activeEpisode && <Badge variant="neutral">Episode {activeEpisode.episodeNumber}</Badge>}
+          </div>
+          <div className="flex items-center gap-3">
+            <Tabs
+              tabs={tabs}
+              defaultTab={activeTab}
+              onChange={(id) => setActiveTab(id as 'calls' | 'documents')}
+              variant="pills"
+            />
+            {!isLive && activeEpisode && (
+              <Button variant="success" size="sm" onClick={startEpisode}>
+                GO LIVE
+              </Button>
+            )}
+            {isLive && (
+              <Button variant="danger" size="sm" onClick={endEpisode}>
+                END SHOW
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -311,21 +301,26 @@ export default function HostDashboard() {
               {activeEpisode ? (
                 <ParticipantBoard episodeId={activeEpisode.id} />
               ) : (
-                <div className="text-center py-16 text-gray-400">
-                  <p>No active episode</p>
-                </div>
+                <Card variant="default" padding="lg">
+                  <EmptyState
+                    title="No Active Episode"
+                    description="Start an episode to manage calls"
+                  />
+                </Card>
               )}
             </div>
           ) : (
             /* Documents Tab - Show AI Analysis */
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold mb-4">Caller Documents & AI Analysis</h3>
+              <h3 className="text-title-sm text-dark dark:text-white mb-4">Caller Documents & AI Analysis</h3>
               
               {allDocuments.length === 0 ? (
-                <div className="text-center py-16 text-gray-400">
-                  <p>No documents uploaded yet</p>
-                  <p className="text-sm mt-2">Documents will appear here when screener uploads them</p>
-                </div>
+                <Card variant="default" padding="lg">
+                  <EmptyState
+                    title="No Documents Yet"
+                    description="Documents will appear here when screener uploads them"
+                  />
+                </Card>
               ) : (
                 allDocuments.map((doc: any) => {
                   // Handle aiAnalysis - might be object or string
