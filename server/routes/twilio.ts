@@ -478,14 +478,20 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
       isLive = false;
     }
 
-    // SIMPLE SOLUTION: Always use hold music until dedicated server DNS issue is resolved
-    // The 24/7 Auto DJ is working perfectly for web/mobile listeners
-    // Phone callers hear hold music (reliable, works 100%)
-    console.log('📻 [WAIT-AUDIO] Using hold music (dedicated server DNS not resolvable from FFmpeg)');
+    // Use audio proxy to solve DNS issue
+    // Proxy fetches from dedicated server (Node fetch works)
+    // FFmpeg reads from local proxy (no DNS needed)
+    console.log('🎙️ [WAIT-AUDIO] Using audio proxy for live show/Auto DJ...');
+    
+    const proxyHlsUrl = `${appUrl}/api/audio-proxy/live.m3u8`;
+    const streamUrl = `${appUrl}/api/twilio/live-show-audio-stream?source=${encodeURIComponent(proxyHlsUrl)}`;
+    
+    console.log(`   Proxy URL: ${proxyHlsUrl} → FFmpeg can resolve this!`);
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+        <Play>${streamUrl}</Play>
+        <Redirect method="POST">${appUrl}/api/twilio/wait-audio</Redirect>
       </Response>`;
     
     res.type('text/xml').send(twiml);
