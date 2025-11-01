@@ -30,17 +30,20 @@ class AudioCacheService extends EventEmitter {
     console.log(`   Source: ${hlsUrl}`);
 
     const args = [
-      '-loglevel', 'error',
-      '-live_start_index', '-1',
+      '-loglevel', 'info',
+      
+      // CRITICAL: Treat as infinite live stream (yesterday's fix!)
+      '-live_start_index', '-1',  // Start from newest segment
       '-i', hlsUrl,
       
-      // Reconnect on errors
+      // Reconnect on errors (continuous streaming)
       '-reconnect', '1',
       '-reconnect_at_eof', '1',
       '-reconnect_streamed', '1',
       '-reconnect_delay_max', '2',
       
-      // Fast processing
+      // Handle errors gracefully (keep going)
+      '-ignore_unknown',
       '-fflags', '+genpts',
       
       // MP3 output
@@ -49,6 +52,7 @@ class AudioCacheService extends EventEmitter {
       '-ar', '44100',
       '-ac', '2',
       '-f', 'mp3',
+      '-write_xing', '0', // Streaming mode (no seek table)
       
       'pipe:1'
     ];
@@ -74,8 +78,9 @@ class AudioCacheService extends EventEmitter {
 
     this.ffmpeg.stderr?.on('data', (data) => {
       const msg = data.toString().trim();
-      if (msg) {
-        console.error('📊 [AUDIO-CACHE FFmpeg]:', msg);
+      // Log important messages only (not every segment read)
+      if (msg && !msg.includes('Opening') && !msg.includes('Skip') && !msg.includes('size=')) {
+        console.log('📊 [AUDIO-CACHE FFmpeg]:', msg);
       }
     });
 
