@@ -53,16 +53,20 @@ export async function generateMp3Chunk(config: ChunkConfig): Promise<PassThrough
   // Pipe FFmpeg output to PassThrough stream
   ffmpeg.stdout.pipe(output);
 
-  // Log errors
+  // Log errors (but don't fail - HLS can have temporary issues)
   ffmpeg.stderr.on('data', (data) => {
     const msg = data.toString().trim();
-    if (msg) {
-      console.error('❌ [MP3-CHUNK FFmpeg]:', msg);
+    if (msg && !msg.includes('Metadata:') && !msg.includes('Stream #')) {
+      console.log('📊 [MP3-CHUNK FFmpeg]:', msg);
     }
   });
 
   ffmpeg.on('exit', (code) => {
-    console.log(`✅ [MP3-CHUNK] Generated (exit code: ${code})`);
+    if (code === 0) {
+      console.log(`✅ [MP3-CHUNK] Generated successfully`);
+    } else {
+      console.warn(`⚠️ [MP3-CHUNK] FFmpeg exited with code: ${code} (continuing anyway)`);
+    }
     output.end();
   });
 
@@ -70,6 +74,15 @@ export async function generateMp3Chunk(config: ChunkConfig): Promise<PassThrough
     console.error('❌ [MP3-CHUNK] FFmpeg error:', error);
     output.end();
   });
+  
+  // Timeout safety - if FFmpeg hangs, end after 15 seconds
+  const timeout = setTimeout(() => {
+    console.warn('⚠️ [MP3-CHUNK] Timeout after 15 seconds, ending chunk');
+    if (ffmpeg && !ffmpeg.killed) {
+      ffmpeg.kill('SIGKILL');
+    }
+    output.end();
+  }, 15000);
 
   return output;
 }
