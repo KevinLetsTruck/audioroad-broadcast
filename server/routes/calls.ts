@@ -260,9 +260,24 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       }
     });
 
-    // Keep participant in waiting state - they'll continue hearing waitUrl audio
-    // No need to put on hold - the conference waitUrl handles audio playback
-    console.log(`ℹ️ Participant remains in conference waiting state - hearing waitUrl audio (position ${finalPosition})`);
+    // Put participant on hold so they hear hold music while waiting for host
+    if (call.twilioCallSid && call.twilioCallSid.startsWith('CA') && call.twilioConferenceSid) {
+      try {
+        const { updateParticipant } = await import('../services/twilioService.js');
+        
+        // Put participant on hold - Twilio plays hold music automatically
+        await updateParticipant(call.twilioConferenceSid, call.twilioCallSid, {
+          hold: true
+        });
+        
+        console.log(`✅ Participant put on HOLD for call ${call.id} - will hear Twilio hold music (position ${finalPosition})`);
+      } catch (twilioError) {
+        console.error('⚠️ Error putting participant on hold:', twilioError);
+        // Continue anyway - call is still approved
+      }
+    } else {
+      console.log(`ℹ️ Cannot put on hold - no Twilio CallSid (position ${finalPosition})`);
+    }
 
     const io = req.app.get('io');
     emitToEpisode(io, call.episodeId, 'call:approved', call);
