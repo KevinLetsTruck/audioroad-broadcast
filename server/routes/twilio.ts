@@ -559,15 +559,9 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     const VoiceResponse = twilio.twiml.VoiceResponse;
     const twiml = new VoiceResponse();
     
-    // Try to play AI-generated welcome message
-    // If it fails, Twilio will skip and continue to Say
+    // Play AI-generated welcome message
+    // The welcome-audio endpoint has its own fallback handling
     twiml.play({}, welcomeAudioUrl);
-    
-    // Fallback: Use Twilio's built-in TTS if audio fails
-    twiml.say({
-      voice: 'alice',
-      language: 'en-US'
-    }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
     
     // Connect to conference with live show audio
     const dial = twiml.dial();
@@ -577,6 +571,7 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
       beep: 'http://twimlets.com/echo?Twiml=%3CResponse%3E%3C%2FResponse%3E',
       maxParticipants: 40,
       waitUrl: liveStreamUrl,
+      waitMethod: 'POST',
       muted: false,
       statusCallback: `${appUrl}/api/twilio/conference-status`,
       statusCallbackEvent: ['start', 'end', 'join', 'leave'],
@@ -757,18 +752,41 @@ router.post('/live-show-audio', async (req: Request, res: Response) => {
   try {
     const { episodeId } = req.query;
     
+    console.log('🎵 [LIVE-AUDIO] Request received for episode:', episodeId);
+    
     // Get HLS stream URL - use internal URL or external streaming server
     const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
     const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
     const hlsPlaylistUrl = `${appUrl}/api/stream/live.m3u8`;
     
-    // Try to start converter - don't check stream status first (let it try)
-    // If converter fails, we'll fall back to hold music
-    console.log('🎵 [LIVE-AUDIO] Attempting to start live show audio converter...');
+    // Check if stream is actually live
+    let isLive = false;
+    try {
+      const statusResponse = await fetch(`${appUrl}/api/stream/status`);
+      const status = await statusResponse.json() as { live?: boolean };
+      isLive = status.live || false;
+      console.log(`   Stream status: ${isLive ? 'LIVE' : 'OFFLINE'}`);
+    } catch (statusError) {
+      console.warn('⚠️ [LIVE-AUDIO] Could not check stream status, assuming offline');
+      isLive = false;
+    }
+
+    // If stream is offline, return hold music immediately
+    if (!isLive) {
+      console.log('⚠️ [LIVE-AUDIO] Stream is offline, using hold music');
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+        <Response>
+          <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+        </Response>`;
+      return res.type('text/xml').send(twiml);
+    }
+
+    // Stream is live, try to start converter
+    console.log('🎵 [LIVE-AUDIO] Stream is live, starting converter...');
 
     // Initialize converter if not already running
     if (!mp3Converter || !converterActive) {
-      console.log('🎵 [LIVE-AUDIO] Starting HLS to MP3 converter...');
+      console.log('🎵 [LIVE-AUDIO] Creating new HLS to MP3 converter...');
       
       mp3Converter = new HLSToMP3Converter({
         hlsPlaylistUrl,
@@ -798,14 +816,15 @@ router.post('/live-show-audio', async (req: Request, res: Response) => {
     // Twilio doesn't support direct streaming, so we'll use a redirect to a GET endpoint
     const mp3StreamUrl = `${appUrl}/api/twilio/live-show-audio-stream`;
     
+    console.log('✅ [LIVE-AUDIO] Returning TwiML with stream URL');
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play loop="0">${mp3StreamUrl}</Play>
+        <Play>${mp3StreamUrl}</Play>
       </Response>`;
     
     res.type('text/xml').send(twiml);
   } catch (error) {
-    console.error('Error streaming live show audio:', error);
+    console.error('❌ [LIVE-AUDIO] Error streaming live show audio:', error);
     // Fallback to hold music
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
