@@ -260,37 +260,9 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       }
     });
 
-    // Put participant on hold so they hear hold music while waiting for host
-    if (call.twilioCallSid && call.twilioCallSid.startsWith('CA')) {
-      try {
-        // Get the ACTUAL Twilio Conference SID from the episode
-        const episode = await prisma.episode.findUnique({
-          where: { id: call.episodeId }
-        });
-        
-        if (!episode || !episode.twilioConferenceSid) {
-          console.warn(`⚠️ No Twilio Conference SID found for episode ${call.episodeId}`);
-          console.log(`   Stored conference name: ${call.twilioConferenceSid}`);
-          console.log(`   Need to wait for conference-start event to set SID`);
-        } else {
-          const { updateParticipant } = await import('../services/twilioService.js');
-          
-          console.log(`📞 Using Conference SID: ${episode.twilioConferenceSid} (not name: ${call.twilioConferenceSid})`);
-          
-          // Put participant on hold - Twilio plays hold music automatically
-          await updateParticipant(episode.twilioConferenceSid, call.twilioCallSid, {
-            hold: true
-          });
-          
-          console.log(`✅ Participant put on HOLD for call ${call.id} - will hear Twilio hold music (position ${finalPosition})`);
-        }
-      } catch (twilioError) {
-        console.error('⚠️ Error putting participant on hold:', twilioError);
-        // Continue anyway - call is still approved
-      }
-    } else {
-      console.log(`ℹ️ Cannot put on hold - no Twilio CallSid (position ${finalPosition})`);
-    }
+    // Keep participant muted - they'll continue hearing conference waitUrl (live show audio)
+    // Don't use hold feature - that plays Twilio's hold music instead of our stream
+    console.log(`✅ Participant remains in conference - will continue hearing waitUrl (live show audio) - position ${finalPosition}`);
 
     const io = req.app.get('io');
     emitToEpisode(io, call.episodeId, 'call:approved', call);
