@@ -479,20 +479,21 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
       isLive = false;
     }
 
-    // SOLUTION: Serve SHORT MP3 chunks (10 seconds each)
-    // Twilio <Play> can buffer and play finite files
-    // Redirect loop requests next chunk → continuous audio
-    console.log('🎙️ [WAIT-AUDIO] Using 10-second MP3 chunks (Twilio compatible)...');
+    // FINAL SOLUTION: Use dedicated streaming server's MP3 stream directly
+    // The dedicated server outputs a REAL MP3 stream (not HLS)
+    // Twilio can play this continuously
+    console.log('🎙️ [WAIT-AUDIO] Using dedicated server MP3 stream...');
     
-    const chunkUrl = `${appUrl}/api/twilio/audio-chunk`;
+    const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
+    const mp3StreamUrl = `${streamServerUrl}/stream.mp3`; // Direct MP3 output
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play>${chunkUrl}</Play>
+        <Play>${mp3StreamUrl}</Play>
         <Redirect method="POST">${appUrl}/api/twilio/wait-audio</Redirect>
       </Response>`;
     
-    console.log(`   Chunk URL: ${chunkUrl} (10-sec finite MP3)`);
+    console.log(`   MP3 Stream: ${mp3StreamUrl}`);
     res.type('text/xml').send(twiml);
     
   } catch (error) {
