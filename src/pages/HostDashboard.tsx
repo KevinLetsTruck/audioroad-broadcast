@@ -285,20 +285,22 @@ export default function HostDashboard() {
             />
 
           {!isLive && activeEpisode && (
-            <button
+            <Button
+              variant="success"
+              size="sm"
               onClick={startEpisode}
-              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-sm font-semibold"
             >
               GO LIVE
-            </button>
+            </Button>
           )}
           {isLive && (
-            <button
+            <Button
+              variant="danger"
+              size="sm"
               onClick={endEpisode}
-              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 rounded text-sm font-semibold"
             >
               END SHOW
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -306,28 +308,32 @@ export default function HostDashboard() {
       {/* Main Layout: Content + Chat Sidebar */}
       <div className="flex-1 flex">
         {/* Left: Main Content */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-6">
           {activeTab === 'calls' ? (
             /* Call Management */
             <div>
               {activeEpisode ? (
                 <ParticipantBoard episodeId={activeEpisode.id} />
               ) : (
-                <div className="text-center py-16 text-gray-400">
-                  <p>No active episode</p>
-                </div>
+                <Card variant="default" padding="lg">
+                  <div className="text-center py-16">
+                    <p className="text-body-md text-body dark:text-body-dark">No active episode</p>
+                  </div>
+                </Card>
               )}
             </div>
           ) : (
-            /* Documents Tab - Show AI Analysis */
+            /* Documents Tab - Show AI Analysis */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold mb-4">Caller Documents & AI Analysis</h3>
+              <h3 className="text-title-md text-dark dark:text-white mb-4">Caller Documents & AI Analysis</h3>
               
               {allDocuments.length === 0 ? (
-                <div className="text-center py-16 text-gray-400">
-                  <p>No documents uploaded yet</p>
-                  <p className="text-sm mt-2">Documents will appear here when screener uploads them</p>
-                </div>
+                <Card variant="default" padding="lg">
+                  <div className="text-center py-16">
+                    <p className="text-body-md text-body dark:text-body-dark">No documents uploaded yet</p>
+                    <p className="text-body-sm text-body dark:text-body-dark mt-2">Documents will appear here when screener uploads them</p>
+                  </div>
+                </Card>
               ) : (
                 allDocuments.map((doc: any) => {
                   // Handle aiAnalysis - might be object or string
@@ -343,20 +349,19 @@ export default function HostDashboard() {
                   const caller = approvedCalls.find(c => c.callerId === doc.callerId);
                   
                   return (
-                    <div key={doc.id} className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                    <Card key={doc.id} variant="default" padding="md">
                       <div className="flex items-center justify-between mb-3">
                         <div>
-                          <h4 className="font-semibold">{caller?.caller?.name || 'Unknown Caller'}</h4>
-                          <p className="text-xs text-gray-500">{doc.fileName}</p>
+                          <h4 className="font-semibold text-dark dark:text-white">{caller?.caller?.name || 'Unknown Caller'}</h4>
+                          <p className="text-xs text-body dark:text-body-dark">{doc.fileName}</p>
                         </div>
-                        <a
-                          href={doc.fileUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-semibold"
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => window.open(doc.fileUrl, '_blank')}
                         >
                           View File
-                        </a>
+                        </Button>
                       </div>
 
                       {analysis ? (
