@@ -239,7 +239,14 @@ const startServer = async () => {
       // 24/7 STREAMING MOVED TO DEDICATED MICROSERVICE
       // audioroad-streaming-server handles HLS and Auto DJ
       // This app only sends audio to the streaming server via Socket.IO
-      console.log('📡 [STREAMING] Using dedicated streaming server (microservice architecture)\n');
+      console.log('📡 [STREAMING] Using dedicated streaming server (microservice architecture)');
+      
+      // Start audio cache for phone callers
+      const appUrl = process.env.APP_URL || `http://localhost:${PORT}`;
+      const cacheHlsUrl = `${appUrl}/api/audio-proxy/live.m3u8`;
+      console.log('🎵 [AUDIO-CACHE] Starting background audio cache for phone callers...');
+      audioCache.start(cacheHlsUrl);
+      console.log('✅ [AUDIO-CACHE] Background caching active\n');
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
