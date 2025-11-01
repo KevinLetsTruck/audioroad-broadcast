@@ -211,6 +211,32 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Call not found' });
     }
 
+    // Calculate queue position: count approved calls not yet on-air, ordered by approvedAt
+    const approvedCalls = await prisma.call.findMany({
+      where: {
+        episodeId: existingCall.episodeId,
+        status: 'approved',
+        endedAt: null,
+        onAirAt: null // Not yet on-air
+      },
+      orderBy: { approvedAt: 'asc' }
+    });
+
+    // Count on-air calls
+    const onAirCalls = await prisma.call.count({
+      where: {
+        episodeId: existingCall.episodeId,
+        status: 'on-air',
+        endedAt: null
+      }
+    });
+
+    // Queue position = approved count + 1 (this call) - on-air count
+    const queuePosition = approvedCalls.length + 1 - onAirCalls;
+    const finalPosition = Math.max(1, queuePosition); // Ensure at least 1
+
+    console.log(`📊 Queue position calculated: ${finalPosition} (approved: ${approvedCalls.length + 1}, on-air: ${onAirCalls})`);
+
     // Update call to approved status
     const call = await prisma.call.update({
       where: { id: req.params.id },
@@ -234,12 +260,32 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       }
     });
 
+    // Play queue message to caller using Twilio API
+    if (call.twilioCallSid && call.twilioCallSid.startsWith('CA') && call.twilioConferenceSid) {
+      try {
+        const { updateParticipant } = await import('../services/twilioService.js');
+        const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+        const queueMessageUrl = `${appUrl}/api/twilio/queue-message?callId=${call.id}&position=${finalPosition}`;
+        
+        // Use announceUrl to play the queue message
+        await updateParticipant(call.twilioConferenceSid, call.twilioCallSid, {
+          announceUrl: queueMessageUrl,
+          announceMethod: 'POST'
+        });
+        
+        console.log(`✅ Queue message queued for call ${call.id} (position ${finalPosition})`);
+      } catch (twilioError) {
+        console.error('⚠️ Error playing queue message:', twilioError);
+        // Continue anyway - call is still approved
+      }
+    }
+
     const io = req.app.get('io');
     emitToEpisode(io, call.episodeId, 'call:approved', call);
 
-    console.log(`✅ Call approved: ${call.id} - Participant in HOLD state (conference: ${call.twilioConferenceSid})`);
+    console.log(`✅ Call approved: ${call.id} - Participant in HOLD state (conference: ${call.twilioConferenceSid}, queue position: ${finalPosition})`);
 
-    res.json(call);
+    res.json({ ...call, queuePosition: finalPosition });
   } catch (error) {
     console.error('Error approving call:', error);
     res.status(500).json({ error: 'Failed to approve call' });

@@ -4,9 +4,16 @@ import { generateAccessToken, generateTwiML } from '../services/twilioService.js
 import { processRecording } from '../services/audioService.js';
 import { verifyTwilioWebhook } from '../middleware/twilioWebhookAuth.js';
 import { z } from 'zod';
+import { HLSToMP3Converter } from '../services/hlsToMp3Converter.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+// Singleton converter instance for live show audio
+// Multiple callers can share the same MP3 stream via PassThrough streams
+let mp3Converter: HLSToMP3Converter | null = null;
+let converterActive = false;
+let activeStreamClients = 0;
 
 // Validation schemas
 const tokenRequestSchema = z.object({
@@ -169,13 +176,6 @@ router.post('/voice', async (req: Request, res: Response) => {
       }
     }
 
-    // Put caller in conference
-    const conferenceName = `episode-${activeEpisode.id}`;
-    
-    // Check if conference is active (episode is live)
-    const startConference = activeEpisode.conferenceActive || true;
-    console.log('📞 Sending web caller to conference:', conferenceName, 'Conference active:', startConference);
-    
     // Update call record with conference info if we created one
     if (callerId) {
       const call = await prisma.call.findFirst({
@@ -191,7 +191,7 @@ router.post('/voice', async (req: Request, res: Response) => {
         await prisma.call.update({
           where: { id: call.id },
           data: {
-            twilioConferenceSid: conferenceName,
+            twilioConferenceSid: `episode-${activeEpisode.id}`,
             participantState: 'screening', // Will be picked up by screener
             isMutedInConference: true // Starts muted
           }
@@ -200,13 +200,14 @@ router.post('/voice', async (req: Request, res: Response) => {
       }
     }
     
-    const twiml = generateTwiML('conference', { 
-      conferenceName,
-      startConferenceOnEnter: startConference,
-      endConferenceOnExit: false,
-      waitUrl: '/api/twilio/wait-music',
-      muted: false  // Join UNMUTED to avoid needing to unmute later (which causes beeps)
-    });
+    console.log('📞 Redirecting web caller to welcome message for episode:', activeEpisode.id);
+    
+    // Redirect to welcome message endpoint which will play message and connect to conference
+    const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+        <Redirect method="POST">${appUrl}/api/twilio/welcome-message</Redirect>
+      </Response>`;
     
     res.type('text/xml').send(twiml);
 
@@ -254,11 +255,8 @@ router.post('/incoming-call', verifyTwilioWebhook, async (req: Request, res: Res
       return;
     }
 
-    // Send caller to conference
-    const conferenceName = `episode-${activeEpisode.id}`;
-    
-    // Create call record with conference info
-    await prisma.call.create({
+    // Create call record first
+    const call = await prisma.call.create({
       data: {
         episodeId: activeEpisode.id,
         callerId: caller.id,
@@ -266,7 +264,7 @@ router.post('/incoming-call', verifyTwilioWebhook, async (req: Request, res: Res
         status: 'queued',
         incomingAt: new Date(),
         queuedAt: new Date(),
-        twilioConferenceSid: conferenceName,
+        twilioConferenceSid: `episode-${activeEpisode.id}`,
         participantState: 'screening', // Will be picked up by screener
         isMutedInConference: true // Starts muted
       }
@@ -275,22 +273,20 @@ router.post('/incoming-call', verifyTwilioWebhook, async (req: Request, res: Res
     // Emit socket event
     const io = req.app.get('io');
     io.to(`episode:${activeEpisode.id}`).emit('call:incoming', {
+      callId: call.id,
       callerId: caller.id,
       twilioCallSid: CallSid,
       phoneNumber: From
     });
 
-    // Conference is active if episode is live
-    const startConference = activeEpisode.conferenceActive || true;
-    console.log('📞 Sending phone caller to conference:', conferenceName, 'Conference active:', startConference);
+    console.log('📞 Redirecting phone caller to welcome message for episode:', activeEpisode.id);
     
-    const twiml = generateTwiML('conference', { 
-      conferenceName,
-      startConferenceOnEnter: startConference,  // Join active conference immediately
-      endConferenceOnExit: false,
-      waitUrl: '/api/twilio/wait-music',
-      muted: false  // Join UNMUTED to avoid needing to unmute later (which causes beeps)
-    });
+    // Redirect to welcome message endpoint which will play message and connect to conference
+    const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+        <Redirect method="POST">${appUrl}/api/twilio/welcome-message</Redirect>
+      </Response>`;
     
     res.type('text/xml').send(twiml);
 
@@ -454,6 +450,341 @@ router.post('/wait-music', (req: Request, res: Response) => {
   
   res.type('text/xml').send(twiml);
 });
+
+/**
+ * POST /api/twilio/welcome-message - Welcome message with show name and redirect to conference
+ */
+router.post('/welcome-message', async (req: Request, res: Response) => {
+  try {
+    const { CallSid } = req.body;
+    
+    if (!CallSid) {
+      return res.status(400).send('Call SID required');
+    }
+
+    // Find call by Twilio CallSid to get episode
+    const call = await prisma.call.findFirst({
+      where: { twilioCallSid: CallSid },
+      include: { 
+        episode: {
+          include: { show: true }
+        }
+      },
+      orderBy: { incomingAt: 'desc' }
+    });
+
+    if (!call || !call.episode) {
+      // Fallback: try to find active episode
+      const activeEpisode = await prisma.episode.findFirst({
+        where: { status: 'live' },
+        include: { show: true },
+        orderBy: { scheduledStart: 'desc' }
+      });
+      
+      if (!activeEpisode) {
+        return res.status(404).send('No active episode found');
+      }
+      
+      const showName = activeEpisode.show.name || 'AudioRoad Network';
+      const conferenceName = `episode-${activeEpisode.id}`;
+      const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+      const liveStreamUrl = `${appUrl}/api/twilio/live-show-audio?episodeId=${activeEpisode.id}`;
+      
+      const twiml = generateTwiML('welcome', {
+        showName,
+        conferenceName,
+        startConferenceOnEnter: activeEpisode.conferenceActive || true,
+        liveStreamUrl,
+        muted: false
+      });
+
+      return res.type('text/xml').send(twiml);
+    }
+
+    const episode = call.episode;
+    const showName = episode.show.name || 'AudioRoad Network';
+    const conferenceName = `episode-${episode.id}`;
+    const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+    
+    // Generate live stream URL (will be proxied/converted for Twilio)
+    const liveStreamUrl = `${appUrl}/api/twilio/live-show-audio?episodeId=${episode.id}`;
+    
+    const twiml = generateTwiML('welcome', {
+      showName,
+      conferenceName,
+      startConferenceOnEnter: episode.conferenceActive || true,
+      liveStreamUrl,
+      muted: false
+    });
+
+    res.type('text/xml').send(twiml);
+  } catch (error) {
+    console.error('Error generating welcome message:', error);
+    res.status(500).send('Error processing welcome message');
+  }
+});
+
+/**
+ * POST /api/twilio/queue-message - Queue position message after screening approval
+ * Called by Twilio when announceUrl is triggered for a participant
+ */
+router.post('/queue-message', async (req: Request, res: Response) => {
+  try {
+    // Twilio sends CallSid in request body when using announceUrl
+    const CallSid = req.body.CallSid || req.query.CallSid;
+    const callId = req.query.callId as string;
+    const position = req.query.position as string;
+    
+    // Find call by CallSid (from Twilio) or callId (from query param)
+    let call = null;
+    
+    if (CallSid) {
+      call = await prisma.call.findFirst({
+        where: { twilioCallSid: CallSid as string },
+        include: { episode: true },
+        orderBy: { incomingAt: 'desc' }
+      });
+    } else if (callId) {
+      call = await prisma.call.findUnique({
+        where: { id: callId },
+        include: { episode: true }
+      });
+    }
+
+    if (!call) {
+      // Fallback: use hold music
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+        <Response>
+          <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+        </Response>`;
+      return res.type('text/xml').send(twiml);
+    }
+
+    // Calculate queue position if not provided
+    let queuePosition = position ? parseInt(position) : 1;
+    
+    if (!position) {
+      // Recalculate position
+      const approvedCalls = await prisma.call.findMany({
+        where: {
+          episodeId: call.episodeId,
+          status: 'approved',
+          endedAt: null,
+          onAirAt: null
+        },
+        orderBy: { approvedAt: 'asc' }
+      });
+      
+      const onAirCalls = await prisma.call.count({
+        where: {
+          episodeId: call.episodeId,
+          status: 'on-air',
+          endedAt: null
+        }
+      });
+      
+      queuePosition = Math.max(1, approvedCalls.length - onAirCalls);
+    }
+
+    const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+    const liveStreamUrl = `${appUrl}/api/twilio/live-show-audio?episodeId=${call.episodeId}`;
+    
+    const twiml = generateTwiML('queue-message', {
+      position: queuePosition,
+      liveStreamUrl
+    });
+
+    res.type('text/xml').send(twiml);
+  } catch (error) {
+    console.error('Error generating queue message:', error);
+    // Fallback to hold music
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+        <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+      </Response>`;
+    res.type('text/xml').send(twiml);
+  }
+});
+
+/**
+ * POST /api/twilio/live-show-audio - Stream live show audio as MP3 for Twilio
+ * Converts HLS stream to MP3 format that Twilio can consume
+ */
+router.post('/live-show-audio', async (req: Request, res: Response) => {
+  try {
+    const { episodeId } = req.query;
+    
+    // Get HLS stream URL - use internal URL or external streaming server
+    const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+    const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
+    const hlsPlaylistUrl = `${appUrl}/api/stream/live.m3u8`;
+    
+    // Check if stream is live
+    try {
+      const statusResponse = await fetch(`${appUrl}/api/stream/status`);
+      const status = await statusResponse.json();
+      
+      if (!status.live) {
+        console.log('⚠️ [LIVE-AUDIO] Stream is offline, using hold music');
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+          <Response>
+            <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+          </Response>`;
+        return res.type('text/xml').send(twiml);
+      }
+    } catch (statusError) {
+      console.warn('⚠️ [LIVE-AUDIO] Could not check stream status:', statusError);
+    }
+
+    // Initialize converter if not already running
+    if (!mp3Converter || !converterActive) {
+      console.log('🎵 [LIVE-AUDIO] Starting HLS to MP3 converter...');
+      
+      mp3Converter = new HLSToMP3Converter({
+        hlsPlaylistUrl,
+        bitrate: 128,
+        sampleRate: 44100,
+        channels: 2
+      });
+
+      // Start converter (this creates the underlying FFmpeg process)
+      mp3Converter.start(); // First client stream, but converter is shared
+      converterActive = true;
+
+      mp3Converter.on('error', (error) => {
+        console.error('❌ [LIVE-AUDIO] Converter error:', error);
+        converterActive = false;
+        mp3Converter = null;
+      });
+
+      mp3Converter.on('stopped', () => {
+        console.log('📴 [LIVE-AUDIO] Converter stopped');
+        converterActive = false;
+        mp3Converter = null;
+      });
+    }
+
+    // For Twilio, we need to return TwiML that references the MP3 stream URL
+    // Twilio doesn't support direct streaming, so we'll use a redirect to a GET endpoint
+    const mp3StreamUrl = `${appUrl}/api/twilio/live-show-audio-stream`;
+    
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+        <Play loop="0">${mp3StreamUrl}</Play>
+      </Response>`;
+    
+    res.type('text/xml').send(twiml);
+  } catch (error) {
+    console.error('Error streaming live show audio:', error);
+    // Fallback to hold music
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+        <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+      </Response>`;
+    res.type('text/xml').send(twiml);
+  }
+});
+
+/**
+ * GET /api/twilio/live-show-audio-stream - Stream MP3 audio directly
+ * This endpoint streams MP3 data from the HLS converter
+ * Multiple callers can access this same stream (Twilio handles buffering)
+ */
+router.get('/live-show-audio-stream', (req: Request, res: Response) => {
+  try {
+    // Ensure converter is running
+    if (!mp3Converter || !converterActive) {
+      // Try to start converter
+      const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+      const hlsPlaylistUrl = `${appUrl}/api/stream/live.m3u8`;
+      
+      console.log('🎵 [LIVE-AUDIO-STREAM] Starting converter...');
+      
+      mp3Converter = new HLSToMP3Converter({
+        hlsPlaylistUrl,
+        bitrate: 128,
+        sampleRate: 44100,
+        channels: 2
+      });
+
+      // Start converter (first client stream)
+      mp3Converter.start();
+      converterActive = true;
+      activeStreamClients = 0;
+
+      mp3Converter.on('error', (error) => {
+        console.error('❌ [LIVE-AUDIO-STREAM] Converter error:', error);
+        converterActive = false;
+      });
+
+      mp3Converter.on('stopped', () => {
+        console.log('📴 [LIVE-AUDIO-STREAM] Converter stopped');
+        converterActive = false;
+      });
+
+      // Wait a moment for converter to start
+      setTimeout(() => {
+        if (!mp3Converter || !converterActive) {
+          console.log('⚠️ [LIVE-AUDIO-STREAM] Converter failed to start, sending 503');
+          return res.status(503).send('Stream not available');
+        }
+        serveStream(res);
+      }, 1000);
+      
+      return;
+    }
+
+    serveStream(res);
+
+  } catch (error) {
+    console.error('Error serving MP3 stream:', error);
+    if (!res.headersSent) {
+      res.status(500).send('Error serving stream');
+    }
+  }
+});
+
+/**
+ * Helper function to serve the MP3 stream to a client
+ */
+function serveStream(res: Response): void {
+  if (!mp3Converter || !converterActive) {
+    return res.status(503).send('Stream not available');
+  }
+
+  activeStreamClients++;
+  console.log(`📡 [LIVE-AUDIO-STREAM] Client connected (total: ${activeStreamClients})`);
+
+  // Set headers for MP3 streaming
+  res.setHeader('Content-Type', 'audio/mpeg');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Transfer-Encoding', 'chunked');
+  res.setHeader('Connection', 'keep-alive');
+
+  // Get a client stream from the shared converter
+  const clientStream = mp3Converter.start();
+  
+  // Pipe client stream to response
+  clientStream.pipe(res);
+
+  // Handle client disconnect
+  res.on('close', () => {
+    activeStreamClients--;
+    console.log(`📴 [LIVE-AUDIO-STREAM] Client disconnected (remaining: ${activeStreamClients})`);
+    clientStream.destroy();
+  });
+
+  // Handle errors
+  clientStream.on('error', (error) => {
+    console.error('❌ [LIVE-AUDIO-STREAM] Stream error:', error);
+    if (!res.headersSent) {
+      res.status(500).send('Stream error');
+    }
+    clientStream.destroy();
+  });
+}
 
 /**
  * POST /api/twilio/screener-connect - Connect screener to caller via conference

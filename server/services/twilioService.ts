@@ -218,7 +218,7 @@ export async function downloadRecording(recordingSid: string): Promise<Buffer> {
 /**
  * Generate TwiML for incoming calls
  */
-export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', options: any = {}) {
+export function generateTwiML(action: 'queue' | 'conference' | 'voicemail' | 'welcome' | 'queue-message', options: any = {}) {
   const VoiceResponse = twilio.twiml.VoiceResponse;
   const twiml = new VoiceResponse();
 
@@ -249,6 +249,47 @@ export function generateTwiML(action: 'queue' | 'conference' | 'voicemail', opti
       };
       
       dial.conference(conferenceOptions, options.conferenceName);
+      break;
+    }
+
+    case 'welcome': {
+      // Welcome message with show name
+      const showName = options.showName || 'AudioRoad Network';
+      twiml.say({
+        voice: 'alice',
+        language: 'en-US'
+      }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
+      
+      // Redirect to conference with live show audio
+      const dial = twiml.dial();
+      const conferenceOptions: any = {
+        startConferenceOnEnter: options.startConferenceOnEnter !== undefined ? options.startConferenceOnEnter : true,
+        endConferenceOnExit: false,
+        beep: 'http://twimlets.com/echo?Twiml=%3CResponse%3E%3C%2FResponse%3E',
+        maxParticipants: 40,
+        waitUrl: options.liveStreamUrl || '/api/twilio/live-show-audio',
+        muted: options.muted !== undefined ? options.muted : false,
+        statusCallback: `${process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app'}/api/twilio/conference-status`,
+        statusCallbackEvent: ['start', 'end', 'join', 'leave'],
+        statusCallbackMethod: 'POST'
+      };
+      
+      dial.conference(conferenceOptions, options.conferenceName);
+      break;
+    }
+
+    case 'queue-message': {
+      // Queue position message
+      const position = options.position || 1;
+      const positionText = position === 1 ? 'first' : position === 2 ? 'second' : position === 3 ? 'third' : `number ${position}`;
+      
+      twiml.say({
+        voice: 'alice',
+        language: 'en-US'
+      }, `The host will be with you shortly. You are ${positionText} in the queue.`);
+      
+      // Return to conference - caller will continue hearing live show audio
+      // The conference waitUrl already streams live show audio
       break;
     }
 
