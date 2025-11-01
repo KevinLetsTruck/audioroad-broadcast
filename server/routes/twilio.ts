@@ -478,31 +478,14 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
       isLive = false;
     }
 
-    // If stream is offline, return hold music
-    if (!isLive) {
-      console.log('📻 [WAIT-AUDIO] Returning hold music (stream offline)');
-      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-        <Response>
-          <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
-        </Response>`;
-      return res.type('text/xml').send(twiml);
-    }
-
-    // Stream is live - use DEDICATED streaming server (yesterday's working architecture)
-    console.log('🎙️ [WAIT-AUDIO] Stream is LIVE, using dedicated streaming server...');
-    
-    const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
-    const dedicatedStreamUrl = `${streamServerUrl}/live.m3u8`;
-    
-    console.log(`   Dedicated server HLS: ${dedicatedStreamUrl}`);
-    
-    // Use HLS to MP3 conversion from dedicated server
-    const streamUrl = `${appUrl}/api/twilio/live-show-audio-stream?source=${encodeURIComponent(dedicatedStreamUrl)}`;
+    // SIMPLE SOLUTION: Always use hold music until dedicated server DNS issue is resolved
+    // The 24/7 Auto DJ is working perfectly for web/mobile listeners
+    // Phone callers hear hold music (reliable, works 100%)
+    console.log('📻 [WAIT-AUDIO] Using hold music (dedicated server DNS not resolvable from FFmpeg)');
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play>${streamUrl}</Play>
-        <Redirect method="POST">${appUrl}/api/twilio/wait-audio</Redirect>
+        <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
       </Response>`;
     
     res.type('text/xml').send(twiml);
