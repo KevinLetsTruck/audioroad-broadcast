@@ -919,11 +919,12 @@ router.get('/live-show-audio-stream', (req: Request, res: Response) => {
   try {
     // Ensure converter is running
     if (!mp3Converter || !converterActive) {
-      // Try to start converter
-      const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
-      const hlsPlaylistUrl = `${appUrl}/api/stream/live.m3u8`;
+      // Try to start converter - use STREAMING SERVER URL
+      const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
+      const hlsPlaylistUrl = `${streamServerUrl}/live.m3u8`; // Streaming server, not local
       
       console.log('🎵 [LIVE-AUDIO-STREAM] Converter not running, starting...');
+      console.log(`   Using HLS URL: ${hlsPlaylistUrl}`);
       
       mp3Converter = new HLSToMP3Converter({
         hlsPlaylistUrl,
