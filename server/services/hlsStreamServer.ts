@@ -124,18 +124,19 @@ export class HLSStreamServer extends EventEmitter {
         '-ar', '48000',
         '-ac', '2',
         
-        // HLS output
-        '-f', 'hls',
-        '-hls_time', this.config.segmentDuration.toString(),
-        '-hls_list_size', this.config.playlistSize.toString(),
-        // Use append_list to prevent segment number wraparound issues
-        '-hls_flags', 'append_list+temp_file',
-        '-hls_segment_type', 'mpegts',
-        // Use larger segment counter (%05d = 00000-99999) to prevent wraparound
-        '-hls_segment_filename', path.join(this.streamPath, 'segment-%05d.ts'),
-        '-start_number', '0',
-        '-hls_allow_cache', '0',
-        path.join(this.streamPath, 'playlist.m3u8')
+      // HLS output (LIVE STREAMING MODE - no end tag)
+      '-f', 'hls',
+      '-hls_time', this.config.segmentDuration.toString(),
+      '-hls_list_size', this.config.playlistSize.toString(),
+      // CRITICAL: Remove append_list which adds EXT-X-ENDLIST
+      // Use delete_segments to remove old segments and keep playlist live
+      '-hls_flags', 'delete_segments+omit_endlist',
+      '-hls_segment_type', 'mpegts',
+      // Use larger segment counter (%05d = 00000-99999) to prevent wraparound
+      '-hls_segment_filename', path.join(this.streamPath, 'segment-%05d.ts'),
+      '-start_number', '0',
+      '-hls_allow_cache', '0',
+      path.join(this.streamPath, 'playlist.m3u8')
       ];
 
       console.log('🎬 [HLS] FFmpeg HLS args:', args.join(' '));
