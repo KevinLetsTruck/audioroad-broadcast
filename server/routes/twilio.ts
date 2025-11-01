@@ -478,31 +478,21 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
       isLive = false;
     }
 
-    // TWILIO LIMITATION: <Play> doesn't support infinite MP3 streams
-    // It buffers the entire file before playing → never starts with infinite stream
-    // 
-    // SOLUTION: Use Radio.co listen URL if available (proven to work)
-    // Otherwise use hold music until we can fix this properly
+    // Use Twilio MediaStreams API (WebSocket-based streaming)
+    // Supports infinite audio streams (unlike <Play> which buffers entire file)
+    console.log('🎙️ [WAIT-AUDIO] Using Twilio MediaStreams (WebSocket streaming)...');
     
-    const radioCoListenUrl = process.env.RADIO_CO_LISTEN_URL;
+    const mediaStreamUrl = `wss://${appUrl.replace('https://', '')}/api/twilio/media-stream`;
     
-    if (radioCoListenUrl) {
-      console.log('🎙️ [WAIT-AUDIO] Using Radio.co stream (proven working)');
-      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-        <Response>
-          <Play>${radioCoListenUrl}</Play>
-          <Redirect method="POST">${appUrl}/api/twilio/wait-audio</Redirect>
-        </Response>`;
-      return res.type('text/xml').send(twiml);
-    }
-    
-    // Fallback: Hold music (Twilio's <Play> works with finite MP3 files)
-    console.log('📻 [WAIT-AUDIO] Using hold music (Twilio <Play> limitation with infinite streams)');
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+        <Start>
+          <Stream url="${mediaStreamUrl}" />
+        </Start>
+        <Pause length="3600" />
       </Response>`;
     
+    console.log(`   MediaStream URL: ${mediaStreamUrl}`);
     res.type('text/xml').send(twiml);
     
   } catch (error) {

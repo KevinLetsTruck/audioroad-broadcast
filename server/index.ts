@@ -38,6 +38,7 @@ import audioProxyRoutes from './routes/audioProxy.js';
 // Import services
 import { initializeSocketHandlers } from './services/socketService.js';
 import { initializeStreamSocketHandlers, startHLSServerOnBoot } from './services/streamSocketService.js';
+import { initializeMediaStreamWebSocket } from './routes/mediaStream.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,6 +60,9 @@ const io = new SocketIOServer(httpServer, {
 // Initialize socket handlers
 initializeSocketHandlers(io);
 initializeStreamSocketHandlers(io);
+
+// Initialize Twilio MediaStreams WebSocket
+initializeMediaStreamWebSocket(httpServer);
 
 // Make io available to routes
 app.set('io', io);
