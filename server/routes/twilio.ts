@@ -5,6 +5,7 @@ import { processRecording } from '../services/audioService.js';
 import { verifyTwilioWebhook } from '../middleware/twilioWebhookAuth.js';
 import { z } from 'zod';
 import { HLSToMP3Converter } from '../services/hlsToMp3Converter.js';
+import { generateMp3Chunk } from '../services/hlsToMp3Chunk.js';
 import { generateWelcomeMessage, generateQueueMessage } from '../services/aiMessageService.js';
 import { generateSpeech } from '../services/textToSpeechService.js';
 import twilio from 'twilio';
@@ -478,21 +479,20 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
       isLive = false;
     }
 
-    // Use Twilio MediaStreams API (WebSocket-based streaming)
-    // Supports infinite audio streams (unlike <Play> which buffers entire file)
-    console.log('🎙️ [WAIT-AUDIO] Using Twilio MediaStreams (WebSocket streaming)...');
+    // SOLUTION: Serve SHORT MP3 chunks (10 seconds each)
+    // Twilio <Play> can buffer and play finite files
+    // Redirect loop requests next chunk → continuous audio
+    console.log('🎙️ [WAIT-AUDIO] Using 10-second MP3 chunks (Twilio compatible)...');
     
-    const mediaStreamUrl = `wss://${appUrl.replace('https://', '')}/api/twilio/media-stream`;
+    const chunkUrl = `${appUrl}/api/twilio/audio-chunk`;
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Start>
-          <Stream url="${mediaStreamUrl}" />
-        </Start>
-        <Pause length="3600" />
+        <Play>${chunkUrl}</Play>
+        <Redirect method="POST">${appUrl}/api/twilio/wait-audio</Redirect>
       </Response>`;
     
-    console.log(`   MediaStream URL: ${mediaStreamUrl}`);
+    console.log(`   Chunk URL: ${chunkUrl} (10-sec finite MP3)`);
     res.type('text/xml').send(twiml);
     
   } catch (error) {
@@ -1076,6 +1076,49 @@ router.post('/sms', async (req: Request, res: Response) => {
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response></Response>`;
     res.type('text/xml').send(twiml);
+  }
+});
+
+/**
+ * GET /api/twilio/audio-chunk - Generate 10-second MP3 chunk
+ * Twilio <Play> can handle finite files, redirect loop for continuous playback
+ */
+router.get('/audio-chunk', async (req: Request, res: Response) => {
+  try {
+    console.log('🎵 [AUDIO-CHUNK] Generating 10-second MP3 chunk...');
+    
+    const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+    const hlsUrl = `${appUrl}/api/audio-proxy/live.m3u8`;
+    
+    const chunkStream = await generateMp3Chunk({
+      hlsUrl,
+      durationSeconds: 10
+    });
+    
+    // Set headers for MP3 playback
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Accept-Ranges', 'none');
+    
+    // Pipe chunk to response
+    chunkStream.pipe(res);
+    
+    chunkStream.on('end', () => {
+      console.log('✅ [AUDIO-CHUNK] Chunk delivered to caller');
+    });
+    
+    chunkStream.on('error', (error) => {
+      console.error('❌ [AUDIO-CHUNK] Error:', error);
+      if (!res.headersSent) {
+        res.status(500).send('Error generating audio chunk');
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ [AUDIO-CHUNK] Error:', error);
+    if (!res.headersSent) {
+      res.status(500).send('Error generating audio chunk');
+    }
   }
 });
 
