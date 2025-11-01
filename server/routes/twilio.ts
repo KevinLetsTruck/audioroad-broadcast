@@ -479,21 +479,19 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
       isLive = false;
     }
 
-    // FINAL SOLUTION: Use dedicated streaming server's MP3 stream directly
-    // The dedicated server outputs a REAL MP3 stream (not HLS)
-    // Twilio can play this continuously
-    console.log('🎙️ [WAIT-AUDIO] Using dedicated server MP3 stream...');
+    // Chunks work but stop after ~30 seconds
+    // Keep using chunks but make redirect interval shorter to recover faster
+    console.log('🎙️ [WAIT-AUDIO] Using 5-second MP3 chunks (faster recovery)...');
     
-    const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
-    const mp3StreamUrl = `${streamServerUrl}/stream.mp3`; // Direct MP3 output
+    const chunkUrl = `${appUrl}/api/twilio/audio-chunk?duration=5`;
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play>${mp3StreamUrl}</Play>
+        <Play>${chunkUrl}</Play>
         <Redirect method="POST">${appUrl}/api/twilio/wait-audio</Redirect>
       </Response>`;
     
-    console.log(`   MP3 Stream: ${mp3StreamUrl}`);
+    console.log(`   Chunk URL: ${chunkUrl} (5-sec chunks for faster recovery)`);
     res.type('text/xml').send(twiml);
     
   } catch (error) {
@@ -1086,14 +1084,15 @@ router.post('/sms', async (req: Request, res: Response) => {
  */
 router.get('/audio-chunk', async (req: Request, res: Response) => {
   try {
-    console.log('🎵 [AUDIO-CHUNK] Generating 10-second MP3 chunk...');
+    const duration = parseInt(req.query.duration as string) || 10;
+    console.log(`🎵 [AUDIO-CHUNK] Generating ${duration}-second MP3 chunk...`);
     
     const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
     const hlsUrl = `${appUrl}/api/audio-proxy/live.m3u8`;
     
     const chunkStream = await generateMp3Chunk({
       hlsUrl,
-      durationSeconds: 10
+      durationSeconds: duration
     });
     
     // Set headers for MP3 playback
