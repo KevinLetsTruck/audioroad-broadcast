@@ -488,46 +488,37 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
       return res.type('text/xml').send(twiml);
     }
 
-    // Stream is live - verify local HLS playlist is accessible
-    console.log('🎙️ [WAIT-AUDIO] Stream is LIVE, verifying local HLS playlist...');
+    // Stream is live - use the best available audio source
+    console.log('🎙️ [WAIT-AUDIO] Stream is LIVE, selecting audio source...');
     
-    const localHlsUrl = `${appUrl}/api/stream/live.m3u8`; // LOCAL HLS server
+    // OPTION 1: Radio.co public listener URL (SIMPLEST - recommended)
+    // This is the same MP3 stream that web listeners hear
+    // Add RADIO_CO_LISTEN_URL to Railway environment variables
+    // Example: https://streaming.radio.co/sXXXXXXX/listen
+    const radioCoUrl = process.env.RADIO_CO_LISTEN_URL;
     
-    console.log(`   Checking local HLS: ${localHlsUrl}`);
-    
-    try {
-      const playlistResponse = await fetch(localHlsUrl, {
-        signal: AbortSignal.timeout(2000)
-      });
-      
-      if (!playlistResponse.ok) {
-        console.warn(`⚠️ [WAIT-AUDIO] HLS playlist returned ${playlistResponse.status}, using hold music`);
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-          <Response>
-            <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
-          </Response>`;
-        return res.type('text/xml').send(twiml);
-      }
-      
-      console.log('✅ [WAIT-AUDIO] Stream is LIVE, using direct MP3 stream...');
-      
-      // Use direct MP3 stream (simpler, more reliable than HLS conversion)
-      const mp3StreamUrl = `${appUrl}/api/mp3-stream`;
-      
+    if (radioCoUrl) {
+      console.log(`✅ [WAIT-AUDIO] Using Radio.co public listener URL: ${radioCoUrl}`);
+      console.log('   (This is the same stream web listeners hear - infinite, reliable)');
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
         <Response>
-          <Play>${mp3StreamUrl}</Play>
+          <Play>${radioCoUrl}</Play>
         </Response>`;
-      
-      res.type('text/xml').send(twiml);
-    } catch (playlistError) {
-      console.warn('⚠️ [WAIT-AUDIO] Cannot access HLS playlist, using hold music');
-      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-        <Response>
-          <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
-        </Response>`;
-      res.type('text/xml').send(twiml);
+      return res.type('text/xml').send(twiml);
     }
+    
+    // OPTION 2: Direct MP3 stream from our server
+    console.log('🎵 [WAIT-AUDIO] Radio.co URL not set, using direct MP3 stream from our server...');
+    console.log('   To use Radio.co instead: Add RADIO_CO_LISTEN_URL to Railway env vars');
+    
+    const mp3StreamUrl = `${appUrl}/api/mp3-stream`;
+    
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+        <Play>${mp3StreamUrl}</Play>
+      </Response>`;
+    
+    res.type('text/xml').send(twiml);
     
   } catch (error) {
     console.error('❌ [WAIT-AUDIO] Error:', error);
