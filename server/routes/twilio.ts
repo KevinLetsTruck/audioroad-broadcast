@@ -491,31 +491,17 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
     // Stream is live - use the best available audio source
     console.log('🎙️ [WAIT-AUDIO] Stream is LIVE, selecting audio source...');
     
-    // OPTION 1: Radio.co public listener URL (SIMPLEST - recommended)
-    // This is the same MP3 stream that web listeners hear
-    // Add RADIO_CO_LISTEN_URL to Railway environment variables
-    // Example: https://streaming.radio.co/sXXXXXXX/listen
-    const radioCoUrl = process.env.RADIO_CO_LISTEN_URL;
+    // Use Radio.co public listener URL or environment variable
+    // Check for configured URL first, then use default
+    const radioCoUrl = process.env.RADIO_CO_LISTEN_URL || 
+                       'https://audioroad-broadcast-production.up.railway.app/listen';
     
-    if (radioCoUrl) {
-      console.log(`✅ [WAIT-AUDIO] Using Radio.co public listener URL: ${radioCoUrl}`);
-      console.log('   (This is the same stream web listeners hear - infinite, reliable)');
-      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-        <Response>
-          <Play>${radioCoUrl}</Play>
-        </Response>`;
-      return res.type('text/xml').send(twiml);
-    }
-    
-    // OPTION 2: Direct MP3 stream from our server
-    console.log('🎵 [WAIT-AUDIO] Radio.co URL not set, using direct MP3 stream from our server...');
-    console.log('   To use Radio.co instead: Add RADIO_CO_LISTEN_URL to Railway env vars');
-    
-    const mp3StreamUrl = `${appUrl}/api/mp3-stream`;
+    console.log(`✅ [WAIT-AUDIO] Using public listener stream: ${radioCoUrl}`);
+    console.log('   (Same stream web listeners hear - infinite, reliable)');
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play>${mp3StreamUrl}</Play>
+        <Play>${radioCoUrl}</Play>
       </Response>`;
     
     res.type('text/xml').send(twiml);
