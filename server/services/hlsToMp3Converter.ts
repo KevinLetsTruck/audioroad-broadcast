@@ -83,6 +83,9 @@ export class HLSToMP3Converter extends EventEmitter {
 
     // FFmpeg command to convert HLS to MP3 stream
     const args = [
+      // Logging
+      '-loglevel', 'info',
+      
       // Input: HLS playlist URL
       '-i', this.config.hlsPlaylistUrl,
       
@@ -107,16 +110,28 @@ export class HLSToMP3Converter extends EventEmitter {
       'pipe:1'
     ];
 
-    console.log('🎬 [HLS→MP3] FFmpeg args:', args.join(' '));
+    console.log('🎬 [HLS→MP3] FFmpeg command:', 'ffmpeg', args.join(' '));
 
     // Spawn FFmpeg process
     this.ffmpeg = spawn('ffmpeg', args, {
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
+    let bytesReceived = 0;
+    let lastLogTime = Date.now();
+
     // Pipe FFmpeg stdout (MP3 data) to output stream
     this.ffmpeg.stdout!.on('data', (data: Buffer) => {
       if (this.isRunning && this.outputStream) {
+        bytesReceived += data.length;
+        
+        // Log data flow every 5 seconds
+        const now = Date.now();
+        if (now - lastLogTime > 5000) {
+          console.log(`📊 [HLS→MP3] Streaming: ${(bytesReceived / 1024).toFixed(1)} KB received, ${this.outputStreams.size} clients`);
+          lastLogTime = now;
+        }
+        
         // Push to main output stream
         this.outputStream.push(data);
         
@@ -130,25 +145,22 @@ export class HLSToMP3Converter extends EventEmitter {
       }
     });
 
-    // Handle FFmpeg errors/info
+    // Handle FFmpeg errors/info - LOG EVERYTHING for debugging
     this.ffmpeg.stderr!.on('data', (data: Buffer) => {
       const message = data.toString();
       
-      // Log important info
-      if (message.includes('Stream') || message.includes('Output')) {
-        console.log('📊 [HLS→MP3]:', message.trim().substring(0, 150));
+      // Log ALL output for now to debug issues
+      console.log('📊 [HLS→MP3 FFmpeg]:', message.trim().substring(0, 300));
+      
+      // Detect specific errors
+      if (message.includes('Server returned 4') || message.includes('Server returned 5')) {
+        console.error('❌ [HLS→MP3] HTTP error accessing stream:', message.trim());
+        this.emit('error', new Error('Stream not accessible'));
       }
       
-      // Log errors
-      if (message.includes('Error') || message.includes('error')) {
-        console.error('⚠️ [HLS→MP3 ERROR]:', message.trim().substring(0, 200));
-        this.emit('error', new Error(message));
-      }
-      
-      // Detect reconnection
-      if (message.includes('Reconnecting')) {
-        console.log('🔄 [HLS→MP3] Reconnecting to stream...');
-        this.emit('reconnecting');
+      if (message.includes('No such file') || message.includes('Invalid data')) {
+        console.error('❌ [HLS→MP3] Invalid stream data:', message.trim());
+        this.emit('error', new Error('Invalid stream'));
       }
     });
 
@@ -162,6 +174,7 @@ export class HLSToMP3Converter extends EventEmitter {
     // Handle FFmpeg exit
     this.ffmpeg.on('exit', (code, signal) => {
       console.log(`📴 [HLS→MP3] FFmpeg exited with code ${code}, signal ${signal}`);
+      console.log(`   Total bytes processed: ${(bytesReceived / 1024).toFixed(1)} KB`);
       
       if (code !== 0 && code !== null && this.isRunning) {
         console.warn('⚠️ [HLS→MP3] FFmpeg exited unexpectedly, attempting reconnect...');
@@ -174,7 +187,7 @@ export class HLSToMP3Converter extends EventEmitter {
 
     // FFmpeg ready
     setTimeout(() => {
-      console.log('✅ [HLS→MP3] FFmpeg converter started');
+      console.log('✅ [HLS→MP3] FFmpeg converter started, waiting for data...');
       this.emit('started');
     }, 1000);
   }
