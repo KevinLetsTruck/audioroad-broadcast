@@ -918,20 +918,10 @@ router.get('/live-show-audio-stream', (req: Request, res: Response) => {
         converterActive = false;
       });
 
-      // Wait for FFmpeg to buffer some data before serving (Twilio needs immediate audio)
-      setTimeout(() => {
-        if (!mp3Converter || !converterActive) {
-          console.log('⚠️ [LIVE-AUDIO-STREAM] Converter failed to start, sending 503');
-          if (!res.headersSent) {
-            return res.status(503).send('Stream not available');
-          }
-        } else {
-          console.log('✅ [HLS→MP3] FFmpeg buffered, serving to caller...');
-          serveStream(res);
-        }
-      }, 3000); // 3 second buffer - allows FFmpeg to catch up and have data ready
-      
-      console.log('⏳ [HLS→MP3] FFmpeg converter started, buffering 3 seconds...');
+      // Start serving IMMEDIATELY - Twilio doesn't like delays
+      // The redirect loop will handle reconnection if needed
+      console.log('✅ [HLS→MP3] FFmpeg converter started, serving immediately...');
+      serveStream(res);
       return;
     }
 
