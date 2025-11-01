@@ -565,16 +565,18 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     // Play AI-generated welcome message
     twiml.play({}, welcomeAudioUrl);
     
-    // Connect to conference with hold music (for now)
+    // Connect to conference with hold music
+    // IMPORTANT: startConferenceOnEnter should be FALSE for callers
+    // so they hear waitUrl music until screener joins
     const dial = twiml.dial();
     const conferenceOptions: any = {
-      startConferenceOnEnter: episode.conferenceActive || true,
+      startConferenceOnEnter: false, // Caller waits with music until screener joins
       endConferenceOnExit: false,
       beep: 'http://twimlets.com/echo?Twiml=%3CResponse%3E%3C%2FResponse%3E',
       maxParticipants: 40,
       waitUrl: waitMusicUrl,
       waitMethod: 'GET',
-      muted: false,
+      muted: true, // Caller starts muted
       statusCallback: `${appUrl}/api/twilio/conference-status`,
       statusCallbackEvent: ['start', 'end', 'join', 'leave'],
       statusCallbackMethod: 'POST'
