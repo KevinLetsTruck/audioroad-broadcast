@@ -479,11 +479,11 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
       isLive = false;
     }
 
-    // Chunks work but stop after ~30 seconds
-    // Keep using chunks but make redirect interval shorter to recover faster
-    console.log('🎙️ [WAIT-AUDIO] Using 5-second MP3 chunks (faster recovery)...');
+    // Use 60-second chunks - gives FFmpeg time to generate from live HLS
+    // Longer chunks = more reliable generation, less timeouts
+    console.log('🎙️ [WAIT-AUDIO] Using 60-second MP3 chunks (reliable generation)...');
     
-    const chunkUrl = `${appUrl}/api/twilio/audio-chunk?duration=5`;
+    const chunkUrl = `${appUrl}/api/twilio/audio-chunk?duration=60`;
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
@@ -491,7 +491,7 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
         <Redirect method="POST">${appUrl}/api/twilio/wait-audio</Redirect>
       </Response>`;
     
-    console.log(`   Chunk URL: ${chunkUrl} (5-sec chunks for faster recovery)`);
+    console.log(`   Chunk URL: ${chunkUrl} (60-sec chunks)`);
     res.type('text/xml').send(twiml);
     
   } catch (error) {
