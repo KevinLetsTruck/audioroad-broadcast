@@ -509,14 +509,13 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
         return res.type('text/xml').send(twiml);
       }
       
-      console.log('✅ [WAIT-AUDIO] HLS playlist accessible, attempting MP3 conversion...');
-      const streamUrl = `${appUrl}/api/twilio/live-show-audio-stream`;
+      console.log('✅ [WAIT-AUDIO] HLS playlist accessible, returning live show audio...');
       
-      // Use Redirect with loop to keep trying if stream stops
+      // Return hold music for now - the HLS conversion works but stops after ~70 seconds
+      // TODO: Fix infinite streaming (current stream completes instead of continuing)
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
         <Response>
-          <Play>${streamUrl}</Play>
-          <Redirect method="POST">${appUrl}/api/twilio/wait-audio</Redirect>
+          <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
         </Response>`;
       
       res.type('text/xml').send(twiml);
