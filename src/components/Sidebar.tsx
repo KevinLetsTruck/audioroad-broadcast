@@ -1,5 +1,6 @@
 import { useUser, UserButton } from '@clerk/clerk-react';
 import SidebarNavLink from './SidebarNavLink';
+import { DarkModeToggle } from './ui/DarkModeToggle';
 
 interface SidebarProps {
   collapsed?: boolean;
@@ -15,20 +16,20 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
   const isProducer = userRole === 'producer' || userRole === 'admin';
 
   return (
-    <aside className={`bg-gray-800 border-r border-gray-700 h-screen sticky top-0 flex flex-col transition-all duration-300 ${
+    <aside className={`bg-white dark:bg-gray-dark border-r border-stroke dark:border-dark-3 h-screen sticky top-0 flex flex-col transition-all duration-300 shadow-2 ${
       collapsed ? 'w-16' : 'w-60'
     }`}>
-      {/* Logo & User Info */}
-      <div className="p-4 border-b border-gray-700">
+      {/* TailAdmin Logo & User Info */}
+      <div className="p-4 border-b border-stroke dark:border-dark-3">
         {!collapsed ? (
           <>
-            <h1 className="text-xl font-bold text-white mb-1">
+            <h1 className="text-xl font-bold text-dark dark:text-white mb-1">
               🎙️ AudioRoad
             </h1>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-body dark:text-body-dark">
               {user?.firstName} {user?.lastName}
             </p>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-body dark:text-body-dark">
               {userRole || 'user'}
             </p>
           </>
@@ -39,10 +40,10 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-4">
-        {/* BROADCAST Section */}
+        {/* TailAdmin BROADCAST Section */}
         {!collapsed && (
           <div className="px-4 mb-2">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <h3 className="text-xs font-semibold text-body dark:text-body-dark uppercase tracking-wider">
               Broadcast
             </h3>
           </div>
@@ -66,7 +67,7 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           <>
             {!collapsed && (
               <div className="px-4 mb-2 mt-6">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <h3 className="text-xs font-semibold text-body dark:text-body-dark uppercase tracking-wider">
                   Content
                 </h3>
               </div>
@@ -78,10 +79,10 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           </>
         )}
 
-        {/* SETTINGS Section */}
+        {/* TailAdmin SETTINGS Section */}
         {!collapsed && (
           <div className="px-4 mb-2 mt-6">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <h3 className="text-xs font-semibold text-body dark:text-body-dark uppercase tracking-wider">
               Settings
             </h3>
           </div>
@@ -92,28 +93,33 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
         <SidebarNavLink to="/settings" icon="⚙️" label="Show Settings" collapsed={collapsed} />
       </nav>
 
-      {/* Bottom Section */}
-      <div className="p-4 border-t border-gray-700">
+      {/* TailAdmin Bottom Section with Dark Mode */}
+      <div className="p-4 border-t border-stroke dark:border-dark-3">
         {!collapsed ? (
-          <div className="flex items-center justify-between">
-            <UserButton 
-              afterSignOutUrl="/sign-in"
-              appearance={{
-                elements: {
-                  avatarBox: "w-8 h-8"
-                }
-              }}
-            />
-            <button
-              onClick={onToggle}
-              className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
-              title="Collapse sidebar"
-            >
-              ◀
-            </button>
+          <div className="space-y-3">
+            <DarkModeToggle />
+            <div className="flex items-center justify-between">
+              <UserButton 
+                afterSignOutUrl="/sign-in"
+                appearance={{
+                  elements: {
+                    avatarBox: "w-8 h-8"
+                  }
+                }}
+              />
+              <button
+                onClick={onToggle}
+                className="p-2 text-body dark:text-body-dark hover:text-dark dark:hover:text-white hover:bg-gray-2 dark:hover:bg-dark-3 rounded transition-colors"
+                title="Collapse sidebar"
+                aria-label="Collapse sidebar"
+              >
+                ◀
+              </button>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3">
+            <DarkModeToggle />
             <UserButton 
               afterSignOutUrl="/sign-in"
               appearance={{
@@ -124,8 +130,9 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             />
             <button
               onClick={onToggle}
-              className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded"
+              className="p-2 text-body dark:text-body-dark hover:text-dark dark:hover:text-white hover:bg-gray-2 dark:hover:bg-dark-3 rounded transition-colors"
               title="Expand sidebar"
+              aria-label="Expand sidebar"
             >
               ▶
             </button>
