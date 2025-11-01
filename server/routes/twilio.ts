@@ -747,6 +747,7 @@ router.post('/queue-message', async (req: Request, res: Response) => {
 /**
  * POST /api/twilio/live-show-audio - Stream live show audio as MP3 for Twilio
  * Converts HLS stream to MP3 format that Twilio can consume
+ * ALWAYS tries to stream live audio - optimistic approach
  */
 router.post('/live-show-audio', async (req: Request, res: Response) => {
   try {
@@ -759,30 +760,9 @@ router.post('/live-show-audio', async (req: Request, res: Response) => {
     const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
     const hlsPlaylistUrl = `${appUrl}/api/stream/live.m3u8`;
     
-    // Check if stream is actually live
-    let isLive = false;
-    try {
-      const statusResponse = await fetch(`${appUrl}/api/stream/status`);
-      const status = await statusResponse.json() as { live?: boolean };
-      isLive = status.live || false;
-      console.log(`   Stream status: ${isLive ? 'LIVE' : 'OFFLINE'}`);
-    } catch (statusError) {
-      console.warn('⚠️ [LIVE-AUDIO] Could not check stream status, assuming offline');
-      isLive = false;
-    }
-
-    // If stream is offline, return hold music immediately
-    if (!isLive) {
-      console.log('⚠️ [LIVE-AUDIO] Stream is offline, using hold music');
-      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-        <Response>
-          <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
-        </Response>`;
-      return res.type('text/xml').send(twiml);
-    }
-
-    // Stream is live, try to start converter
-    console.log('🎵 [LIVE-AUDIO] Stream is live, starting converter...');
+    // OPTIMISTIC: Always try to stream live audio
+    // The converter will handle failures gracefully
+    console.log('🎵 [LIVE-AUDIO] Attempting to stream live show...');
 
     // Initialize converter if not already running
     if (!mp3Converter || !converterActive) {
@@ -810,16 +790,18 @@ router.post('/live-show-audio', async (req: Request, res: Response) => {
         converterActive = false;
         mp3Converter = null;
       });
+    } else {
+      console.log('🎵 [LIVE-AUDIO] Reusing existing converter');
     }
 
     // For Twilio, we need to return TwiML that references the MP3 stream URL
     // Twilio doesn't support direct streaming, so we'll use a redirect to a GET endpoint
     const mp3StreamUrl = `${appUrl}/api/twilio/live-show-audio-stream`;
     
-    console.log('✅ [LIVE-AUDIO] Returning TwiML with stream URL');
+    console.log('✅ [LIVE-AUDIO] Returning TwiML with stream URL:', mp3StreamUrl);
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play>${mp3StreamUrl}</Play>
+        <Play loop="0">${mp3StreamUrl}</Play>
       </Response>`;
     
     res.type('text/xml').send(twiml);
@@ -840,6 +822,8 @@ router.post('/live-show-audio', async (req: Request, res: Response) => {
  * Multiple callers can access this same stream (Twilio handles buffering)
  */
 router.get('/live-show-audio-stream', (req: Request, res: Response) => {
+  console.log('📡 [LIVE-AUDIO-STREAM] Stream request received');
+  
   try {
     // Ensure converter is running
     if (!mp3Converter || !converterActive) {
@@ -847,7 +831,7 @@ router.get('/live-show-audio-stream', (req: Request, res: Response) => {
       const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
       const hlsPlaylistUrl = `${appUrl}/api/stream/live.m3u8`;
       
-      console.log('🎵 [LIVE-AUDIO-STREAM] Starting converter...');
+      console.log('🎵 [LIVE-AUDIO-STREAM] Converter not running, starting...');
       
       mp3Converter = new HLSToMP3Converter({
         hlsPlaylistUrl,
@@ -871,22 +855,26 @@ router.get('/live-show-audio-stream', (req: Request, res: Response) => {
         converterActive = false;
       });
 
-      // Wait a moment for converter to start
+      // Wait a moment for converter to start, then serve
       setTimeout(() => {
         if (!mp3Converter || !converterActive) {
           console.log('⚠️ [LIVE-AUDIO-STREAM] Converter failed to start, sending 503');
-          return res.status(503).send('Stream not available');
+          if (!res.headersSent) {
+            return res.status(503).send('Stream not available');
+          }
+        } else {
+          serveStream(res);
         }
-        serveStream(res);
-      }, 1000);
+      }, 1500);
       
       return;
     }
 
+    console.log('✅ [LIVE-AUDIO-STREAM] Converter active, serving stream');
     serveStream(res);
 
   } catch (error) {
-    console.error('Error serving MP3 stream:', error);
+    console.error('❌ [LIVE-AUDIO-STREAM] Error serving MP3 stream:', error);
     if (!res.headersSent) {
       res.status(500).send('Error serving stream');
     }
