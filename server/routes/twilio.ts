@@ -456,6 +456,7 @@ router.post('/wait-music', (req: Request, res: Response) => {
 
 /**
  * GET /api/twilio/welcome-audio - Generate and serve AI welcome message audio
+ * Falls back to TwiML Say if AI generation fails
  */
 router.get('/welcome-audio', async (req: Request, res: Response) => {
   try {
@@ -464,26 +465,40 @@ router.get('/welcome-audio', async (req: Request, res: Response) => {
     
     // Generate AI message
     console.log('🤖 [WELCOME-AUDIO] Generating AI welcome message...');
-    const message = await generateWelcomeMessage(showNameStr);
-    console.log(`   Message: "${message}"`);
+    let message: string;
+    try {
+      message = await generateWelcomeMessage(showNameStr);
+      console.log(`   Message: "${message}"`);
+    } catch (aiError) {
+      console.warn('⚠️ [WELCOME-AUDIO] AI generation failed, using fallback:', aiError);
+      message = `Welcome to the AudioRoad Network. ${showNameStr} is currently on the air. The call screener will be right with you.`;
+    }
     
     // Convert to speech using ElevenLabs
     console.log('🎤 [WELCOME-AUDIO] Converting to speech...');
-    const audioBuffer = await generateSpeech(message, {
-      voiceId: 'EXAVITQu4vr4xnSDxMaL', // Bella - smooth, friendly voice
-      stability: 0.3, // Lower = more natural, less robotic
-      similarity_boost: 0.85
-    });
-    
-    // Set headers for MP3 streaming
-    res.setHeader('Content-Type', 'audio/mpeg');
-    res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
-    
-    res.send(audioBuffer);
+    let audioBuffer: Buffer;
+    try {
+      audioBuffer = await generateSpeech(message, {
+        voiceId: 'EXAVITQu4vr4xnSDxMaL', // Bella - smooth, friendly voice
+        stability: 0.3, // Lower = more natural, less robotic
+        similarity_boost: 0.85
+      });
+      
+      // Set headers for MP3 streaming
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+      
+      res.send(audioBuffer);
+    } catch (ttsError) {
+      console.error('❌ [WELCOME-AUDIO] ElevenLabs TTS failed:', ttsError);
+      // Return empty response - Twilio will skip and continue
+      // The welcome-message endpoint will handle fallback
+      res.status(204).send();
+    }
   } catch (error) {
-    console.error('❌ [WELCOME-AUDIO] Error:', error);
-    // Fallback: return empty response (Twilio will skip)
-    res.status(500).send('Error generating audio');
+    console.error('❌ [WELCOME-AUDIO] Critical error:', error);
+    // Return empty response - Twilio will skip and continue
+    res.status(204).send();
   }
 });
 
@@ -544,8 +559,15 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     const VoiceResponse = twilio.twiml.VoiceResponse;
     const twiml = new VoiceResponse();
     
-    // Play AI-generated welcome message
+    // Try to play AI-generated welcome message
+    // If it fails, Twilio will skip and continue to Say
     twiml.play({}, welcomeAudioUrl);
+    
+    // Fallback: Use Twilio's built-in TTS if audio fails
+    twiml.say({
+      voice: 'alice',
+      language: 'en-US'
+    }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
     
     // Connect to conference with live show audio
     const dial = twiml.dial();
@@ -565,8 +587,41 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
 
     res.type('text/xml').send(twiml.toString());
   } catch (error) {
-    console.error('Error generating welcome message:', error);
-    res.status(500).send('Error processing welcome message');
+    console.error('❌ [WELCOME-MESSAGE] Error generating welcome message:', error);
+    // Return valid TwiML even on error - connect directly to conference
+    try {
+      const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+      const VoiceResponse = twilio.twiml.VoiceResponse;
+      const twiml = new VoiceResponse();
+      
+      // Say error message
+      twiml.say({
+        voice: 'alice',
+        language: 'en-US'
+      }, 'Welcome to the AudioRoad Network. The call screener will be right with you.');
+      
+      // Still try to connect to conference
+      const dial = twiml.dial();
+      dial.conference({
+        startConferenceOnEnter: true,
+        endConferenceOnExit: false,
+        waitUrl: `${appUrl}/api/twilio/live-show-audio`,
+        muted: false
+      }, 'episode-fallback');
+      
+      res.type('text/xml').send(twiml.toString());
+    } catch (fallbackError) {
+      console.error('❌ [WELCOME-MESSAGE] Fallback also failed:', fallbackError);
+      // Last resort: return minimal valid TwiML
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+        <Response>
+          <Say voice="alice" language="en-US">Welcome to AudioRoad Network. Please hold.</Say>
+          <Dial>
+            <Conference>episode-fallback</Conference>
+          </Dial>
+        </Response>`;
+      res.type('text/xml').send(twiml);
+    }
   }
 });
 
