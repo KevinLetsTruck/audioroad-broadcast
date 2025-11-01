@@ -627,12 +627,12 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
       language: 'en-US'
     }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
     
-    // Connect to conference
+    // Connect to conference with smart wait audio (live show or hold music)
     const dial = twiml.dial();
     dial.conference({
       startConferenceOnEnter: false, // Caller waits until screener joins
       endConferenceOnExit: false, // Don't end when caller leaves
-      waitUrl: `${appUrl}/api/twilio/wait-music`, // Use our endpoint that returns TwiML
+      waitUrl: `${appUrl}/api/twilio/wait-audio`, // Smart endpoint: live stream if available, else hold music
       waitMethod: 'POST',
       maxParticipants: 40,
       muted: true, // Caller starts muted
