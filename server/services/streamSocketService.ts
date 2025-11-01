@@ -295,11 +295,12 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
       
       // Notify dedicated streaming server on disconnect (for tracking)
       if (activeRadioStreams.size === 0) {
-        console.log('📴 [STREAM] Last broadcaster disconnected (but keeping HLS running for phone callers)');
+        console.log('📴 [STREAM] Last broadcaster disconnected (keeping HLS + stream status for phone callers)');
         
         // DON'T stop local HLS or mark as offline on brief disconnects
-        // HLS will keep serving last segments for a bit
-        // Only stop when episode actually ends
+        // HLS will keep serving last segments
+        // Stream status stays LIVE for 10 seconds (lastAudioReceived check)
+        // Only stop when episode actually ends or stream:stop is called
         
         // Let dedicated streaming server know (it will handle Auto DJ resume)
         if (streamingServerSocket && streamingServerSocket.connected) {
