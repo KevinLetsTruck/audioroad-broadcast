@@ -551,7 +551,10 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     }
 
     const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
-    liveStreamUrl = `${appUrl}/api/twilio/live-show-audio?episodeId=${episode.id}`;
+    
+    // For now, use hold music as waitUrl (reliable)
+    // TODO: Switch to live show audio once HLS conversion is working
+    const waitMusicUrl = 'http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3';
     
     // Generate TwiML with AI audio URL
     const welcomeAudioUrl = `${appUrl}/api/twilio/welcome-audio?showName=${encodeURIComponent(showName)}`;
@@ -560,18 +563,17 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     const twiml = new VoiceResponse();
     
     // Play AI-generated welcome message
-    // The welcome-audio endpoint has its own fallback handling
     twiml.play({}, welcomeAudioUrl);
     
-    // Connect to conference with live show audio
+    // Connect to conference with hold music (for now)
     const dial = twiml.dial();
     const conferenceOptions: any = {
       startConferenceOnEnter: episode.conferenceActive || true,
       endConferenceOnExit: false,
       beep: 'http://twimlets.com/echo?Twiml=%3CResponse%3E%3C%2FResponse%3E',
       maxParticipants: 40,
-      waitUrl: liveStreamUrl,
-      waitMethod: 'POST',
+      waitUrl: waitMusicUrl,
+      waitMethod: 'GET',
       muted: false,
       statusCallback: `${appUrl}/api/twilio/conference-status`,
       statusCallbackEvent: ['start', 'end', 'join', 'leave'],
@@ -717,9 +719,8 @@ router.post('/queue-message', async (req: Request, res: Response) => {
     }
 
     const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
-    const liveStreamUrl = `${appUrl}/api/twilio/live-show-audio?episodeId=${call.episodeId}`;
     
-    // Generate TwiML with AI audio URL, then redirect back to live show audio
+    // Generate TwiML with AI audio URL
     const queueAudioUrl = `${appUrl}/api/twilio/queue-audio?position=${queuePosition}`;
     
     const VoiceResponse = twilio.twiml.VoiceResponse;
@@ -728,9 +729,8 @@ router.post('/queue-message', async (req: Request, res: Response) => {
     // Play AI-generated queue message
     twiml.play({}, queueAudioUrl);
     
-    // Redirect back to live show audio (conference waitUrl)
-    // This ensures caller continues hearing live show after message
-    twiml.redirect({ method: 'POST' }, liveStreamUrl);
+    // After message, just end - caller returns to conference waitUrl (hold music)
+    // The conference waitUrl will continue playing
 
     res.type('text/xml').send(twiml.toString());
   } catch (error) {
