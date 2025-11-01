@@ -563,12 +563,18 @@ router.get('/welcome-audio', async (req: Request, res: Response) => {
  * POST /api/twilio/welcome-message - Welcome message with show name and redirect to conference
  */
 router.post('/welcome-message', async (req: Request, res: Response) => {
+  console.log('📞 [WELCOME-MESSAGE] Endpoint called');
+  console.log('   Request body:', JSON.stringify(req.body, null, 2));
+  
   try {
     const { CallSid } = req.body;
     
     if (!CallSid) {
+      console.error('❌ [WELCOME-MESSAGE] No CallSid in request');
       return res.status(400).send('Call SID required');
     }
+
+    console.log('📞 [WELCOME-MESSAGE] Looking up call for CallSid:', CallSid);
 
     // Find call by Twilio CallSid to get episode
     const call = await prisma.call.findFirst({
@@ -607,10 +613,10 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
       conferenceName = `episode-${episode.id}`;
     }
 
-    const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+    console.log('📞 [WELCOME-MESSAGE] Generating TwiML for conference:', conferenceName);
+    console.log('   Show name:', showName);
     
-    // Use DIRECT hold music URL (no endpoints that can fail)
-    const waitMusicUrl = 'http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3';
+    const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
     
     const VoiceResponse = twilio.twiml.VoiceResponse;
     const twiml = new VoiceResponse();
@@ -623,21 +629,23 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     
     // Connect to conference with DIRECT hold music URL
     const dial = twiml.dial();
-    const conferenceOptions: any = {
-      startConferenceOnEnter: false, // Caller waits with music until screener joins
-      endConferenceOnExit: false,
+    dial.conference({
+      startConferenceOnEnter: false, // Caller waits until screener joins
+      endConferenceOnExit: false, // Don't end when caller leaves
       beep: false,
       maxParticipants: 40,
-      waitUrl: waitMusicUrl, // DIRECT URL - can't fail
-      muted: true,
+      waitUrl: 'http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3',
+      muted: true, // Caller starts muted
       statusCallback: `${appUrl}/api/twilio/conference-status`,
-      statusCallbackEvent: ['start', 'end', 'join', 'leave'],
+      statusCallbackEvent: 'start end join leave',
       statusCallbackMethod: 'POST'
-    };
-    
-    dial.conference(conferenceOptions, conferenceName);
+    }, conferenceName);
 
-    res.type('text/xml').send(twiml.toString());
+    const twimlString = twiml.toString();
+    console.log('✅ [WELCOME-MESSAGE] TwiML generated:');
+    console.log(twimlString);
+    
+    res.type('text/xml').send(twimlString);
   } catch (error) {
     console.error('❌ [WELCOME-MESSAGE] Error generating welcome message:', error);
     // Return valid TwiML even on error - connect directly to conference
