@@ -87,6 +87,9 @@ export class HLSToMP3Converter extends EventEmitter {
       // Logging
       '-loglevel', 'info',
       
+      // CRITICAL: Read at realtime speed (prevents buffering delay for Twilio)
+      '-re',
+      
       // Input: HLS playlist URL
       '-i', this.config.hlsPlaylistUrl,
       
