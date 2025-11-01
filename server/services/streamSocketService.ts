@@ -8,6 +8,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { FFmpegStreamEncoder } from './ffmpegStreamEncoder.js';
 import { io as ioClient } from 'socket.io-client';
+import { setStreamingActive, updateLastAudioReceived } from '../routes/stream.js';
 
 // Connection to dedicated streaming server
 let streamingServerSocket: any = null;
@@ -125,6 +126,7 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         
         // Notify client of success
         console.log(`✅ [STREAM] All streams started successfully`);
+        setStreamingActive(true); // Update stream status
         socket.emit('stream:connected');  // Notify client
         callback({ success: true, mode: mode, hls: true });
 
@@ -160,6 +162,9 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         }
         
         audioChunkCount++;
+        
+        // Update stream status (we're receiving audio, so stream is live)
+        updateLastAudioReceived();
         
         // Log every 5 seconds to confirm audio is flowing
         const now = Date.now();
@@ -209,6 +214,8 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
       if (activeRadioStreams.size === 0) {
         console.log('📴 [STREAM] Live show ended - notifying dedicated streaming server...');
         
+        setStreamingActive(false); // Update stream status
+        
         // Notify dedicated streaming server that live show ended
         if (streamingServerSocket && streamingServerSocket.connected) {
           streamingServerSocket.emit('live-stop');
@@ -253,6 +260,8 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
       // Notify dedicated streaming server on disconnect (for tracking)
       if (activeRadioStreams.size === 0) {
         console.log('📴 [STREAM] Last broadcaster disconnected');
+        
+        setStreamingActive(false); // Update stream status
         
         // Let dedicated streaming server know (it will handle Auto DJ resume)
         if (streamingServerSocket && streamingServerSocket.connected) {

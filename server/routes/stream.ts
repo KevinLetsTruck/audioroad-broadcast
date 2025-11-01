@@ -12,9 +12,28 @@ const router = express.Router();
 // Store reference to HLS server (will be set by streamSocketService)
 let hlsServer: any = null;
 
+// Track streaming state independently
+let isStreamingActive = false;
+let lastAudioReceived = 0;
+
 export function setHLSServer(server: any) {
   hlsServer = server;
   console.log('✅ [STREAM ROUTES] HLS server reference set');
+}
+
+// Called by streamSocketService when stream starts/stops
+export function setStreamingActive(active: boolean) {
+  isStreamingActive = active;
+  if (active) {
+    lastAudioReceived = Date.now();
+  }
+  console.log(`📡 [STREAM ROUTES] Streaming state: ${active ? 'LIVE' : 'OFFLINE'}`);
+}
+
+// Called by streamSocketService when audio is received
+export function updateLastAudioReceived() {
+  lastAudioReceived = Date.now();
+  isStreamingActive = true;
 }
 
 /**
@@ -24,19 +43,30 @@ export function setHLSServer(server: any) {
  */
 router.get('/status', (req: Request, res: Response) => {
   try {
-    if (!hlsServer) {
-      return res.json({
-        live: false,
-        message: 'Stream offline'
-      });
+    // Check if we've received audio in last 10 seconds
+    const timeSinceLastAudio = Date.now() - lastAudioReceived;
+    const isLive = isStreamingActive && timeSinceLastAudio < 10000;
+    
+    // Also check HLS server if available
+    let hlsStatus = null;
+    if (hlsServer) {
+      try {
+        hlsStatus = hlsServer.getStatus();
+      } catch (e) {
+        // HLS server might not be running
+      }
     }
-
-    const status = hlsServer.getStatus();
     
     res.json({
-      live: status.streaming,
-      currentSegment: status.currentSegment,
-      encoder: status.encoder
+      live: isLive,
+      message: isLive ? 'Stream live' : 'Stream offline',
+      lastAudioReceived: lastAudioReceived > 0 ? new Date(lastAudioReceived).toISOString() : null,
+      timeSinceLastAudio: lastAudioReceived > 0 ? `${(timeSinceLastAudio / 1000).toFixed(1)}s ago` : null,
+      hlsServer: hlsStatus ? {
+        streaming: hlsStatus.streaming,
+        currentSegment: hlsStatus.currentSegment,
+        encoder: hlsStatus.encoder
+      } : null
     });
     
   } catch (error) {
