@@ -512,9 +512,11 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
       console.log('✅ [WAIT-AUDIO] HLS playlist accessible, attempting MP3 conversion...');
       const streamUrl = `${appUrl}/api/twilio/live-show-audio-stream`;
       
+      // Use Redirect with loop to keep trying if stream stops
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
         <Response>
           <Play>${streamUrl}</Play>
+          <Redirect method="POST">${appUrl}/api/twilio/wait-audio</Redirect>
         </Response>`;
       
       res.type('text/xml').send(twiml);
