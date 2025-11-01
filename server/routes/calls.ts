@@ -260,30 +260,22 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       }
     });
 
-    // TEMPORARILY DISABLE queue message to debug
-    // The announceUrl is causing silence after the message
-    // TODO: Re-enable once we figure out how to return to hold music
-    
-    // Play queue message to caller using Twilio API
-    // if (call.twilioCallSid && call.twilioCallSid.startsWith('CA') && call.twilioConferenceSid) {
-    //   try {
-    //     const { updateParticipant } = await import('../services/twilioService.js');
-    //     const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
-    //     const queueMessageUrl = `${appUrl}/api/twilio/queue-message?callId=${call.id}&position=${finalPosition}`;
-    //     
-    //     // Use announceUrl to play the queue message
-    //     await updateParticipant(call.twilioConferenceSid, call.twilioCallSid, {
-    //       announceUrl: queueMessageUrl
-    //     });
-    //     
-    //     console.log(`✅ Queue message queued for call ${call.id} (position ${finalPosition})`);
-    //   } catch (twilioError) {
-    //     console.error('⚠️ Error playing queue message:', twilioError);
-    //     // Continue anyway - call is still approved
-    //   }
-    // }
-    
-    console.log(`ℹ️ Queue message disabled - caller will hear continuous hold music at position ${finalPosition}`);
+    // Put participant on hold so they hear hold music
+    if (call.twilioCallSid && call.twilioCallSid.startsWith('CA') && call.twilioConferenceSid) {
+      try {
+        const { updateParticipant } = await import('../services/twilioService.js');
+        
+        // Put participant on hold - they will hear hold music
+        await updateParticipant(call.twilioConferenceSid, call.twilioCallSid, {
+          hold: true
+        });
+        
+        console.log(`✅ Participant put on hold for call ${call.id} (position ${finalPosition})`);
+      } catch (twilioError) {
+        console.error('⚠️ Error putting participant on hold:', twilioError);
+        // Continue anyway - call is still approved
+      }
+    }
 
     const io = req.app.get('io');
     emitToEpisode(io, call.episodeId, 'call:approved', call);
