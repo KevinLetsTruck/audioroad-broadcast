@@ -491,17 +491,14 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
     // Stream is live - use the best available audio source
     console.log('🎙️ [WAIT-AUDIO] Stream is LIVE, selecting audio source...');
     
-    // Use Radio.co public listener URL or environment variable
-    // Check for configured URL first, then use default
-    const radioCoUrl = process.env.RADIO_CO_LISTEN_URL || 
-                       'https://audioroad-broadcast-production.up.railway.app/listen';
-    
-    console.log(`✅ [WAIT-AUDIO] Using public listener stream: ${radioCoUrl}`);
-    console.log('   (Same stream web listeners hear - infinite, reliable)');
+    // FOR NOW: Use hold music until we get the stream URL working
+    // The direct MP3 stream needs debugging (FFmpeg not outputting data)
+    console.log('📻 [WAIT-AUDIO] Using hold music (direct stream needs debugging)');
+    console.log('   Direct MP3 stream service is running but not outputting audio yet');
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play>${radioCoUrl}</Play>
+        <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
       </Response>`;
     
     res.type('text/xml').send(twiml);
