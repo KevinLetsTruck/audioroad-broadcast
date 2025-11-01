@@ -31,6 +31,7 @@ import streamRoutes from './routes/stream.js';
 import playlistRoutes from './routes/playlist.js';
 import platformsRoutes from './routes/platforms.js';
 import podcastRoutes from './routes/podcast.js';
+import directMp3Routes from './routes/directMp3.js';
 // import broadcastRoutes from './routes/broadcast.js'; // Temporarily disabled until migration runs
 
 // Import services
@@ -139,6 +140,7 @@ app.use('/api/commercials', apiLimiter, commercialsRoutes); // Shopify product c
 app.use('/api/content', apiLimiter, contentRoutes); // Social media content generation
 app.use('/api/voices', apiLimiter, voicesRoutes); // ElevenLabs voices for commercial generation
 app.use('/api/stream', streamRoutes); // HLS streaming endpoints (public, no auth needed for listeners)
+app.use('/api/mp3-stream', directMp3Routes); // Direct MP3 stream for phone callers (public)
 app.use('/api/playlist', apiLimiter, playlistRoutes); // Auto DJ playlist management
 app.use('/api/platforms', apiLimiter, platformsRoutes); // Multi-platform streaming (YouTube, Facebook, X)
 app.use('/api/podcast', podcastRoutes); // Podcast RSS feeds (public)

@@ -509,12 +509,14 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
         return res.type('text/xml').send(twiml);
       }
       
-      console.log('ℹ️ [WAIT-AUDIO] HLS available but using hold music for reliability');
+      console.log('✅ [WAIT-AUDIO] Stream is LIVE, using direct MP3 stream...');
       
-      // Use hold music for now - live stream conversion needs more work
+      // Use direct MP3 stream (simpler, more reliable than HLS conversion)
+      const mp3StreamUrl = `${appUrl}/api/mp3-stream`;
+      
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
         <Response>
-          <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+          <Play>${mp3StreamUrl}</Play>
         </Response>`;
       
       res.type('text/xml').send(twiml);

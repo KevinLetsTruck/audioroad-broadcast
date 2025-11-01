@@ -10,6 +10,7 @@ import { FFmpegStreamEncoder } from './ffmpegStreamEncoder.js';
 import { io as ioClient } from 'socket.io-client';
 import { setStreamingActive, updateLastAudioReceived, setHLSServer } from '../routes/stream.js';
 import { HLSStreamServer } from './hlsStreamServer.js';
+import { DirectMP3Stream } from './directMp3Stream.js';
 
 // Connection to dedicated streaming server
 let streamingServerSocket: any = null;
@@ -30,6 +31,14 @@ const activeRadioStreams = new Map<string, FFmpegStreamEncoder>();
 
 // Local HLS server for phone callers
 let localHLSServer: HLSStreamServer | null = null;
+
+// Direct MP3 stream for phone callers (simpler than HLS conversion)
+let directMP3Stream: DirectMP3Stream | null = null;
+
+// Export for access from routes
+export function getDirectMP3Stream(): DirectMP3Stream | null {
+  return directMP3Stream;
+}
 
 // Connect to dedicated streaming server on startup
 function connectToStreamingServer() {
@@ -128,9 +137,17 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           console.log(`✅ [RADIO.CO] Radio.co stream started for client ${socket.id}`);
         }
         
-        // Start local HLS server for phone callers
+        // Start direct MP3 stream for phone callers (simpler than HLS)
+        if (!directMP3Stream) {
+          console.log('🎵 [MP3-STREAM] Starting direct MP3 stream for phone callers...');
+          directMP3Stream = new DirectMP3Stream();
+          directMP3Stream.start();
+          console.log('✅ [MP3-STREAM] Direct MP3 stream ready for phone callers');
+        }
+        
+        // Also start local HLS server for web listeners
         if (!localHLSServer) {
-          console.log('🎙️ [LOCAL HLS] Starting local HLS server for phone callers...');
+          console.log('🎙️ [LOCAL HLS] Starting local HLS server for web listeners...');
           localHLSServer = new HLSStreamServer({
             segmentDuration: 2,
             playlistSize: 3,
@@ -140,9 +157,9 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           try {
             await localHLSServer.start();
             setHLSServer(localHLSServer); // Make available to routes
-            console.log('✅ [LOCAL HLS] Local HLS server started for phone caller audio');
+            console.log('✅ [LOCAL HLS] Local HLS server started for web listeners');
           } catch (hlsError) {
-            console.error('⚠️ [LOCAL HLS] Failed to start, phone callers will use hold music:', hlsError);
+            console.error('⚠️ [LOCAL HLS] Failed to start:', hlsError);
             localHLSServer = null;
           }
         }
@@ -202,7 +219,12 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           radioCoEncoder.processAudioChunk(float32Data);
         }
         
-        // Send to local HLS server for phone callers
+        // Send to direct MP3 stream for phone callers
+        if (directMP3Stream) {
+          directMP3Stream.processAudio(float32Data);
+        }
+        
+        // Send to local HLS server for web listeners
         if (localHLSServer) {
           localHLSServer.processAudioChunk(float32Data);
         }
@@ -243,6 +265,14 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         console.log('📴 [STREAM] Live show ended - notifying dedicated streaming server...');
         
         setStreamingActive(false); // Update stream status
+        
+        // Stop direct MP3 stream
+        if (directMP3Stream) {
+          console.log('📴 [MP3-STREAM] Stopping direct MP3 stream...');
+          directMP3Stream.stop();
+          directMP3Stream = null;
+          console.log('✅ [MP3-STREAM] Stopped');
+        }
         
         // Stop local HLS server
         if (localHLSServer) {
