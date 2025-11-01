@@ -8,7 +8,8 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { FFmpegStreamEncoder } from './ffmpegStreamEncoder.js';
 import { io as ioClient } from 'socket.io-client';
-import { setStreamingActive, updateLastAudioReceived } from '../routes/stream.js';
+import { setStreamingActive, updateLastAudioReceived, setHLSServer } from '../routes/stream.js';
+import { HLSStreamServer } from './hlsStreamServer.js';
 
 // Connection to dedicated streaming server
 let streamingServerSocket: any = null;
@@ -26,6 +27,9 @@ interface StreamConfig {
 
 // Store active stream sessions
 const activeRadioStreams = new Map<string, FFmpegStreamEncoder>();
+
+// Local HLS server for phone callers
+let localHLSServer: HLSStreamServer | null = null;
 
 // Connect to dedicated streaming server on startup
 function connectToStreamingServer() {
@@ -124,6 +128,25 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           console.log(`✅ [RADIO.CO] Radio.co stream started for client ${socket.id}`);
         }
         
+        // Start local HLS server for phone callers
+        if (!localHLSServer) {
+          console.log('🎙️ [LOCAL HLS] Starting local HLS server for phone callers...');
+          localHLSServer = new HLSStreamServer({
+            segmentDuration: 2,
+            playlistSize: 3,
+            bitrate: 128
+          });
+          
+          try {
+            await localHLSServer.start();
+            setHLSServer(localHLSServer); // Make available to routes
+            console.log('✅ [LOCAL HLS] Local HLS server started for phone caller audio');
+          } catch (hlsError) {
+            console.error('⚠️ [LOCAL HLS] Failed to start, phone callers will use hold music:', hlsError);
+            localHLSServer = null;
+          }
+        }
+        
         // Notify client of success
         console.log(`✅ [STREAM] All streams started successfully`);
         setStreamingActive(true); // Update stream status
@@ -179,7 +202,12 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           radioCoEncoder.processAudioChunk(float32Data);
         }
         
-        // Forward to dedicated streaming server (handles all HLS + Auto DJ)
+        // Send to local HLS server for phone callers
+        if (localHLSServer) {
+          localHLSServer.processAudioChunk(float32Data);
+        }
+        
+        // Forward to dedicated streaming server (handles Auto DJ and external platforms)
         if (streamingServerSocket && streamingServerSocket.connected) {
           streamingServerSocket.emit('live-audio', float32Data);
         } else {
@@ -190,7 +218,7 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
           }
         }
         
-        // Audio forwarded to dedicated streaming server (always available)
+        // Audio sent to: Radio.co (optional) + Local HLS (phone) + Streaming server (24/7)
       } catch (error) {
         console.error('❌ [STREAM] Error processing audio chunk:', error);
         socket.emit('stream:error', { message: 'Failed to process audio data' });
@@ -215,6 +243,14 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         console.log('📴 [STREAM] Live show ended - notifying dedicated streaming server...');
         
         setStreamingActive(false); // Update stream status
+        
+        // Stop local HLS server
+        if (localHLSServer) {
+          console.log('📴 [LOCAL HLS] Stopping local HLS server (stream:stop)...');
+          await localHLSServer.stop();
+          localHLSServer = null;
+          console.log('✅ [LOCAL HLS] Local HLS server stopped');
+        }
         
         // Notify dedicated streaming server that live show ended
         if (streamingServerSocket && streamingServerSocket.connected) {
@@ -262,6 +298,14 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         console.log('📴 [STREAM] Last broadcaster disconnected');
         
         setStreamingActive(false); // Update stream status
+        
+        // Stop local HLS server
+        if (localHLSServer) {
+          console.log('📴 [LOCAL HLS] Stopping local HLS server (disconnect)...');
+          await localHLSServer.stop();
+          localHLSServer = null;
+          console.log('✅ [LOCAL HLS] Local HLS server stopped');
+        }
         
         // Let dedicated streaming server know (it will handle Auto DJ resume)
         if (streamingServerSocket && streamingServerSocket.connected) {
