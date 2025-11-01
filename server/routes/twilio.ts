@@ -729,8 +729,9 @@ router.post('/queue-message', async (req: Request, res: Response) => {
     // Play AI-generated queue message
     twiml.play({}, queueAudioUrl);
     
-    // After message, just end - caller returns to conference waitUrl (hold music)
-    // The conference waitUrl will continue playing
+    // After message, play hold music in a loop
+    // This ensures caller hears music after the queue announcement
+    twiml.play({ loop: 20 }, 'http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3');
 
     res.type('text/xml').send(twiml.toString());
   } catch (error) {
