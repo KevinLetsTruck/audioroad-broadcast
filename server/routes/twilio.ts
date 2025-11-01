@@ -632,12 +632,12 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     dial.conference({
       startConferenceOnEnter: false, // Caller waits until screener joins
       endConferenceOnExit: false, // Don't end when caller leaves
-      beep: false,
+      beep: 'http://twimlets.com/echo?Twiml=%3CResponse%3E%3C%2FResponse%3E', // No beep
       maxParticipants: 40,
       waitUrl: 'http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3',
       muted: true, // Caller starts muted
       statusCallback: `${appUrl}/api/twilio/conference-status`,
-      statusCallbackEvent: 'start end join leave',
+      statusCallbackEvent: ['start', 'end', 'join', 'leave'],
       statusCallbackMethod: 'POST'
     }, conferenceName);
 
