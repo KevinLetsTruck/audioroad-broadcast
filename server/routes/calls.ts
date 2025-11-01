@@ -269,8 +269,7 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
         
         // Use announceUrl to play the queue message
         await updateParticipant(call.twilioConferenceSid, call.twilioCallSid, {
-          announceUrl: queueMessageUrl,
-          announceMethod: 'POST'
+          announceUrl: queueMessageUrl
         });
         
         console.log(`✅ Queue message queued for call ${call.id} (position ${finalPosition})`);

@@ -622,7 +622,7 @@ router.post('/live-show-audio', async (req: Request, res: Response) => {
     // Check if stream is live
     try {
       const statusResponse = await fetch(`${appUrl}/api/stream/status`);
-      const status = await statusResponse.json();
+      const status = await statusResponse.json() as { live?: boolean };
       
       if (!status.live) {
         console.log('⚠️ [LIVE-AUDIO] Stream is offline, using hold music');
@@ -749,7 +749,8 @@ router.get('/live-show-audio-stream', (req: Request, res: Response) => {
  */
 function serveStream(res: Response): void {
   if (!mp3Converter || !converterActive) {
-    return res.status(503).send('Stream not available');
+    res.status(503).send('Stream not available');
+    return;
   }
 
   activeStreamClients++;
