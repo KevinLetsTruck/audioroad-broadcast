@@ -21,13 +21,14 @@ export interface ChunkConfig {
 export async function generateMp3Chunk(config: ChunkConfig): Promise<PassThrough> {
   const output = new PassThrough();
 
-  console.log('🎵 [MP3-CHUNK] Generating 10-second MP3 chunk...');
+  console.log(`🎵 [MP3-CHUNK] Generating ${config.durationSeconds}-second MP3 chunk...`);
   console.log(`   Source: ${config.hlsUrl}`);
   
   const args = [
     '-loglevel', 'error',
     
-    // Input
+    // Input (start immediately, don't wait)
+    '-live_start_index', '-1',
     '-i', config.hlsUrl,
     
     // Limit to duration
@@ -37,6 +38,10 @@ export async function generateMp3Chunk(config: ChunkConfig): Promise<PassThrough
     '-reconnect', '1',
     '-reconnect_at_eof', '1',
     '-reconnect_streamed', '1',
+    '-reconnect_delay_max', '1',
+    
+    // Fast processing (don't wait for data)
+    '-fflags', '+genpts+igndts',
     
     // MP3 output
     '-c:a', 'libmp3lame',
@@ -75,14 +80,20 @@ export async function generateMp3Chunk(config: ChunkConfig): Promise<PassThrough
     output.end();
   });
   
-  // Timeout safety - if FFmpeg hangs, end after 15 seconds
+  // Timeout safety - for 5-sec chunk, timeout after 10 sec (double the duration)
+  const timeoutMs = (config.durationSeconds + 5) * 1000;
   const timeout = setTimeout(() => {
-    console.warn('⚠️ [MP3-CHUNK] Timeout after 15 seconds, ending chunk');
+    console.warn(`⚠️ [MP3-CHUNK] Timeout after ${timeoutMs/1000} seconds, ending chunk`);
     if (ffmpeg && !ffmpeg.killed) {
       ffmpeg.kill('SIGKILL');
     }
     output.end();
-  }, 15000);
+  }, timeoutMs);
+  
+  // Clear timeout when FFmpeg completes
+  ffmpeg.on('exit', () => {
+    clearTimeout(timeout);
+  });
 
   return output;
 }
