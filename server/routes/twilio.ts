@@ -488,17 +488,40 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
       return res.type('text/xml').send(twiml);
     }
 
-    // Stream is live - try to serve converted MP3
-    console.log('🎙️ [WAIT-AUDIO] Stream is LIVE, attempting MP3 conversion...');
+    // Stream is live - verify HLS playlist is accessible before attempting conversion
+    console.log('🎙️ [WAIT-AUDIO] Stream is LIVE, verifying HLS playlist...');
     
-    const streamUrl = `${appUrl}/api/twilio/live-show-audio-stream`;
-    
-    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-      <Response>
-        <Play>${streamUrl}</Play>
-      </Response>`;
-    
-    res.type('text/xml').send(twiml);
+    try {
+      const playlistResponse = await fetch(`${appUrl}/api/stream/live.m3u8`, {
+        signal: AbortSignal.timeout(2000)
+      });
+      
+      if (!playlistResponse.ok) {
+        console.warn(`⚠️ [WAIT-AUDIO] HLS playlist returned ${playlistResponse.status}, using hold music`);
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+          <Response>
+            <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+          </Response>`;
+        return res.type('text/xml').send(twiml);
+      }
+      
+      console.log('✅ [WAIT-AUDIO] HLS playlist accessible, attempting MP3 conversion...');
+      const streamUrl = `${appUrl}/api/twilio/live-show-audio-stream`;
+      
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+        <Response>
+          <Play>${streamUrl}</Play>
+        </Response>`;
+      
+      res.type('text/xml').send(twiml);
+    } catch (playlistError) {
+      console.warn('⚠️ [WAIT-AUDIO] Cannot access HLS playlist, using hold music');
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+        <Response>
+          <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+        </Response>`;
+      res.type('text/xml').send(twiml);
+    }
     
   } catch (error) {
     console.error('❌ [WAIT-AUDIO] Error:', error);
