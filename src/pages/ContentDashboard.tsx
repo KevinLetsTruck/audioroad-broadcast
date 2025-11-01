@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Card, Button, Badge, Select, Tabs, Tab, Spinner, EmptyState } from '../components/ui';
 
 export default function ContentDashboard() {
   const [activeTab, setActiveTab] = useState<'social' | 'library'>('social');

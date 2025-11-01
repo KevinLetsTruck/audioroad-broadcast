@@ -6,7 +6,6 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Card, Button, Input, Checkbox, Spinner } from '../components/ui';
 
 interface Platform {
   id: string;
