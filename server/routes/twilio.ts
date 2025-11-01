@@ -5,6 +5,9 @@ import { processRecording } from '../services/audioService.js';
 import { verifyTwilioWebhook } from '../middleware/twilioWebhookAuth.js';
 import { z } from 'zod';
 import { HLSToMP3Converter } from '../services/hlsToMp3Converter.js';
+import { generateWelcomeMessage, generateQueueMessage } from '../services/aiMessageService.js';
+import { generateSpeech } from '../services/textToSpeechService.js';
+import twilio from 'twilio';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -452,6 +455,39 @@ router.post('/wait-music', (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/twilio/welcome-audio - Generate and serve AI welcome message audio
+ */
+router.get('/welcome-audio', async (req: Request, res: Response) => {
+  try {
+    const { showName } = req.query;
+    const showNameStr = (showName as string) || 'AudioRoad Network';
+    
+    // Generate AI message
+    console.log('🤖 [WELCOME-AUDIO] Generating AI welcome message...');
+    const message = await generateWelcomeMessage(showNameStr);
+    console.log(`   Message: "${message}"`);
+    
+    // Convert to speech using ElevenLabs
+    console.log('🎤 [WELCOME-AUDIO] Converting to speech...');
+    const audioBuffer = await generateSpeech(message, {
+      voiceId: 'EXAVITQu4vr4xnSDxMaL', // Bella - smooth, friendly voice
+      stability: 0.6,
+      similarity_boost: 0.8
+    });
+    
+    // Set headers for MP3 streaming
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+    
+    res.send(audioBuffer);
+  } catch (error) {
+    console.error('❌ [WELCOME-AUDIO] Error:', error);
+    // Fallback: return empty response (Twilio will skip)
+    res.status(500).send('Error generating audio');
+  }
+});
+
+/**
  * POST /api/twilio/welcome-message - Welcome message with show name and redirect to conference
  */
 router.post('/welcome-message', async (req: Request, res: Response) => {
@@ -473,6 +509,11 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
       orderBy: { incomingAt: 'desc' }
     });
 
+    let episode;
+    let showName;
+    let conferenceName;
+    let liveStreamUrl;
+    
     if (!call || !call.episode) {
       // Fallback: try to find active episode
       const activeEpisode = await prisma.episode.findFirst({
@@ -485,39 +526,44 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
         return res.status(404).send('No active episode found');
       }
       
-      const showName = activeEpisode.show.name || 'AudioRoad Network';
-      const conferenceName = `episode-${activeEpisode.id}`;
-      const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
-      const liveStreamUrl = `${appUrl}/api/twilio/live-show-audio?episodeId=${activeEpisode.id}`;
-      
-      const twiml = generateTwiML('welcome', {
-        showName,
-        conferenceName,
-        startConferenceOnEnter: activeEpisode.conferenceActive || true,
-        liveStreamUrl,
-        muted: false
-      });
-
-      return res.type('text/xml').send(twiml);
+      episode = activeEpisode;
+      showName = activeEpisode.show.name || 'AudioRoad Network';
+      conferenceName = `episode-${activeEpisode.id}`;
+    } else {
+      episode = call.episode;
+      showName = episode.show.name || 'AudioRoad Network';
+      conferenceName = `episode-${episode.id}`;
     }
 
-    const episode = call.episode;
-    const showName = episode.show.name || 'AudioRoad Network';
-    const conferenceName = `episode-${episode.id}`;
     const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+    liveStreamUrl = `${appUrl}/api/twilio/live-show-audio?episodeId=${episode.id}`;
     
-    // Generate live stream URL (will be proxied/converted for Twilio)
-    const liveStreamUrl = `${appUrl}/api/twilio/live-show-audio?episodeId=${episode.id}`;
+    // Generate TwiML with AI audio URL
+    const welcomeAudioUrl = `${appUrl}/api/twilio/welcome-audio?showName=${encodeURIComponent(showName)}`;
     
-    const twiml = generateTwiML('welcome', {
-      showName,
-      conferenceName,
+    const VoiceResponse = twilio.twiml.VoiceResponse;
+    const twiml = new VoiceResponse();
+    
+    // Play AI-generated welcome message
+    twiml.play({}, welcomeAudioUrl);
+    
+    // Connect to conference with live show audio
+    const dial = twiml.dial();
+    const conferenceOptions: any = {
       startConferenceOnEnter: episode.conferenceActive || true,
-      liveStreamUrl,
-      muted: false
-    });
+      endConferenceOnExit: false,
+      beep: 'http://twimlets.com/echo?Twiml=%3CResponse%3E%3C%2FResponse%3E',
+      maxParticipants: 40,
+      waitUrl: liveStreamUrl,
+      muted: false,
+      statusCallback: `${appUrl}/api/twilio/conference-status`,
+      statusCallbackEvent: ['start', 'end', 'join', 'leave'],
+      statusCallbackMethod: 'POST'
+    };
+    
+    dial.conference(conferenceOptions, conferenceName);
 
-    res.type('text/xml').send(twiml);
+    res.type('text/xml').send(twiml.toString());
   } catch (error) {
     console.error('Error generating welcome message:', error);
     res.status(500).send('Error processing welcome message');
@@ -525,8 +571,42 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/twilio/queue-audio - Generate and serve AI queue message audio
+ */
+router.get('/queue-audio', async (req: Request, res: Response) => {
+  try {
+    const { position } = req.query;
+    const positionNum = position ? parseInt(position as string) : 1;
+    
+    // Generate AI message
+    console.log('🤖 [QUEUE-AUDIO] Generating AI queue message...');
+    const message = await generateQueueMessage(positionNum);
+    console.log(`   Message: "${message}"`);
+    
+    // Convert to speech using ElevenLabs
+    console.log('🎤 [QUEUE-AUDIO] Converting to speech...');
+    const audioBuffer = await generateSpeech(message, {
+      voiceId: 'EXAVITQu4vr4xnSDxMaL', // Bella - smooth, friendly voice
+      stability: 0.6,
+      similarity_boost: 0.8
+    });
+    
+    // Set headers for MP3 streaming
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+    
+    res.send(audioBuffer);
+  } catch (error) {
+    console.error('❌ [QUEUE-AUDIO] Error:', error);
+    // Fallback: return empty response (Twilio will skip)
+    res.status(500).send('Error generating audio');
+  }
+});
+
+/**
  * POST /api/twilio/queue-message - Queue position message after screening approval
  * Called by Twilio when announceUrl is triggered for a participant
+ * After playing message, redirects back to conference waitUrl to continue live show audio
  */
 router.post('/queue-message', async (req: Request, res: Response) => {
   try {
@@ -589,12 +669,20 @@ router.post('/queue-message', async (req: Request, res: Response) => {
     const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
     const liveStreamUrl = `${appUrl}/api/twilio/live-show-audio?episodeId=${call.episodeId}`;
     
-    const twiml = generateTwiML('queue-message', {
-      position: queuePosition,
-      liveStreamUrl
-    });
+    // Generate TwiML with AI audio URL, then redirect back to live show audio
+    const queueAudioUrl = `${appUrl}/api/twilio/queue-audio?position=${queuePosition}`;
+    
+    const VoiceResponse = twilio.twiml.VoiceResponse;
+    const twiml = new VoiceResponse();
+    
+    // Play AI-generated queue message
+    twiml.play({}, queueAudioUrl);
+    
+    // Redirect back to live show audio (conference waitUrl)
+    // This ensures caller continues hearing live show after message
+    twiml.redirect({ method: 'POST' }, liveStreamUrl);
 
-    res.type('text/xml').send(twiml);
+    res.type('text/xml').send(twiml.toString());
   } catch (error) {
     console.error('Error generating queue message:', error);
     // Fallback to hold music
