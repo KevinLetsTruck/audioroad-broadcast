@@ -627,13 +627,12 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
       language: 'en-US'
     }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
     
-    // Connect to conference with DIRECT hold music URL
+    // Connect to conference
     const dial = twiml.dial();
     dial.conference({
-      startConferenceOnEnter: false, // Caller waits until screener joins
+      startConferenceOnEnter: true, // Let caller start the conference
       endConferenceOnExit: false, // Don't end when caller leaves
       maxParticipants: 40,
-      waitUrl: 'http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3',
       muted: true, // Caller starts muted
       statusCallback: `${appUrl}/api/twilio/conference-status`,
       statusCallbackEvent: ['start', 'end', 'join', 'leave'],
