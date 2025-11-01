@@ -630,8 +630,10 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     // Connect to conference
     const dial = twiml.dial();
     dial.conference({
-      startConferenceOnEnter: true, // Let caller start the conference
+      startConferenceOnEnter: false, // Caller waits until screener joins
       endConferenceOnExit: false, // Don't end when caller leaves
+      waitUrl: `${appUrl}/api/twilio/wait-music`, // Use our endpoint that returns TwiML
+      waitMethod: 'POST',
       maxParticipants: 40,
       muted: true, // Caller starts muted
       statusCallback: `${appUrl}/api/twilio/conference-status`,
