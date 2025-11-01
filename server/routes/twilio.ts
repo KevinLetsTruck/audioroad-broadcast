@@ -455,6 +455,63 @@ router.post('/wait-music', (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/twilio/wait-audio - Smart wait audio (live show or hold music)
+ * Used as waitUrl for conference - plays live show if available, otherwise hold music
+ */
+router.post('/wait-audio', async (req: Request, res: Response) => {
+  try {
+    console.log('🎵 [WAIT-AUDIO] Request received');
+    
+    // Check if stream is live on the main broadcast server
+    const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+    
+    let isLive = false;
+    try {
+      const statusResponse = await fetch(`${appUrl}/api/stream/status`, { 
+        signal: AbortSignal.timeout(2000) // 2 second timeout
+      });
+      const status = await statusResponse.json() as { live?: boolean };
+      isLive = status.live || false;
+      console.log(`   Stream status: ${isLive ? 'LIVE ✅' : 'OFFLINE ❌'}`);
+    } catch (statusError) {
+      console.warn('⚠️ [WAIT-AUDIO] Could not check stream status (assuming offline)');
+      isLive = false;
+    }
+
+    // If stream is offline, return hold music
+    if (!isLive) {
+      console.log('📻 [WAIT-AUDIO] Returning hold music (stream offline)');
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+        <Response>
+          <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+        </Response>`;
+      return res.type('text/xml').send(twiml);
+    }
+
+    // Stream is live - try to serve converted MP3
+    console.log('🎙️ [WAIT-AUDIO] Stream is LIVE, attempting MP3 conversion...');
+    
+    const streamUrl = `${appUrl}/api/twilio/live-show-audio-stream`;
+    
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+        <Play>${streamUrl}</Play>
+      </Response>`;
+    
+    res.type('text/xml').send(twiml);
+    
+  } catch (error) {
+    console.error('❌ [WAIT-AUDIO] Error:', error);
+    // Fallback to hold music
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+        <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+      </Response>`;
+    res.type('text/xml').send(twiml);
+  }
+});
+
+/**
  * GET /api/twilio/welcome-audio - Generate and serve AI welcome message audio
  * Falls back to TwiML Say if AI generation fails
  */
@@ -565,17 +622,19 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     // Play AI-generated welcome message
     twiml.play({}, welcomeAudioUrl);
     
-    // Connect to conference with hold music
+    // Connect to conference with wait audio (live show or hold music)
     // IMPORTANT: startConferenceOnEnter should be FALSE for callers
     // so they hear waitUrl music until screener joins
+    const waitAudioUrl = `${appUrl}/api/twilio/wait-audio`;
+    
     const dial = twiml.dial();
     const conferenceOptions: any = {
       startConferenceOnEnter: false, // Caller waits with music until screener joins
       endConferenceOnExit: false,
       beep: 'http://twimlets.com/echo?Twiml=%3CResponse%3E%3C%2FResponse%3E',
       maxParticipants: 40,
-      waitUrl: waitMusicUrl,
-      waitMethod: 'GET',
+      waitUrl: waitAudioUrl,
+      waitMethod: 'POST',
       muted: true, // Caller starts muted
       statusCallback: `${appUrl}/api/twilio/conference-status`,
       statusCallbackEvent: ['start', 'end', 'join', 'leave'],

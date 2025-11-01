@@ -260,22 +260,9 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       }
     });
 
-    // Put participant on hold so they hear hold music
-    if (call.twilioCallSid && call.twilioCallSid.startsWith('CA') && call.twilioConferenceSid) {
-      try {
-        const { updateParticipant } = await import('../services/twilioService.js');
-        
-        // Put participant on hold - they will hear hold music
-        await updateParticipant(call.twilioConferenceSid, call.twilioCallSid, {
-          hold: true
-        });
-        
-        console.log(`✅ Participant put on hold for call ${call.id} (position ${finalPosition})`);
-      } catch (twilioError) {
-        console.error('⚠️ Error putting participant on hold:', twilioError);
-        // Continue anyway - call is still approved
-      }
-    }
+    // Keep participant in waiting state - they'll continue hearing waitUrl audio
+    // No need to put on hold - the conference waitUrl handles audio playback
+    console.log(`ℹ️ Participant remains in conference waiting state - hearing waitUrl audio (position ${finalPosition})`);
 
     const io = req.app.get('io');
     emitToEpisode(io, call.episodeId, 'call:approved', call);
