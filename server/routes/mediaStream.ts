@@ -26,15 +26,22 @@ export function initializeMediaStreamWebSocket(httpServer: HTTPServer): void {
 
   // Handle HTTP upgrade for WebSocket
   httpServer.on('upgrade', (request, socket, head) => {
+    console.log('🔄 [MEDIA-STREAM] HTTP Upgrade request:', request.url);
+    
     if (request.url?.startsWith('/api/twilio/media-stream')) {
+      console.log('✅ [MEDIA-STREAM] Handling upgrade for media-stream');
       wss.handleUpgrade(request, socket, head, (ws) => {
         wss.emit('connection', ws, request);
       });
+    } else {
+      console.log(`⚠️ [MEDIA-STREAM] Ignoring upgrade for: ${request.url}`);
     }
   });
 
-  wss.on('connection', (ws: WebSocket) => {
+  wss.on('connection', (ws: WebSocket, request) => {
     console.log('🔌 [MEDIA-STREAM] Twilio WebSocket connected');
+    console.log(`   URL: ${request.url}`);
+    console.log(`   Headers:`, request.headers);
     
     let callSid: string | null = null;
     let streamer: TwilioMediaStreamer | null = null;
