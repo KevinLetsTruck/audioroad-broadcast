@@ -77,6 +77,7 @@ export class HLSToMP3Converter extends EventEmitter {
     console.log('🎵 [HLS→MP3] Starting FFmpeg converter...');
     console.log(`   HLS URL: ${this.config.hlsPlaylistUrl}`);
     console.log(`   Output: MP3 ${this.config.bitrate}kbps, ${this.config.sampleRate}Hz, ${this.config.channels}ch`);
+    console.log(`   NOTE: If this fails with 503, the HLS server may not be running or accessible`);
 
     // Create main output stream
     this.outputStream = new PassThrough();

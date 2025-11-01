@@ -491,8 +491,13 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
     // Stream is live - verify HLS playlist is accessible before attempting conversion
     console.log('🎙️ [WAIT-AUDIO] Stream is LIVE, verifying HLS playlist...');
     
+    const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
+    const hlsUrl = `${streamServerUrl}/live.m3u8`; // Dedicated streaming server
+    
+    console.log(`   Checking: ${hlsUrl}`);
+    
     try {
-      const playlistResponse = await fetch(`${appUrl}/api/stream/live.m3u8`, {
+      const playlistResponse = await fetch(hlsUrl, {
         signal: AbortSignal.timeout(2000)
       });
       
@@ -842,10 +847,10 @@ router.post('/live-show-audio', async (req: Request, res: Response) => {
     
     console.log('🎵 [LIVE-AUDIO] Request received for episode:', episodeId);
     
-    // Get HLS stream URL - use internal URL or external streaming server
+    // Get HLS stream URL - use dedicated streaming server (where HLS is actually generated)
     const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
     const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
-    const hlsPlaylistUrl = `${appUrl}/api/stream/live.m3u8`;
+    const hlsPlaylistUrl = `${streamServerUrl}/live.m3u8`; // Use dedicated streaming server
     
     // OPTIMISTIC: Always try to stream live audio
     // The converter will handle failures gracefully
