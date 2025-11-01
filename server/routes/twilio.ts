@@ -478,20 +478,29 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
       isLive = false;
     }
 
-    // Use audio proxy to solve DNS issue
-    // Proxy fetches from dedicated server (Node fetch works)
-    // FFmpeg reads from local proxy (no DNS needed)
-    console.log('🎙️ [WAIT-AUDIO] Using audio proxy for live show/Auto DJ...');
+    // TWILIO LIMITATION: <Play> doesn't support infinite MP3 streams
+    // It buffers the entire file before playing → never starts with infinite stream
+    // 
+    // SOLUTION: Use Radio.co listen URL if available (proven to work)
+    // Otherwise use hold music until we can fix this properly
     
-    const proxyHlsUrl = `${appUrl}/api/audio-proxy/live.m3u8`;
-    const streamUrl = `${appUrl}/api/twilio/live-show-audio-stream?source=${encodeURIComponent(proxyHlsUrl)}`;
+    const radioCoListenUrl = process.env.RADIO_CO_LISTEN_URL;
     
-    console.log(`   Proxy URL: ${proxyHlsUrl} → FFmpeg can resolve this!`);
+    if (radioCoListenUrl) {
+      console.log('🎙️ [WAIT-AUDIO] Using Radio.co stream (proven working)');
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+        <Response>
+          <Play>${radioCoListenUrl}</Play>
+          <Redirect method="POST">${appUrl}/api/twilio/wait-audio</Redirect>
+        </Response>`;
+      return res.type('text/xml').send(twiml);
+    }
     
+    // Fallback: Hold music (Twilio's <Play> works with finite MP3 files)
+    console.log('📻 [WAIT-AUDIO] Using hold music (Twilio <Play> limitation with infinite streams)');
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play>${streamUrl}</Play>
-        <Redirect method="POST">${appUrl}/api/twilio/wait-audio</Redirect>
+        <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
       </Response>`;
     
     res.type('text/xml').send(twiml);
