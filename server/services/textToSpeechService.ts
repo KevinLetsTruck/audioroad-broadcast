@@ -47,10 +47,10 @@ export async function generateSpeech(
 
     const audio = await client.textToSpeech.convert(voiceId, {
       text,
-      modelId: 'eleven_monolingual_v1',
+      modelId: 'eleven_turbo_v2_5', // Latest turbo model - more natural, faster
       voiceSettings: {
-        stability,
-        similarityBoost: similarity_boost
+        stability: stability || 0.3, // Lower = more expressive, less robotic
+        similarityBoost: similarity_boost || 0.85 // Higher = more like original voice
       }
     });
 

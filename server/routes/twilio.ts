@@ -471,8 +471,8 @@ router.get('/welcome-audio', async (req: Request, res: Response) => {
     console.log('🎤 [WELCOME-AUDIO] Converting to speech...');
     const audioBuffer = await generateSpeech(message, {
       voiceId: 'EXAVITQu4vr4xnSDxMaL', // Bella - smooth, friendly voice
-      stability: 0.6,
-      similarity_boost: 0.8
+      stability: 0.3, // Lower = more natural, less robotic
+      similarity_boost: 0.85
     });
     
     // Set headers for MP3 streaming
@@ -587,8 +587,8 @@ router.get('/queue-audio', async (req: Request, res: Response) => {
     console.log('🎤 [QUEUE-AUDIO] Converting to speech...');
     const audioBuffer = await generateSpeech(message, {
       voiceId: 'EXAVITQu4vr4xnSDxMaL', // Bella - smooth, friendly voice
-      stability: 0.6,
-      similarity_boost: 0.8
+      stability: 0.3, // Lower = more natural, less robotic
+      similarity_boost: 0.85
     });
     
     // Set headers for MP3 streaming
@@ -707,22 +707,9 @@ router.post('/live-show-audio', async (req: Request, res: Response) => {
     const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
     const hlsPlaylistUrl = `${appUrl}/api/stream/live.m3u8`;
     
-    // Check if stream is live
-    try {
-      const statusResponse = await fetch(`${appUrl}/api/stream/status`);
-      const status = await statusResponse.json() as { live?: boolean };
-      
-      if (!status.live) {
-        console.log('⚠️ [LIVE-AUDIO] Stream is offline, using hold music');
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-          <Response>
-            <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
-          </Response>`;
-        return res.type('text/xml').send(twiml);
-      }
-    } catch (statusError) {
-      console.warn('⚠️ [LIVE-AUDIO] Could not check stream status:', statusError);
-    }
+    // Try to start converter - don't check stream status first (let it try)
+    // If converter fails, we'll fall back to hold music
+    console.log('🎵 [LIVE-AUDIO] Attempting to start live show audio converter...');
 
     // Initialize converter if not already running
     if (!mp3Converter || !converterActive) {
