@@ -309,28 +309,17 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         activeRadioStreams.delete(socket.id);
       }
       
-      // Notify dedicated streaming server on disconnect (for tracking)
+      // Notify dedicated streaming server on disconnect
       if (activeRadioStreams.size === 0) {
         console.log('📴 [STREAM] Last broadcaster disconnected');
         
-        setStreamingActive(false); // Mark as offline
+        // DON'T mark as offline - dedicated server handles Auto DJ
+        // DON'T stop local streams - they're for phone callers during shows only
         
-        // Stop direct MP3 stream
-        if (directMP3Stream) {
-          directMP3Stream.stop();
-          directMP3Stream = null;
-        }
-        
-        // Stop local HLS server  
-        if (localHLSServer) {
-          await localHLSServer.stop();
-          localHLSServer = null;
-        }
-        
-        // CRITICAL: Let dedicated streaming server know so Auto DJ resumes
+        // Tell dedicated streaming server to resume Auto DJ
         if (streamingServerSocket && streamingServerSocket.connected) {
           streamingServerSocket.emit('live-stop');
-          console.log('✅ Notified streaming server - Auto DJ should resume');
+          console.log('✅ Notified streaming server - Auto DJ will resume (dedicated server stays live)');
         }
       }
     });
