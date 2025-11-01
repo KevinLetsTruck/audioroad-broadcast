@@ -491,14 +491,15 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
     // Stream is live - use the best available audio source
     console.log('🎙️ [WAIT-AUDIO] Stream is LIVE, selecting audio source...');
     
-    // FOR NOW: Use hold music until we get the stream URL working
-    // The direct MP3 stream needs debugging (FFmpeg not outputting data)
-    console.log('📻 [WAIT-AUDIO] Using hold music (direct stream needs debugging)');
-    console.log('   Direct MP3 stream service is running but not outputting audio yet');
+    // Use local HLS→MP3 conversion (this was working yesterday!)
+    console.log('🎙️ [WAIT-AUDIO] Using HLS to MP3 conversion...');
+    
+    const streamUrl = `${appUrl}/api/twilio/live-show-audio-stream`;
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+        <Play>${streamUrl}</Play>
+        <Redirect method="POST">${appUrl}/api/twilio/wait-audio</Redirect>
       </Response>`;
     
     res.type('text/xml').send(twiml);

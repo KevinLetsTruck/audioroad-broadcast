@@ -82,21 +82,17 @@ export class HLSToMP3Converter extends EventEmitter {
     // Create main output stream
     this.outputStream = new PassThrough();
 
-    // FFmpeg command to convert HLS to MP3 stream (LIVE STREAMING MODE)
+    // FFmpeg command to convert HLS to MP3 stream (INFINITE STREAMING)
     const args = [
       // Logging
       '-loglevel', 'info',
-      
-      // LIVE STREAMING FLAGS - Don't exit when segments end
-      '-re', // Read input at native frame rate (real-time)
-      '-live_start_index', '-3', // Start from latest segments
       
       // Input: HLS playlist URL
       '-i', this.config.hlsPlaylistUrl,
       
       // Handle errors gracefully (continue on errors)
       '-ignore_unknown',
-      '-fflags', '+genpts+discardcorrupt',
+      '-fflags', '+genpts',
       '-reconnect', '1',
       '-reconnect_at_eof', '1',
       '-reconnect_streamed', '1',
