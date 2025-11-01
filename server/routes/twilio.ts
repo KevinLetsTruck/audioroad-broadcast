@@ -654,14 +654,13 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
       language: 'en-US'
     }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
     
-    // Connect to conference with hold music
-    // NOTE: Live show audio requires dedicated streaming infrastructure
-    // For now, using reliable hold music
+    // Connect to conference with smart wait audio (live show or hold music)
+    // Uses LOCAL HLS server (started when broadcast begins)
     const dial = twiml.dial();
     dial.conference({
       startConferenceOnEnter: false, // Caller waits until screener joins
       endConferenceOnExit: false, // Don't end when caller leaves
-      waitUrl: `${appUrl}/api/twilio/wait-music`, // Reliable hold music endpoint
+      waitUrl: `${appUrl}/api/twilio/wait-audio`, // Smart: live show if HLS running, else hold music
       waitMethod: 'POST',
       maxParticipants: 40,
       muted: true, // Caller starts muted
