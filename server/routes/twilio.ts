@@ -6,6 +6,7 @@ import { verifyTwilioWebhook } from '../middleware/twilioWebhookAuth.js';
 import { z } from 'zod';
 import { HLSToMP3Converter } from '../services/hlsToMp3Converter.js';
 import { generateMp3Chunk } from '../services/hlsToMp3Chunk.js';
+import { audioCache } from '../services/audioCache.js';
 import { generateWelcomeMessage, generateQueueMessage } from '../services/aiMessageService.js';
 import { generateSpeech } from '../services/textToSpeechService.js';
 import twilio from 'twilio';
@@ -479,23 +480,19 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
       isLive = false;
     }
 
-    // TEMPORARY: Hold music while we solve the live audio streaming issue properly
-    // The core challenge: Twilio's <Play> verb has fundamental limitations with live streams
-    // - Can't buffer infinite streams (waits forever)
-    // - Chunks work but timeout generating from live HLS
-    // - MediaStreams doesn't work in conference waitUrl
-    // 
-    // Next steps to fix properly:
-    // 1. Use Twilio TaskRouter with <Enqueue> (built for this use case)
-    // 2. Or implement a persistent MP3 buffer service
-    // 3. Or use <Conference> beep parameter for hold indication
-    console.log('📻 [WAIT-AUDIO] Using hold music (live audio feature in progress)');
+    // Use pre-cached MP3 files instead of live HLS conversion
+    // Generate chunks in ADVANCE and cache them, serve from cache
+    console.log('🎙️ [WAIT-AUDIO] Using cached MP3 chunks...');
+    
+    const chunkUrl = `${appUrl}/api/twilio/cached-audio-chunk`;
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+        <Play>${chunkUrl}</Play>
+        <Redirect method="POST">${appUrl}/api/twilio/wait-audio</Redirect>
       </Response>`;
     
+    console.log(`   Cached chunk URL: ${chunkUrl}`);
     res.type('text/xml').send(twiml);
     
   } catch (error) {
@@ -1083,7 +1080,42 @@ router.post('/sms', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /api/twilio/audio-chunk - Generate 10-second MP3 chunk
+ * GET /api/twilio/cached-audio-chunk - Serve pre-cached MP3 chunk
+ * Instant delivery from rolling buffer (no FFmpeg wait)
+ */
+router.get('/cached-audio-chunk', (req: Request, res: Response) => {
+  try {
+    const duration = 10; // 10 seconds
+    console.log(`🎵 [CACHED-CHUNK] Serving ${duration}-second cached chunk...`);
+    
+    // Get chunk from cache (instant!)
+    const chunk = audioCache.getChunk(duration);
+    
+    if (chunk.length === 0) {
+      console.warn('⚠️ [CACHED-CHUNK] Cache empty, starting caching...');
+      const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+      const hlsUrl = `${appUrl}/api/audio-proxy/live.m3u8`;
+      audioCache.start(hlsUrl);
+      
+      // Return silence for now
+      return res.status(503).send('Cache warming up...');
+    }
+    
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Content-Length', chunk.length.toString());
+    
+    res.send(chunk);
+    console.log(`✅ [CACHED-CHUNK] Delivered ${(chunk.length / 1024).toFixed(1)}KB`);
+    
+  } catch (error) {
+    console.error('❌ [CACHED-CHUNK] Error:', error);
+    res.status(500).send('Error serving cached chunk');
+  }
+});
+
+/**
+ * GET /api/twilio/audio-chunk - Generate MP3 chunk on-demand (fallback)
  * Twilio <Play> can handle finite files, redirect loop for continuous playback
  */
 router.get('/audio-chunk', async (req: Request, res: Response) => {
