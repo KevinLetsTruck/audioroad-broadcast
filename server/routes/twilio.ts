@@ -923,8 +923,6 @@ router.get('/live-show-audio-stream', (req: Request, res: Response) => {
       console.log('✅ [HLS→MP3] FFmpeg converter started with -re flag (realtime output)');
       serveStream(res);
       return;
-      
-      return;
     }
 
     console.log('✅ [LIVE-AUDIO-STREAM] Converter active, serving stream');
