@@ -488,13 +488,16 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
       return res.type('text/xml').send(twiml);
     }
 
-    // Stream is live - use the best available audio source
-    console.log('🎙️ [WAIT-AUDIO] Stream is LIVE, selecting audio source...');
+    // Stream is live - use DEDICATED streaming server (yesterday's working architecture)
+    console.log('🎙️ [WAIT-AUDIO] Stream is LIVE, using dedicated streaming server...');
     
-    // Use local HLS→MP3 conversion (this was working yesterday!)
-    console.log('🎙️ [WAIT-AUDIO] Using HLS to MP3 conversion...');
+    const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
+    const dedicatedStreamUrl = `${streamServerUrl}/live.m3u8`;
     
-    const streamUrl = `${appUrl}/api/twilio/live-show-audio-stream`;
+    console.log(`   Dedicated server HLS: ${dedicatedStreamUrl}`);
+    
+    // Use HLS to MP3 conversion from dedicated server
+    const streamUrl = `${appUrl}/api/twilio/live-show-audio-stream?source=${encodeURIComponent(dedicatedStreamUrl)}`;
     
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
@@ -824,9 +827,10 @@ router.post('/live-show-audio', async (req: Request, res: Response) => {
     
     console.log('🎵 [LIVE-AUDIO] Request received for episode:', episodeId);
     
-    // Get HLS stream URL - use LOCAL HLS server (started when broadcast begins)
+    // Get HLS stream URL - use DEDICATED streaming server (24/7 architecture)
     const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
-    const hlsPlaylistUrl = `${appUrl}/api/stream/live.m3u8`; // Use LOCAL HLS server
+    const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
+    const hlsPlaylistUrl = `${streamServerUrl}/live.m3u8`; // Use dedicated streaming server
     
     // OPTIMISTIC: Always try to stream live audio
     // The converter will handle failures gracefully
@@ -895,12 +899,13 @@ router.get('/live-show-audio-stream', (req: Request, res: Response) => {
   try {
     // Ensure converter is running
     if (!mp3Converter || !converterActive) {
-      // Try to start converter - use LOCAL HLS server
-      const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
-      const hlsPlaylistUrl = `${appUrl}/api/stream/live.m3u8`; // Local HLS server
+      // Get HLS URL from query param or use dedicated streaming server
+      const sourceUrl = req.query.source as string;
+      const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
+      const hlsPlaylistUrl = sourceUrl || `${streamServerUrl}/live.m3u8`; // Dedicated streaming server
       
       console.log('🎵 [LIVE-AUDIO-STREAM] Converter not running, starting...');
-      console.log(`   Using local HLS URL: ${hlsPlaylistUrl}`);
+      console.log(`   Using dedicated streaming server HLS: ${hlsPlaylistUrl}`);
       
       mp3Converter = new HLSToMP3Converter({
         hlsPlaylistUrl,
