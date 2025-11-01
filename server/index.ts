@@ -39,6 +39,7 @@ import audioProxyRoutes from './routes/audioProxy.js';
 import { initializeSocketHandlers } from './services/socketService.js';
 import { initializeStreamSocketHandlers, startHLSServerOnBoot } from './services/streamSocketService.js';
 import { initializeMediaStreamWebSocket } from './routes/mediaStream.js';
+import { audioCache } from './services/audioCache.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
