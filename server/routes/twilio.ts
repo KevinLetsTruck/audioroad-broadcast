@@ -609,33 +609,27 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
 
     const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
     
-    // For now, use hold music as waitUrl (reliable)
-    // TODO: Switch to live show audio once HLS conversion is working
+    // Use DIRECT hold music URL (no endpoints that can fail)
     const waitMusicUrl = 'http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3';
-    
-    // Generate TwiML with AI audio URL
-    const welcomeAudioUrl = `${appUrl}/api/twilio/welcome-audio?showName=${encodeURIComponent(showName)}`;
     
     const VoiceResponse = twilio.twiml.VoiceResponse;
     const twiml = new VoiceResponse();
     
-    // Play AI-generated welcome message
-    twiml.play({}, welcomeAudioUrl);
+    // Say welcome message (simple, reliable)
+    twiml.say({
+      voice: 'Polly.Joanna',
+      language: 'en-US'
+    }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
     
-    // Connect to conference with wait audio (live show or hold music)
-    // IMPORTANT: startConferenceOnEnter should be FALSE for callers
-    // so they hear waitUrl music until screener joins
-    const waitAudioUrl = `${appUrl}/api/twilio/wait-audio`;
-    
+    // Connect to conference with DIRECT hold music URL
     const dial = twiml.dial();
     const conferenceOptions: any = {
       startConferenceOnEnter: false, // Caller waits with music until screener joins
       endConferenceOnExit: false,
-      beep: 'http://twimlets.com/echo?Twiml=%3CResponse%3E%3C%2FResponse%3E',
+      beep: false,
       maxParticipants: 40,
-      waitUrl: waitAudioUrl,
-      waitMethod: 'POST',
-      muted: true, // Caller starts muted
+      waitUrl: waitMusicUrl, // DIRECT URL - can't fail
+      muted: true,
       statusCallback: `${appUrl}/api/twilio/conference-status`,
       statusCallbackEvent: ['start', 'end', 'join', 'leave'],
       statusCallbackMethod: 'POST'
