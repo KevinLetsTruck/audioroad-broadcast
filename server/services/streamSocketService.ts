@@ -264,23 +264,9 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
       if (activeRadioStreams.size === 0) {
         console.log('📴 [STREAM] Live show ended - notifying dedicated streaming server...');
         
-        setStreamingActive(false); // Update stream status
-        
-        // Stop direct MP3 stream
-        if (directMP3Stream) {
-          console.log('📴 [MP3-STREAM] Stopping direct MP3 stream...');
-          directMP3Stream.stop();
-          directMP3Stream = null;
-          console.log('✅ [MP3-STREAM] Stopped');
-        }
-        
-        // Stop local HLS server
-        if (localHLSServer) {
-          console.log('📴 [LOCAL HLS] Stopping local HLS server (stream:stop)...');
-          await localHLSServer.stop();
-          localHLSServer = null;
-          console.log('✅ [LOCAL HLS] Local HLS server stopped');
-        }
+        // DON'T stop streams or mark as offline!
+        // Auto DJ will resume and needs HLS server to keep running
+        console.log('ℹ️ [STREAM] Live show stopped - keeping HLS/MP3 streams running for Auto DJ');
         
         // Notify dedicated streaming server that live show ended
         if (streamingServerSocket && streamingServerSocket.connected) {
