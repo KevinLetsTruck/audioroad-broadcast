@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { emitToEpisode } from '../services/socketService.js';
 import { createCallSchema, updateCallStatusSchema, sanitizeString } from '../utils/validation.js';
+import twilio from 'twilio';
 
 const router = express.Router();
 const prisma = new PrismaClient();
