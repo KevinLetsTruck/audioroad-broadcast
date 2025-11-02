@@ -159,17 +159,8 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
             await localHLSServer.start();
             setHLSServer(localHLSServer); // Make available to routes
             console.log('✅ [LOCAL HLS] Local HLS server started for web listeners');
-            
-            // Start audio cache for phone callers using LOCAL HLS server
-            // Use localhost to avoid Railway DNS issues with cross-service resolution
-            if (!audioCache.caching) {
-              const port = process.env.PORT || '5000';
-              const localHlsUrl = `http://localhost:${port}/api/stream/live.m3u8`;
-              console.log('🎵 [AUDIO-CACHE] Starting audio cache for phone callers...');
-              console.log(`   Using LOCAL HLS server (localhost): ${localHlsUrl}`);
-              audioCache.start(localHlsUrl);
-              console.log('✅ [AUDIO-CACHE] Audio cache active');
-            }
+            // Note: audioCache already running via audio-proxy (started on boot)
+            // It will serve live audio once streaming server receives browser audio
           } catch (hlsError) {
             console.error('⚠️ [LOCAL HLS] Failed to start:', hlsError);
             localHLSServer = null;
