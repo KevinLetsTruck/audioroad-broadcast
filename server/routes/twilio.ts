@@ -1093,8 +1093,10 @@ router.get('/cached-audio-chunk', (req: Request, res: Response) => {
     
     if (chunk.length === 0) {
       console.warn('⚠️ [CACHED-CHUNK] Cache empty, starting caching...');
-      const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
-      const hlsUrl = `${appUrl}/api/audio-proxy/live.m3u8`;
+      // CRITICAL: Connect DIRECTLY to streaming server (not through proxy)
+      const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
+      const hlsUrl = `${streamServerUrl}/live.m3u8`;
+      console.log(`   Starting cache with direct connection: ${hlsUrl}`);
       audioCache.start(hlsUrl);
       
       // Return silence for now

@@ -242,9 +242,12 @@ const startServer = async () => {
       console.log('📡 [STREAMING] Using dedicated streaming server (microservice architecture)');
       
       // Start audio cache for phone callers
-      const appUrl = process.env.APP_URL || `http://localhost:${PORT}`;
-      const cacheHlsUrl = `${appUrl}/api/audio-proxy/live.m3u8`;
+      // CRITICAL: Connect DIRECTLY to streaming server (not through proxy)
+      // Avoids DNS/networking issues within Railway
+      const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
+      const cacheHlsUrl = `${streamServerUrl}/live.m3u8`;
       console.log('🎵 [AUDIO-CACHE] Starting background audio cache for phone callers...');
+      console.log(`   Connecting directly to streaming server: ${cacheHlsUrl}`);
       audioCache.start(cacheHlsUrl);
       console.log('✅ [AUDIO-CACHE] Background caching active\n');
     });
