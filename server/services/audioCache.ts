@@ -84,11 +84,18 @@ class AudioCacheService extends EventEmitter {
       }
     });
 
-    this.ffmpeg.on('exit', (code) => {
-      console.log(`📴 [AUDIO-CACHE] FFmpeg exited (code: ${code})`);
+    this.ffmpeg.on('exit', (code, signal) => {
+      console.log(`📴 [AUDIO-CACHE] FFmpeg exited (code: ${code}, signal: ${signal})`);
       this.isRunning = false;
-      // Auto-restart after 2 seconds
-      setTimeout(() => this.start(hlsUrl), 2000);
+      
+      // Only auto-restart if it wasn't intentionally stopped
+      if (signal !== 'SIGTERM' && signal !== 'SIGKILL') {
+        console.log('🔄 [AUDIO-CACHE] Auto-restarting in 2 seconds...');
+        setTimeout(() => {
+          console.log('🔄 [AUDIO-CACHE] Restarting...');
+          this.start(hlsUrl);
+        }, 2000);
+      }
     });
 
     this.ffmpeg.on('error', (error) => {

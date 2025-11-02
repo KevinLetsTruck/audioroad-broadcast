@@ -308,11 +308,13 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         // DON'T mark as offline - dedicated server handles Auto DJ
         // DON'T stop local streams - they're for phone callers during shows only
         
-        // Tell dedicated streaming server to resume Auto DJ
+        // Tell dedicated streaming server to resume Auto DJ (ONLY ONCE)
         if (streamingServerSocket && streamingServerSocket.connected) {
           streamingServerSocket.emit('live-stop');
           console.log('✅ Notified streaming server - Auto DJ will resume (dedicated server stays live)');
         }
+      } else {
+        console.log(`ℹ️  [STREAM] Broadcaster disconnected (${activeRadioStreams.size} still active)`);
       }
     });
   });
