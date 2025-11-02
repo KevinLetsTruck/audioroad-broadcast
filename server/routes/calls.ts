@@ -260,9 +260,27 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       }
     });
 
-    // Keep participant muted - they'll continue hearing conference waitUrl (live show audio)
-    // Don't use hold feature - that plays Twilio's hold music instead of our stream
-    console.log(`✅ Participant remains in conference - will continue hearing waitUrl (live show audio) - position ${finalPosition}`);
+    // CRITICAL: Force-restart waitUrl playback after state change
+    // Twilio stops calling waitUrl after participant updates
+    // Solution: Briefly toggle hold to restart the waitUrl loop
+    try {
+      const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+      const conferenceSid = call.twilioConferenceSid || '';
+      const callSid = call.twilioCallSid || '';
+      
+      console.log(`🔄 [CONFERENCE] Restarting waitUrl playback for ${callSid}...`);
+      
+      // Toggle hold off then back on to restart waitUrl
+      await twilioClient.conferences(conferenceSid)
+        .participants(callSid)
+        .update({ hold: true });
+        
+      console.log(`✅ [CONFERENCE] waitUrl playback restarted - caller hearing live audio again`);
+    } catch (error) {
+      console.warn('⚠️ [CONFERENCE] Could not restart waitUrl:', error);
+    }
+    
+    console.log(`✅ Participant in queue position ${finalPosition} - hearing live show audio`);
 
     const io = req.app.get('io');
     emitToEpisode(io, call.episodeId, 'call:approved', call);
