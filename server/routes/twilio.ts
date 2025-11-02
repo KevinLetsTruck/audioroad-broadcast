@@ -626,7 +626,7 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     // Uses LOCAL HLS server (started when broadcast begins)
     const dial = twiml.dial();
     dial.conference({
-      startConferenceOnEnter: false, // Caller waits until screener joins
+      startConferenceOnEnter: true, // IMPORTANT: Caller can keep conference alive when waiting for host
       endConferenceOnExit: false, // Don't end when caller leaves
       waitUrl: `${appUrl}/api/twilio/wait-audio`, // Smart: live show if HLS running, else hold music
       waitMethod: 'POST',
