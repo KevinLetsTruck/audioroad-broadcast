@@ -262,19 +262,11 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
       
       // Mark as no longer live
       if (activeRadioStreams.size === 0) {
-        console.log('📴 [STREAM] Live show ended - notifying dedicated streaming server...');
+        console.log('📴 [STREAM] Live show ended');
         
-        // DON'T stop streams or mark as offline!
-        // Auto DJ will resume and needs HLS server to keep running
-        console.log('ℹ️ [STREAM] Live show stopped - keeping HLS/MP3 streams running for Auto DJ');
-        
-        // Notify dedicated streaming server that live show ended
-        if (streamingServerSocket && streamingServerSocket.connected) {
-          streamingServerSocket.emit('live-stop');
-          console.log('✅ [STREAM] Dedicated streaming server notified - Auto DJ will resume');
-        } else {
-          console.warn('⚠️ [STREAM] Cannot notify streaming server (not connected)');
-        }
+        // DON'T notify dedicated server here - will be done in disconnect handler
+        // This prevents duplicate live-stop events which cause both streams to play
+        console.log('ℹ️ [STREAM] Waiting for broadcaster disconnect to notify streaming server...');
       }
 
       if (callback) {
