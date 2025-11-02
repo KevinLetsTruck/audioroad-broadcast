@@ -1093,13 +1093,13 @@ router.get('/cached-audio-chunk', (req: Request, res: Response) => {
     
     if (chunk.length === 0) {
       console.warn('⚠️ [CACHED-CHUNK] Cache empty, starting caching...');
-      // CRITICAL: Connect DIRECTLY to streaming server (not through proxy)
-      const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
-      const hlsUrl = `${streamServerUrl}/live.m3u8`;
-      console.log(`   Starting cache with direct connection: ${hlsUrl}`);
+      // Use localhost to avoid Railway DNS issues
+      const port = process.env.PORT || '5000';
+      const hlsUrl = `http://localhost:${port}/api/stream/live.m3u8`;
+      console.log(`   Starting cache with LOCAL HLS: ${hlsUrl}`);
       audioCache.start(hlsUrl);
       
-      // Return silence for now
+      // Return 503 so Twilio retries
       return res.status(503).send('Cache warming up...');
     }
     

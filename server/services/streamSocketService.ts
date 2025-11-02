@@ -11,6 +11,7 @@ import { io as ioClient } from 'socket.io-client';
 import { setStreamingActive, updateLastAudioReceived, setHLSServer } from '../routes/stream.js';
 import { HLSStreamServer } from './hlsStreamServer.js';
 import { DirectMP3Stream } from './directMp3Stream.js';
+import { audioCache } from './audioCache.js';
 
 // Connection to dedicated streaming server
 let streamingServerSocket: any = null;
@@ -158,6 +159,17 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
             await localHLSServer.start();
             setHLSServer(localHLSServer); // Make available to routes
             console.log('✅ [LOCAL HLS] Local HLS server started for web listeners');
+            
+            // Start audio cache for phone callers using LOCAL HLS server
+            // Use localhost to avoid Railway DNS issues with cross-service resolution
+            if (!audioCache.caching) {
+              const port = process.env.PORT || '5000';
+              const localHlsUrl = `http://localhost:${port}/api/stream/live.m3u8`;
+              console.log('🎵 [AUDIO-CACHE] Starting audio cache for phone callers...');
+              console.log(`   Using LOCAL HLS server (localhost): ${localHlsUrl}`);
+              audioCache.start(localHlsUrl);
+              console.log('✅ [AUDIO-CACHE] Audio cache active');
+            }
           } catch (hlsError) {
             console.error('⚠️ [LOCAL HLS] Failed to start:', hlsError);
             localHLSServer = null;

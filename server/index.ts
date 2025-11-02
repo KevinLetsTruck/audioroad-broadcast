@@ -241,15 +241,9 @@ const startServer = async () => {
       // This app only sends audio to the streaming server via Socket.IO
       console.log('📡 [STREAMING] Using dedicated streaming server (microservice architecture)');
       
-      // Start audio cache for phone callers
-      // CRITICAL: Connect DIRECTLY to streaming server (not through proxy)
-      // Avoids DNS/networking issues within Railway
-      const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
-      const cacheHlsUrl = `${streamServerUrl}/live.m3u8`;
-      console.log('🎵 [AUDIO-CACHE] Starting background audio cache for phone callers...');
-      console.log(`   Connecting directly to streaming server: ${cacheHlsUrl}`);
-      audioCache.start(cacheHlsUrl);
-      console.log('✅ [AUDIO-CACHE] Background caching active\n');
+      // Audio cache will start automatically when broadcast begins
+      // This avoids Railway DNS issues on boot (services can't resolve each other's public URLs)
+      console.log('🎵 [AUDIO-CACHE] Ready (will start when broadcast begins)\n');
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
