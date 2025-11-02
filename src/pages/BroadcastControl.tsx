@@ -579,23 +579,13 @@ export default function BroadcastControl() {
       await broadcast.destroyMixer();
       console.log('✅ [END] Mixer cleaned up');
 
-      // End the episode with recording URL
-      try {
-        console.log('📴 [END] Ending episode in database...');
-        const endRes = await fetch(`/api/episodes/${status.episodeId}/end`, { 
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ recordingUrl })
-        });
-        if (endRes.ok) {
-          console.log('✅ [END] Episode ended in database with recording URL');
-        } else {
-          const errorData = await endRes.json().catch(() => ({}));
-          console.warn('⚠️ [END] Episode end failed:', errorData);
-        }
-      } catch (endError) {
-        console.warn('⚠️ [END] Error ending episode:', endError);
-      }
+      // DON'T end the episode here - just stop broadcasting!
+      // The episode should stay live so callers can wait for the host
+      // Episode will be ended manually via "End Episode" button
+      console.log('✅ [END] Broadcast stopped - episode remains live for callers');
+      
+      // TODO: Save recording URL to episode without ending it
+      // For now, recording URL can be added when episode is manually ended
 
       // Reset status in context
       console.log('📴 [END] Resetting state...');
