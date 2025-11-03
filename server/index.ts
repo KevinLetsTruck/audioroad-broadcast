@@ -241,16 +241,14 @@ const startServer = async () => {
       // This app only sends audio to the streaming server via Socket.IO
       console.log('📡 [STREAMING] Using dedicated streaming server (microservice architecture)');
       
-      // Start audio cache for phone callers using audio-proxy
-      // The proxy uses fetch() (not FFmpeg), so it works fine with Railway DNS
-      // During Auto DJ: serves 24/7 stream via proxy
-      // During broadcast: will switch to local HLS (see streamSocketService.ts)
-      const port = process.env.PORT || '5000';
-      const proxyHlsUrl = `http://localhost:${port}/api/audio-proxy/live.m3u8`;
+      // Start audio cache for phone callers using Radio.co stream
+      // Radio.co handles Auto DJ ↔ Live switching seamlessly (zero overlap!)
+      // Callers on hold hear the same professional stream as listeners
+      const radioCoStreamUrl = 'https://stream.radio.co/s923c25be7/listen';
       console.log('🎵 [AUDIO-CACHE] Starting audio cache for phone callers...');
-      console.log(`   Using audio proxy (24/7 Auto DJ): ${proxyHlsUrl}`);
-      audioCache.start(proxyHlsUrl);
-      console.log('✅ [AUDIO-CACHE] Audio cache active (24/7)\n');
+      console.log(`   Using Radio.co stream (professional quality): ${radioCoStreamUrl}`);
+      audioCache.start(radioCoStreamUrl);
+      console.log('✅ [AUDIO-CACHE] Audio cache active (Radio.co stream)\n');
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
