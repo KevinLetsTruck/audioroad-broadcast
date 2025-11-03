@@ -241,14 +241,15 @@ const startServer = async () => {
       // This app only sends audio to the streaming server via Socket.IO
       console.log('📡 [STREAMING] Using dedicated streaming server (microservice architecture)');
       
-      // Start audio cache for phone callers using Radio.co stream
+      // Start audio cache for phone callers using Radio.co HLS stream
+      // HLS format = best quality (source format, no transcoding loss)
       // Radio.co handles Auto DJ ↔ Live switching seamlessly (zero overlap!)
       // Callers on hold hear the same professional stream as listeners
-      const radioCoStreamUrl = 'https://stream.radio.co/s923c25be7/listen';
+      const radioCoStreamUrl = 'http://stream.radio.co/s923c25be7/listen.m3u8';
       console.log('🎵 [AUDIO-CACHE] Starting audio cache for phone callers...');
-      console.log(`   Using Radio.co stream (professional quality): ${radioCoStreamUrl}`);
+      console.log(`   Using Radio.co HLS stream (best quality): ${radioCoStreamUrl}`);
       audioCache.start(radioCoStreamUrl);
-      console.log('✅ [AUDIO-CACHE] Audio cache active (Radio.co stream)\n');
+      console.log('✅ [AUDIO-CACHE] Audio cache active (Radio.co HLS stream)\n');
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
