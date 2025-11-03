@@ -274,26 +274,13 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     try {
       console.log(`📞 [CALL] Connecting as ${role}:`, callId, callerName);
 
-      // If host is joining, use cloned mic stream from mixer
-      let callOptions: any = { params: { callId, episodeId, role } };
-      
-      if (role === 'host' && mixer) {
-        const hostMicStream = mixer.getHostMicStreamForConference();
-        if (hostMicStream) {
-          // Pass the cloned mic stream to Twilio so host can be heard
-          callOptions.rtcConfiguration = {
-            ...callOptions.rtcConfiguration,
-            audioConstraints: { audio: { deviceId: undefined } }
-          };
-          callOptions.audioStream = hostMicStream;
-          console.log('✅ [CALL] Using cloned mic stream from mixer for host audio');
-        } else {
-          console.warn('⚠️ [CALL] No mic stream from mixer - host may not be heard!');
-        }
-      }
-      
-      // Make Twilio call
-      const call = await twilioDevice.connect(callOptions);
+      // Make Twilio call with standard options
+      // Note: Twilio will try to access microphone
+      // For host: mic is already used by mixer (this may cause issues)
+      // For screener: mic should be available
+      const call = await twilioDevice.connect({
+        params: { callId, episodeId, role }
+      });
 
       // Wait for call to connect
       await new Promise((resolve, reject) => {
