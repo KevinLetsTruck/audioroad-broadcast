@@ -46,6 +46,9 @@ class AudioCacheService extends EventEmitter {
       '-ignore_unknown',
       '-fflags', '+genpts',
       
+      // Audio filtering to remove noise and normalize
+      '-af', 'highpass=f=200,lowpass=f=3000,volume=1.0',  // Clean phone audio (remove static)
+      
       // MP3 output
       '-c:a', 'libmp3lame',
       '-b:a', '128k',
