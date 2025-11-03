@@ -274,10 +274,26 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     try {
       console.log(`📞 [CALL] Connecting as ${role}:`, callId, callerName);
 
+      // If host is joining, use cloned mic stream from mixer
+      let callOptions: any = { params: { callId, episodeId, role } };
+      
+      if (role === 'host' && mixer) {
+        const hostMicStream = mixer.getHostMicStreamForConference();
+        if (hostMicStream) {
+          // Pass the cloned mic stream to Twilio so host can be heard
+          callOptions.rtcConfiguration = {
+            ...callOptions.rtcConfiguration,
+            audioConstraints: { audio: { deviceId: undefined } }
+          };
+          callOptions.audioStream = hostMicStream;
+          console.log('✅ [CALL] Using cloned mic stream from mixer for host audio');
+        } else {
+          console.warn('⚠️ [CALL] No mic stream from mixer - host may not be heard!');
+        }
+      }
+      
       // Make Twilio call
-      const call = await twilioDevice.connect({
-        params: { callId, episodeId, role }
-      });
+      const call = await twilioDevice.connect(callOptions);
 
       // Wait for call to connect
       await new Promise((resolve, reject) => {
@@ -286,18 +302,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
         setTimeout(() => reject(new Error('Call timeout')), 10000);
       });
 
-      console.log('✅ [CALL] Twilio call connected');
-
-      // TEMPORARILY DISABLED: Don't try to capture audio stream yet
-      // This was interfering with Twilio's native audio
-      // TODO: Implement proper audio routing without breaking Twilio
-      
-      // Get audio stream from call (for future mixer integration)
-      // Disabled for now: call.getRemoteStream();
-      // Placeholder for future audio stream capture
-      
-      console.log('⚠️ [CALL] Mixer audio capture DISABLED - using Twilio native audio');
-      console.log('💡 [CALL] Volume controls will be added once audio routing is fixed');
+      console.log(`✅ [CALL] Twilio call connected (role: ${role})`);
 
       // Store call info
       const callInfo: CallInfo = {

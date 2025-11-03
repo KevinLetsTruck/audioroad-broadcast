@@ -35,6 +35,9 @@ export class AudioMixerEngine {
   private destination: MediaStreamAudioDestinationNode | null = null;
   private compressor: DynamicsCompressorNode | null = null;
   
+  // Host microphone stream (for sharing with Twilio conference)
+  private hostMicStream: MediaStream | null = null;
+  
   // Recording
   private mediaRecorder: MediaRecorder | null = null;
   private recordedChunks: Blob[] = [];
@@ -167,6 +170,10 @@ export class AudioMixerEngine {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: cleanConstraints
         });
+
+        // Save host mic stream so it can be shared with Twilio conference
+        this.hostMicStream = stream;
+        console.log('✅ [MIXER] Host mic stream saved for conference sharing');
 
         return this.addSource({
           id: 'host-mic',
@@ -597,8 +604,25 @@ export class AudioMixerEngine {
     this.masterAnalyser = null;
     this.destination = null;
     this.compressor = null;
+    this.hostMicStream = null;
 
     console.log('✅ [MIXER] Mixer destroyed - microphone should now be OFF');
+  }
+
+  /**
+   * Get host microphone stream for Twilio conference
+   * Returns a CLONE so both mixer and Twilio can use the same mic
+   */
+  getHostMicStreamForConference(): MediaStream | null {
+    if (!this.hostMicStream) {
+      console.warn('⚠️ [MIXER] No host mic stream available - mic may not be connected');
+      return null;
+    }
+
+    // Clone the stream so Twilio gets its own copy (separate from mixer)
+    const clonedStream = this.hostMicStream.clone();
+    console.log('✅ [MIXER] Cloned host mic stream for Twilio conference');
+    return clonedStream;
   }
 }
 
