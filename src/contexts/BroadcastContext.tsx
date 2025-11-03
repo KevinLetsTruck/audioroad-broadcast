@@ -242,11 +242,9 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
           incoming: silentSound,
           outgoing: silentSound
         },
-        // Add codec preferences to prevent EncodingError
-        codecPreferences: ['opus', 'pcmu'],
-        // Ensure proper audio constraints
-        maxAverageBitrate: 16000  // Standard for voice calls
-      });
+        // Set max bitrate for voice quality (prevents encoding issues)
+        maxAverageBitrate: 16000
+      } as any);
       
       console.log('🎤 [CONTEXT] Twilio Device created (browser handles noise suppression automatically)');
 
@@ -278,20 +276,11 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     try {
       console.log(`📞 [CALL] Connecting as ${role}:`, callId, callerName);
 
-      // Make Twilio call with explicit audio enabled
+      // Make Twilio call with explicit audio constraints
       // For screener: mic should be available (no mixer)
       // For host: mic is used by mixer (may cause conflict - TO FIX)
       const call = await twilioDevice.connect({
-        params: { callId, episodeId, role },
-        rtcConfiguration: {
-          enableDscp: true
-        },
-        // Explicitly enable audio
-        audioConstraints: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
+        params: { callId, episodeId, role }
       });
 
       // Wait for call to connect
