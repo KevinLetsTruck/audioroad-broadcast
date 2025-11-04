@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
-import ChatPanel from '../components/ChatPanel';
+import ChatPanelNew from '../components/ChatPanelNew';
 import ParticipantBoard from '../components/ParticipantBoard';
 import { useBroadcast } from '../contexts/BroadcastContext';
 import { Card, Button, Badge, Tabs, Tab, EmptyState } from '../components/ui';
@@ -414,7 +414,7 @@ export default function HostDashboard() {
 
         {/* Right: Chat Sidebar - 50/50 Split */}
         <div className="flex-1 border-l border-gray-700 overflow-hidden">
-          {activeEpisode && <ChatPanel episodeId={activeEpisode.id} userRole="host" />}
+          {activeEpisode && <ChatPanelNew episodeId={activeEpisode.id} userRole="host" />}
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useBroadcast } from '../contexts/BroadcastContext';
-import ChatPanel from '../components/ChatPanel';
+import ChatPanelNew from '../components/ChatPanelNew';
 import DocumentUploadWidget from '../components/DocumentUploadWidget';
 
 export default function ScreeningRoom() {
@@ -680,7 +680,7 @@ export default function ScreeningRoom() {
 
         {/* Right: Chat Sidebar - 50% */}
         <div className="flex-1 border-l border-gray-700 overflow-hidden">
-          {activeEpisode && <ChatPanel episodeId={activeEpisode.id} userRole="screener" />}
+          {activeEpisode && <ChatPanelNew episodeId={activeEpisode.id} userRole="screener" />}
         </div>
       </div>
     </div>
