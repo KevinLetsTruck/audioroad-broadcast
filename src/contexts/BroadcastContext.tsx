@@ -212,7 +212,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
   const initializeTwilio = async (identity: string) => {
     if (twilioDevice) {
       console.log('⚠️ [TWILIO] Device already initialized');
-      return;
+      return twilioDevice; // Return existing device
     }
 
     try {
@@ -247,7 +247,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
       console.log('🎤 [CONTEXT] Twilio Device created (browser handles noise suppression automatically)');
 
       device.on('registered', () => {
-        console.log('✅ [TWILIO] Device registered');
+        console.log('✅ [TWILIO] Device registered and ready for calls');
       });
 
       device.on('error', (error) => {
@@ -255,8 +255,13 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
       });
 
       await device.register();
+      
+      // Wait for device to be fully ready
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       setTwilioDevice(device);
-      console.log('✅ [TWILIO] Device initialized globally');
+      console.log('✅ [TWILIO] Device initialized globally and ready');
+      return device;
     } catch (error) {
       console.error('❌ [TWILIO] Failed to initialize:', error);
       throw error;
