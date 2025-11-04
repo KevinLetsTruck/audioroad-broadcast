@@ -231,20 +231,13 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
 
       const { token } = await response.json();
 
-      // Create device with ALL sounds disabled (use silent data URL)
-      const silentSound = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+      // Create device with minimal config (the custom sounds were causing EncodingError!)
       const device = new Device(token, {
         enableImprovedSignalingErrorPrecision: true,
-        logLevel: 'error',
-        // DISABLE ALL TWILIO DEVICE SOUNDS - these cause beeps when connecting/disconnecting
-        sounds: {
-          disconnect: silentSound,
-          incoming: silentSound,
-          outgoing: silentSound
-        },
-        // Set max bitrate for voice quality (prevents encoding issues)
-        maxAverageBitrate: 16000
-      } as any);
+        logLevel: 'error'
+        // Removed custom sounds - they were causing audio decode errors
+        // Removed maxAverageBitrate - not needed, let Twilio use defaults
+      });
       
       console.log('🎤 [CONTEXT] Twilio Device created (browser handles noise suppression automatically)');
 
