@@ -1092,14 +1092,9 @@ router.get('/cached-audio-chunk', (req: Request, res: Response) => {
     const chunk = audioCache.getChunk(duration);
     
     if (chunk.length === 0) {
-      console.warn('⚠️ [CACHED-CHUNK] Cache empty, starting caching...');
-      // Use audio-proxy which works with fetch() (no Railway DNS issues)
-      const port = process.env.PORT || '5000';
-      const proxyHlsUrl = `http://localhost:${port}/api/audio-proxy/live.m3u8`;
-      console.log(`   Starting cache with audio proxy: ${proxyHlsUrl}`);
-      audioCache.start(proxyHlsUrl);
-      
-      // Return 503 so Twilio retries
+      console.warn('⚠️ [CACHED-CHUNK] Cache warming up...');
+      // Don't override with local stream - let Radio.co cache build
+      // audioCache already started on boot with Radio.co URL
       return res.status(503).send('Cache warming up...');
     }
     

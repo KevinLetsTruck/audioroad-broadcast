@@ -15,7 +15,7 @@ class AudioCacheService extends EventEmitter {
   private isRunning = false;
 
   /**
-   * Start caching audio from HLS stream
+   * Start caching audio from stream (HLS or AAC)
    */
   start(hlsUrl: string): void {
     if (this.isRunning) {
@@ -31,20 +31,11 @@ class AudioCacheService extends EventEmitter {
 
     const args = [
       '-loglevel', 'info',
+      '-i', hlsUrl,  // Works for both HLS and AAC streams
       
-      // CRITICAL: Treat as infinite live stream (yesterday's fix!)
-      '-live_start_index', '-1',  // Start from newest segment
-      '-i', hlsUrl,
-      
-      // Reconnect on errors (continuous streaming)
+      // Reconnect on network issues
       '-reconnect', '1',
-      '-reconnect_at_eof', '1',
-      '-reconnect_streamed', '1',
       '-reconnect_delay_max', '2',
-      
-      // Handle errors gracefully (keep going)
-      '-ignore_unknown',
-      '-fflags', '+genpts',
       
       // Audio filtering to remove noise and normalize
       '-af', 'highpass=f=200,lowpass=f=3000,volume=1.0',  // Clean phone audio (remove static)

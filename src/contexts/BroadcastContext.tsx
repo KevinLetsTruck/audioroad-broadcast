@@ -231,12 +231,17 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
 
       const { token } = await response.json();
 
-      // Create device with minimal config (the custom sounds were causing EncodingError!)
+      // Silent sounds prevent annoying beeps (worked perfectly on Oct 31!)
+      const silentSound = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
       const device = new Device(token, {
         enableImprovedSignalingErrorPrecision: true,
-        logLevel: 'error'
-        // Removed custom sounds - they were causing audio decode errors
-        // Removed maxAverageBitrate - not needed, let Twilio use defaults
+        logLevel: 'error',
+        // Disable all Twilio device sounds - prevents beeps on connect/disconnect
+        sounds: {
+          disconnect: silentSound,
+          incoming: silentSound,
+          outgoing: silentSound
+        }
       });
       
       console.log('🎤 [CONTEXT] Twilio Device created (browser handles noise suppression automatically)');
@@ -269,9 +274,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     try {
       console.log(`📞 [CALL] Connecting as ${role}:`, callId, callerName);
 
-      // Make Twilio call with explicit audio constraints
-      // For screener: mic should be available (no mixer)
-      // For host: mic is used by mixer (may cause conflict - TO FIX)
+      // Simple - Twilio handles audio natively (worked perfectly on Oct 31!)
       const call = await twilioDevice.connect({
         params: { callId, episodeId, role }
       });
@@ -285,25 +288,22 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
 
       console.log(`✅ [CALL] Twilio call connected (role: ${role})`);
 
-      // Store call info
+      // Store call info (no custom audio stream handling)
       const callInfo: CallInfo = {
         id: `call-${callId}`,
         callId,
         callerName,
         twilioCall: call,
-        audioStream: null, // Not capturing yet
+        audioStream: null, // Twilio handles natively
         isOnAir: role === 'host',
         connectedAt: new Date()
       };
 
       setActiveCalls(prev => new Map(prev).set(callId, callInfo));
       
-      // Only set as on-air if it's the host
       if (role === 'host') {
         setOnAirCallState(callInfo);
       }
-
-      console.log(`✅ [CALL] ${role} call fully connected (Twilio native audio)`);
 
     } catch (error) {
       console.error('❌ [CALL] Failed to connect:', error);
