@@ -246,10 +246,12 @@ const startServer = async () => {
       // ========================================
       // Radio.co handles Auto DJ ↔ Live switching with ZERO overlap!
       // Callers on hold hear same professional stream as listeners
-      const radioCoStreamUrl = 'http://stream.radio.co/s923c25be7/listen.m3u8';
+      // Radio.co provides AAC stream (not HLS), works perfectly with FFmpeg
+      const radioCoStreamUrl = 'https://stream.radio.co/s923c25be7/listen';
       console.log('========================================');
       console.log('🎵 [AUDIO-CACHE] STARTING WITH RADIO.CO STREAM');
       console.log(`   URL: ${radioCoStreamUrl}`);
+      console.log(`   Format: AAC (64kbps - Standard Quality)`);
       console.log('========================================');
       audioCache.start(radioCoStreamUrl);
       console.log('✅ [AUDIO-CACHE] Radio.co stream ACTIVE\n');
