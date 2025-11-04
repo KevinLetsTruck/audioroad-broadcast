@@ -298,8 +298,15 @@ export default function ScreeningRoom() {
       // Wait a moment for screener to fully connect to conference
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // NOTE: Caller joins unmuted now (set in TwiML) to avoid beeps from unmute operations
-      console.log('✅ Caller already unmuted (joined conference unmuted to avoid beeps)')
+      // CRITICAL: Take caller OFF hold so they can hear screener
+      // Without this, caller only hears music, not the screener!
+      console.log('📞 Taking caller off hold for screening...');
+      try {
+        await fetch(`/api/participants/${call.id}/on-air`, { method: 'PATCH' });
+        console.log('✅ Caller taken off hold - can now hear screener');
+      } catch (holdError) {
+        console.error('⚠️ Failed to take caller off hold:', holdError);
+      }
     } catch (error) {
       console.error('❌ Error connecting to caller:', error);
       setActiveCall(null);
