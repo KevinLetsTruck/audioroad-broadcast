@@ -304,25 +304,8 @@ export default function ScreeningRoom() {
       await new Promise(resolve => setTimeout(resolve, 1500));
       console.log('✅ Step 2 complete: Wait finished');
       
-      // CRITICAL: Take caller OFF hold so they can hear screener
-      console.log('📞 Step 3: Taking caller off hold via API call...');
-      console.log(`   API endpoint: /api/participants/${call.id}/on-air`);
-      
-      const response = await fetch(`/api/participants/${call.id}/on-air`, { 
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      console.log(`   Response status: ${response.status}`);
-      const responseData = await response.json();
-      console.log('   Response data:', responseData);
-      
-      if (!response.ok) {
-        throw new Error(`API call failed with status ${response.status}`);
-      }
-      
-      console.log('✅ Step 3 complete: Caller taken off hold');
-      console.log('🎉 ALL STEPS COMPLETE - Caller should now hear screener!');
+      // No hold state - both are unmuted and in conference
+      console.log('🎉 Screener and caller connected - both unmuted, audio should work!');
     } catch (error) {
       console.error('❌ Error in screening connection process:', error);
       console.error('   Error details:', error);
