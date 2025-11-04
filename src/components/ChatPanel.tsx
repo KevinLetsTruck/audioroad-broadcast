@@ -136,14 +136,7 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
                 </a>
               )
             )}
-            {msg.messageType === 'sms' && msg.senderId !== 'host' && (
-              <button
-                onClick={() => setReplyingTo(msg)}
-                className="mt-2 text-xs text-blue-400 hover:text-blue-300 underline"
-              >
-                Reply via SMS
-              </button>
-            )}
+            {/* SMS reply removed for simplified UI */}
           </div>
         ))}
         <div ref={messagesEndRef} />
