@@ -262,27 +262,23 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       }
     });
 
-    // Put caller on hold so they hear the live show while waiting for host
-    // This is the ONLY place we use hold state - just for the queue
+    // Mute caller while in approved queue
+    // NO hold state - they stay in conference and hear it live
     if (call.twilioCallSid && call.twilioConferenceSid && twilioClient) {
       try {
-        const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
         const conferenceSid = call.episode?.twilioConferenceSid || call.twilioConferenceSid;
         
         await twilioClient
           .conferences(conferenceSid)
           .participants(call.twilioCallSid)
           .update({
-            muted: true,
-            hold: true, // On hold so they hear holdUrl (live show)
-            holdUrl: `${appUrl}/api/twilio/wait-audio`,
-            holdMethod: 'POST'
-            // No announceUrl - it interrupts the hold music
-          } as any);
+            muted: true
+            // No hold - caller hears conference in real-time
+          });
         
-        console.log(`✅ [APPROVE] Participant on hold hearing live show (position ${finalPosition})`);
+        console.log(`✅ [APPROVE] Participant muted, hearing live conference (position ${finalPosition})`);
       } catch (error) {
-        console.error('⚠️ [APPROVE] Failed to put on hold:', error);
+        console.error('⚠️ [APPROVE] Failed to mute:', error);
       }
     }
 
