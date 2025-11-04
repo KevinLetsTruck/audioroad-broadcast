@@ -81,15 +81,16 @@ export class ParticipantService {
           } else {
             console.log(`✅ [CONFERENCE] Found participant: ${participant.callSid}`);
             
-            // Simple: just unmute them (no hold state management)
+            // Unmute and take off hold (if they were in queue)
             await twilioClient
               .conferences(conferenceSidToUse)
               .participants(call.twilioCallSid)
               .update({
-                muted: false
+                muted: false,
+                hold: false // Take off hold so they hear conference, not waitUrl
               });
             
-            console.log(`✅ [TWILIO] Successfully unmuted participant`);
+            console.log(`✅ [TWILIO] Successfully unmuted participant and removed hold`);
           }
         } else {
           console.warn(`⚠️ [CONFERENCE] Conference ${conferenceSidToUse} doesn't exist yet`);
