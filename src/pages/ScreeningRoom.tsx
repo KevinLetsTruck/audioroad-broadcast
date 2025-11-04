@@ -407,7 +407,19 @@ export default function ScreeningRoom() {
         throw new Error('Failed to approve call');
       }
 
-      console.log('✅ Call approved and added to host queue');
+      console.log('✅ Call approved');
+      
+      // WORKAROUND: Cycle caller through on-air/hold to "wake up" audio
+      // This fixes the first-caller audio issue
+      console.log('🔄 Cycling participant state to activate audio...');
+      try {
+        await fetch(`/api/participants/${callToApprove.id}/on-air`, { method: 'PATCH' });
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await fetch(`/api/participants/${callToApprove.id}/hold`, { method: 'PATCH' });
+        console.log('✅ Audio routing activated - caller should hear conference');
+      } catch (cycleError) {
+        console.warn('⚠️ Could not cycle participant state:', cycleError);
+      }
       
       // Clear form data
       const resetNotes = {
