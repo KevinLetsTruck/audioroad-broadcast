@@ -5,9 +5,11 @@
  */
 
 import express, { Request, Response } from 'express';
+import { PrismaClient } from '@prisma/client';
 import { ParticipantService } from '../services/participantService.js';
 
 const router = express.Router();
+const prisma = new PrismaClient();
 
 /**
  * GET /api/participants/:episodeId - Get all active participants for an episode
