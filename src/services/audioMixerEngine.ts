@@ -96,11 +96,12 @@ export class AudioMixerEngine {
       this.compressor.connect(this.masterAnalyser);
       this.masterAnalyser.connect(this.destination);
       
-      // DON'T connect to speakers - prevents feedback!
-      // Host hears callers through Twilio, not through mixer
-      // this.masterAnalyser.connect(this.audioContext.destination);
+      // ALSO connect to speakers so host can hear opener, soundboard, etc.
+      // Note: This will cause feedback if mic is unmuted, but that's OK
+      // Host can control their speaker volume to prevent feedback
+      this.masterAnalyser.connect(this.audioContext.destination);
 
-      console.log('🎚️ Audio Mixer initialized (output: stream only, no local playback)');
+      console.log('🎚️ Audio Mixer initialized (output: stream + local playback)');
       
       // Start level monitoring
       this.startLevelMonitoring();

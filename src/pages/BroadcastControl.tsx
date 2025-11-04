@@ -391,7 +391,7 @@ export default function BroadcastControl() {
       console.log('   Mixer:', mixerInstance ? 'Ready' : 'Not ready');
       
       if (selectedShow?.openerAudioUrl && mixerInstance) {
-        console.log('🎵 [START] Playing show opener automatically...');
+        console.log('🎵 [START] Playing show opener - this gives Twilio time to be ready...');
         setPlayingOpener(true);
         try {
           // Play opener through mixer (broadcasts to listeners AND your speakers!)
@@ -403,6 +403,17 @@ export default function BroadcastControl() {
           // Don't fail the whole start if opener fails
         } finally {
           setPlayingOpener(false);
+        }
+        
+        // CRITICAL: After opener, connect host to conference
+        // By now Twilio has had 60+ seconds to be fully ready
+        console.log('📞 [START] Opener complete - connecting host to conference...');
+        try {
+          await broadcast.connectToCall(`opener-${episode.id}`, 'Host', episode.id, 'host');
+          console.log('✅ [START] Host connected to conference - first caller will hear you!');
+        } catch (conferenceError) {
+          console.warn('⚠️ [START] Could not connect to conference:', conferenceError);
+          // This is not critical - host will connect when taking first call
         }
       } else {
         if (!selectedShow?.openerAudioUrl) {
