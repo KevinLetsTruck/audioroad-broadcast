@@ -262,25 +262,42 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       }
     });
 
-    // Put participant on hold with Radio.co stream
+    // Put participant on hold with Radio.co stream (ONLY if not already on hold)
+    // Re-setting holdUrl causes audio to restart/rewind - avoid it!
     if (call.twilioCallSid && call.twilioConferenceSid && twilioClient) {
       try {
         const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
         const conferenceSid = call.episode?.twilioConferenceSid || call.twilioConferenceSid;
         
-        await twilioClient
-          .conferences(conferenceSid)
-          .participants(call.twilioCallSid)
-          .update({
-            muted: true, // Muted so they can't talk
-            hold: true, // On hold so they hear holdUrl
-            holdUrl: `${appUrl}/api/twilio/wait-audio`, // Radio.co stream
-            holdMethod: 'POST'
-          } as any);
+        // Check if already on hold to avoid restarting audio
+        const wasOnHold = existingCall.isOnHold;
         
-        console.log(`✅ [APPROVE] Participant on hold with Radio.co stream (queue position ${finalPosition})`);
+        if (!wasOnHold) {
+          // First time on hold - set holdUrl
+          await twilioClient
+            .conferences(conferenceSid)
+            .participants(call.twilioCallSid)
+            .update({
+              muted: true,
+              hold: true,
+              holdUrl: `${appUrl}/api/twilio/wait-audio`,
+              holdMethod: 'POST'
+            } as any);
+          
+          console.log(`✅ [APPROVE] Participant on hold with Radio.co stream (queue position ${finalPosition})`);
+        } else {
+          // Already on hold - just ensure still muted, don't reset holdUrl
+          await twilioClient
+            .conferences(conferenceSid)
+            .participants(call.twilioCallSid)
+            .update({
+              muted: true
+            });
+          
+          console.log(`✅ [APPROVE] Participant already on hold, kept existing audio (queue position ${finalPosition})`);
+        }
       } catch (holdError) {
-        console.error('⚠️ [APPROVE] Failed to set hold with Radio.co stream:', holdError);
+        console.error('⚠️ [APPROVE] Failed to set hold status:', holdError);
         // Continue anyway - database is updated
       }
     }

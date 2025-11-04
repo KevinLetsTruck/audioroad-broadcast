@@ -81,16 +81,18 @@ export class ParticipantService {
           } else {
             console.log(`✅ [CONFERENCE] Found participant: ${participant.callSid}`);
             
-            // Unmute the participant using their call SID (silently)
+            // Unmute the participant so they can talk
+            // KEEP on hold so they continue hearing Radio.co stream (which has host's voice!)
+            // Don't set hold:false or they'll lose host audio
             await twilioClient
               .conferences(conferenceSidToUse)
               .participants(call.twilioCallSid)
               .update({
-                muted: false,
-                hold: false
+                muted: false
+                // hold stays true - they keep hearing Radio.co with host's voice
               });
             
-            console.log(`✅ [TWILIO] Successfully unmuted participant in conference`);
+            console.log(`✅ [TWILIO] Successfully unmuted participant for on-air (still hearing Radio.co stream)`);
           }
         } else {
           console.warn(`⚠️ [CONFERENCE] Conference ${conferenceSidToUse} doesn't exist yet`);
