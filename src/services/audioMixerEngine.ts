@@ -96,12 +96,10 @@ export class AudioMixerEngine {
       this.compressor.connect(this.masterAnalyser);
       this.masterAnalyser.connect(this.destination);
       
-      // ALSO connect to speakers so host can hear opener, soundboard, etc.
-      // Note: This will cause feedback if mic is unmuted, but that's OK
-      // Host can control their speaker volume to prevent feedback
-      this.masterAnalyser.connect(this.audioContext.destination);
-
-      console.log('🎚️ Audio Mixer initialized (output: stream + local playback)');
+      // DON'T connect to speakers - prevents feedback
+      // We'll handle local playback separately for specific sources (opener, soundboard)
+      
+      console.log('🎚️ Audio Mixer initialized (output: stream only, no local playback)');
       
       // Start level monitoring
       this.startLevelMonitoring();
