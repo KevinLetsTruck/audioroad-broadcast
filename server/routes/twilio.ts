@@ -723,22 +723,16 @@ router.post('/queue-announcement', async (req: Request, res: Response) => {
     const position = parseInt(req.query.position as string) || 1;
     const positionText = position === 1 ? 'first' : position === 2 ? 'second' : position === 3 ? 'third' : `number ${position}`;
     
-    const VoiceResponse = twilio.twiml.VoiceResponse;
-    const twiml = new VoiceResponse();
+    // Just return empty - let them stay on hold hearing the holdUrl
+    // The announcement feature in Twilio interrupts hold audio
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response></Response>`;
     
-    // Simple message
-    twiml.say({
-      voice: 'Polly.Joanna',
-      language: 'en-US'
-    }, `Thank you. The host will be with you shortly. You are ${positionText} in the queue.`);
-    
-    res.type('text/xml').send(twiml.toString());
+    res.type('text/xml').send(twiml);
   } catch (error) {
     console.error('Error generating queue announcement:', error);
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-      <Response>
-        <Say voice="Polly.Joanna">The host will be with you shortly.</Say>
-      </Response>`;
+      <Response></Response>`;
     res.type('text/xml').send(twiml);
   }
 });

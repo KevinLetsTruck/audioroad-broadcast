@@ -274,11 +274,10 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
           .participants(call.twilioCallSid)
           .update({
             muted: true,
-            hold: true, // On hold so they hear waitUrl (live show)
+            hold: true, // On hold so they hear holdUrl (live show)
             holdUrl: `${appUrl}/api/twilio/wait-audio`,
-            holdMethod: 'POST',
-            announceUrl: `${appUrl}/api/twilio/queue-announcement?position=${finalPosition}`,
-            announceMethod: 'POST'
+            holdMethod: 'POST'
+            // No announceUrl - it interrupts the hold music
           } as any);
         
         console.log(`✅ [APPROVE] Participant on hold hearing live show (position ${finalPosition})`);
