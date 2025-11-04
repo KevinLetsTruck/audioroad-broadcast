@@ -265,6 +265,7 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
     // Simple: just mute participant while in approved queue
     if (call.twilioCallSid && call.twilioConferenceSid && twilioClient) {
       try {
+        const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
         const conferenceSid = call.episode?.twilioConferenceSid || call.twilioConferenceSid;
         
         await twilioClient
