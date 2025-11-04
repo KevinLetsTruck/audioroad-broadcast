@@ -60,7 +60,9 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           <SidebarNavLink to="/screening-room" icon="📞" label="Screening" collapsed={collapsed} />
         )}
         
-        <SidebarNavLink to="/recordings" icon="📁" label="Recordings" collapsed={collapsed} />
+        {(isHost || isProducer) && (
+          <SidebarNavLink to="/recordings" icon="📁" label="Recordings" collapsed={collapsed} />
+        )}
 
         {/* CONTENT Section */}
         {(isHost || isProducer) && (
@@ -79,18 +81,22 @@ export default function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
           </>
         )}
 
-        {/* TailAdmin SETTINGS Section */}
-        {!collapsed && (
-          <div className="px-4 mb-2 mt-6">
-            <h3 className="text-xs font-semibold text-body dark:text-body-dark uppercase tracking-wider">
-              Settings
-            </h3>
-          </div>
+        {/* TailAdmin SETTINGS Section - Host/Admin Only */}
+        {isHost && (
+          <>
+            {!collapsed && (
+              <div className="px-4 mb-2 mt-6">
+                <h3 className="text-xs font-semibold text-body dark:text-body-dark uppercase tracking-wider">
+                  Settings
+                </h3>
+              </div>
+            )}
+            
+            <SidebarNavLink to="/platforms" icon="📡" label="Streaming Platforms" collapsed={collapsed} />
+            <SidebarNavLink to="/podcast" icon="🎙️" label="Podcast Distribution" collapsed={collapsed} />
+            <SidebarNavLink to="/settings" icon="⚙️" label="Show Settings" collapsed={collapsed} />
+          </>
         )}
-        
-        <SidebarNavLink to="/platforms" icon="📡" label="Streaming Platforms" collapsed={collapsed} />
-        <SidebarNavLink to="/podcast" icon="🎙️" label="Podcast Distribution" collapsed={collapsed} />
-        <SidebarNavLink to="/settings" icon="⚙️" label="Show Settings" collapsed={collapsed} />
       </nav>
 
       {/* TailAdmin Bottom Section with Dark Mode */}

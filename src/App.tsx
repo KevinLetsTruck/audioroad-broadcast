@@ -29,10 +29,20 @@ function AppContent() {
   const { user } = useUser()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // Get user role from Clerk
+  const userRole = user?.publicMetadata?.role as string | undefined;
+  const isScreener = userRole === 'screener';
+
   // Don't show navigation on auth pages or public pages
   const isAuthPage = location.pathname === '/sign-in' || location.pathname === '/sign-up'
   const isPublicPage = location.pathname === '/call-now'
-  const showSidebar = !isAuthPage && !isPublicPage && user
+  // Hide sidebar for screeners (they only see screening room)
+  const showSidebar = !isAuthPage && !isPublicPage && user && !isScreener
+
+  // Auto-redirect screeners to screening room if they try to access other pages
+  if (user && isScreener && !isAuthPage && location.pathname !== '/screening-room') {
+    return <Navigate to="/screening-room" replace />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex">
@@ -124,7 +134,7 @@ function AppContent() {
           {/* Protected Routes - Only accessible when signed in */}
           <Route path="/" element={
             <SignedIn>
-              <RoleGate allowedRoles={['host', 'admin']}>
+              <RoleGate allowedRoles={['host', 'admin', 'producer']}>
                 <BroadcastControl />
               </RoleGate>
             </SignedIn>
@@ -145,12 +155,16 @@ function AppContent() {
           } />
           <Route path="/recordings" element={
             <SignedIn>
-              <Recordings />
+              <RoleGate allowedRoles={['host', 'admin', 'producer']}>
+                <Recordings />
+              </RoleGate>
             </SignedIn>
           } />
           <Route path="/settings" element={
             <SignedIn>
-              <ShowSettings />
+              <RoleGate allowedRoles={['host', 'admin']}>
+                <ShowSettings />
+              </RoleGate>
             </SignedIn>
           } />
           <Route path="/commercials" element={
