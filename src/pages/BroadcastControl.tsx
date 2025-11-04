@@ -266,30 +266,18 @@ export default function BroadcastControl() {
 
       // Step 3: Initialize Twilio device
       console.log('🎙️ [START] Step 3: Initializing Twilio...');
-      await broadcast.initializeTwilio(`host-${Date.now()}`);
+      const twilioDevice = await broadcast.initializeTwilio(`host-${Date.now()}`);
       console.log('✅ [START] Twilio initialized');
       
-      // Wait extra time to ensure device state is fully set
-      console.log('⏳ [START] Ensuring device is ready...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Verify device is actually available
-      if (!broadcast.twilioDevice) {
-        throw new Error('Twilio device failed to initialize properly');
+      if (!twilioDevice) {
+        throw new Error('Twilio device initialization returned null');
       }
-      console.log('✅ [START] Twilio device confirmed ready');
 
       // Step 3b: Connect host to conference immediately
-      // This creates the conference and host is in it for whole show
-      // All callers will join this conference and hear host live
+      // Use the device directly (not from state) to avoid timing issues
       console.log('🎙️ [START] Step 3b: Connecting host to conference...');
-      try {
-        await broadcast.connectToCall(`show-${episode.id}`, 'Host', episode.id, 'host');
-        console.log('✅ [START] Host connected to conference - you are now live to callers');
-      } catch (conferenceError) {
-        console.error('❌ [START] Failed to connect to conference:', conferenceError);
-        throw conferenceError; // Stop show start if this fails - it's critical
-      }
+      await broadcast.connectToCall(`show-${episode.id}`, 'Host', episode.id, 'host', twilioDevice);
+      console.log('✅ [START] Host connected to conference - you are now live to callers');
 
       // Step 4: Initialize audio mixer (use global context)
       console.log('🎙️ [START] Step 4: Initializing mixer...');
