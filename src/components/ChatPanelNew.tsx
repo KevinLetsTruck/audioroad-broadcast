@@ -31,7 +31,9 @@ export default function ChatPanelNew({ episodeId, userRole }: ChatPanelProps) {
       setMessages(prev => [...prev.slice(-14), msg]); // Keep only 15 max
     });
 
-    return () => socket.close();
+    return () => {
+      socket.close();
+    };
   }, [episodeId]);
 
   const send = async (e: React.FormEvent) => {
