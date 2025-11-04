@@ -342,14 +342,20 @@ export default function ScreeningRoom() {
     try {
       const callToApprove = activeCall;
       
-      // NOTE: In conference mode, DON'T disconnect the call!
-      // The caller stays in the conference (muted in HOLD state)
-      // Only disconnect screener's local audio connection
+      // NOTE: In conference mode, caller stays in conference
+      // Screener's connection will naturally end when we navigate away
+      // DON'T call disconnectAll() - it breaks the global device!
       if (screenerConnected) {
-        console.log('📴 Screener ending local connection (caller stays in conference)');
-        // Disconnect only the screener's Twilio Device connection
-        if (broadcast.twilioDevice) {
-          broadcast.twilioDevice.disconnectAll();
+        console.log('📴 Screener ending screening session (connection will close naturally)');
+        // Just disconnect the specific call for this screener, not all calls
+        const screenerCall = broadcast.activeCalls.get(call.id);
+        if (screenerCall?.twilioCall) {
+          try {
+            screenerCall.twilioCall.disconnect();
+            console.log('✅ Disconnected screener call only');
+          } catch (e) {
+            console.warn('⚠️ Error disconnecting screener call:', e);
+          }
         }
       }
       
