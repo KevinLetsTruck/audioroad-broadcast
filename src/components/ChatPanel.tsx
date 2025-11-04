@@ -196,12 +196,12 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
   };
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="p-4 bg-gray-800 border-b border-gray-700">
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="p-4 bg-gray-800 border-b border-gray-700 flex-shrink-0">
         <h3 className="font-semibold">Team Chat</h3>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
         {messages.map((msg) => (
           <div key={msg.id} className="bg-gray-800 p-3 rounded">
             <div className="flex items-baseline gap-2 mb-1">
@@ -248,7 +248,7 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      <form onSubmit={sendMessage} className="p-4 border-t border-gray-700">
+      <form onSubmit={sendMessage} className="p-4 border-t border-gray-700 flex-shrink-0">
         {replyingTo && (
           <div className="mb-3 p-3 bg-gray-800/50 border border-gray-700 rounded">
             <div className="flex items-center justify-between mb-2">
