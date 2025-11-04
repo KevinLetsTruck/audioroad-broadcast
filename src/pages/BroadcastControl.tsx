@@ -264,10 +264,20 @@ export default function BroadcastControl() {
         console.log('✅ Episode started');
       }
 
-      // Step 3: Initialize Twilio device and connect to conference
+      // Step 3: Initialize Twilio device
       console.log('🎙️ [START] Step 3: Initializing Twilio...');
       await broadcast.initializeTwilio(`host-${Date.now()}`);
       console.log('✅ [START] Twilio initialized');
+      
+      // Wait extra time to ensure device state is fully set
+      console.log('⏳ [START] Ensuring device is ready...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Verify device is actually available
+      if (!broadcast.twilioDevice) {
+        throw new Error('Twilio device failed to initialize properly');
+      }
+      console.log('✅ [START] Twilio device confirmed ready');
 
       // Step 3b: Connect host to conference immediately
       // This creates the conference and host is in it for whole show
