@@ -15,6 +15,20 @@ export default function HostDashboard() {
   const [activeTab, setActiveTab] = useState<'calls' | 'documents'>('calls');
   const [allDocuments, setAllDocuments] = useState<any[]>([]);
   
+  // Initialize Twilio if not available (same as ScreeningRoom)
+  useEffect(() => {
+    if (!broadcast.twilioDevice && activeEpisode) {
+      console.log('📞 [HOST] Twilio device not available, initializing...');
+      const identity = `host-dashboard-${Date.now()}`;
+      broadcast.initializeTwilio(identity)
+        .then(() => {
+          console.log('✅ [HOST] Twilio device ready');
+        })
+        .catch(err => {
+          console.error('❌ [HOST] Failed to initialize Twilio:', err);
+        });
+    }
+  }, [broadcast.twilioDevice, activeEpisode]);
 
   useEffect(() => {
     // Fetch active episode from database
