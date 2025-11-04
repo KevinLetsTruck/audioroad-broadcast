@@ -195,14 +195,19 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
     }
   };
 
+  // Show only last 20 messages to prevent performance issues
+  const visibleMessages = messages.slice(-20);
+
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <div className="p-4 bg-gray-800 border-b border-gray-700 flex-shrink-0">
-        <h3 className="font-semibold">Team Chat</h3>
+    <div className="h-full flex flex-col bg-gray-900">
+      {/* Header - Fixed */}
+      <div className="p-3 bg-gray-800 border-b border-gray-700">
+        <h3 className="font-semibold text-sm">Team Chat</h3>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
-        {messages.map((msg) => (
+      {/* Messages - Scrollable */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-2" style={{ maxHeight: 'calc(100% - 140px)' }}>
+        {visibleMessages.map((msg) => (
           <div key={msg.id} className="bg-gray-800 p-3 rounded">
             <div className="flex items-baseline gap-2 mb-1">
               <span className={`font-semibold text-sm ${getRoleColor(msg.senderRole)}`}>
@@ -248,61 +253,17 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      <form onSubmit={sendMessage} className="p-4 border-t border-gray-700 flex-shrink-0">
-        {replyingTo && (
-          <div className="mb-3 p-3 bg-gray-800/50 border border-gray-700 rounded">
-            <div className="flex items-center justify-between mb-2">
-              <div className="text-xs text-gray-400">
-                📱 Replying to: <span className="text-blue-400">{replyingTo.senderName}</span>
-              </div>
-              <button
-                onClick={() => setReplyingTo(null)}
-                className="text-xs text-gray-500 hover:text-gray-300"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={smsReply}
-                onChange={(e) => setSmsReply(e.target.value)}
-                placeholder="Type SMS reply..."
-                className="flex-1 bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleSendSmsReply();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                onClick={handleSendSmsReply}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium"
-              >
-                Send SMS
-              </button>
-            </div>
-          </div>
-        )}
-        <div className="flex gap-2 mb-2">
+      {/* Input Form - Fixed at bottom */}
+      <form onSubmit={sendMessage} className="p-3 border-t border-gray-700 bg-gray-800">
+        {/* Simplified - removed SMS reply feature for cleaner UI */}
+        <div className="flex gap-2">
           <input
             type="text"
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
-            placeholder="Type a message..."
-            className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded focus:outline-none focus:border-primary-500 text-sm"
+            placeholder="Message team..."
+            className="flex-1 px-3 py-2 bg-gray-900 border border-gray-700 rounded focus:outline-none focus:border-primary-500 text-sm"
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="px-3 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 rounded text-sm"
-            title="Upload file"
-          >
-            {uploading ? '⏳' : '📎'}
-          </button>
           <button
             type="submit"
             className="px-4 py-2 bg-primary-600 hover:bg-primary-700 rounded font-semibold text-sm"
@@ -310,13 +271,6 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
             Send
           </button>
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          onChange={handleFileUpload}
-          accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
-          className="hidden"
-        />
       </form>
     </div>
   );
