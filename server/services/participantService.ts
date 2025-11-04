@@ -139,22 +139,17 @@ export class ParticipantService {
       console.log(`   Using conference SID: ${conferenceSid}`);
 
       try {
-        // Put on hold with Radio.co stream
-        const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+        // Simple: just mute them
         await twilioClient
           .conferences(conferenceSid)
           .participants(call.twilioCallSid)
           .update({
-            muted: true, // Muted so they can't talk
-            hold: true, // On hold so they hear holdUrl
-            holdUrl: `${appUrl}/api/twilio/wait-audio`, // Radio.co stream
-            holdMethod: 'POST'
-          } as any); // 'as any' to bypass TypeScript (holdUrl/holdMethod not in types)
+            muted: true
+          });
         
-        console.log(`✅ [TWILIO] Participant on hold with Radio.co stream`);
+        console.log(`✅ [TWILIO] Participant muted`);
       } catch (twilioError: any) {
-        console.error(`❌ [TWILIO] Failed to put on hold:`, twilioError.message);
-        // Don't throw - just log and update database anyway
+        console.error(`❌ [TWILIO] Failed to mute:`, twilioError.message);
       }
 
       // Update database
@@ -163,11 +158,11 @@ export class ParticipantService {
         data: {
           participantState: 'hold',
           isMutedInConference: true,
-          isOnHold: true // They are on hold with Radio.co stream
+          isOnHold: false // No hold state - just muted
         }
       });
 
-      console.log(`✅ [PARTICIPANT] ${callId} is now ON HOLD`);
+      console.log(`✅ [PARTICIPANT] ${callId} is now muted (hold)`);
     } catch (error) {
       console.error(`❌ [PARTICIPANT] Failed to put on hold:`, error);
       throw error;
