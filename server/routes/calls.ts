@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { emitToEpisode } from '../services/socketService.js';
 import { createCallSchema, updateCallStatusSchema, sanitizeString } from '../utils/validation.js';
 import twilio from 'twilio';
+import { twilioClient } from '../services/twilioService.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -253,7 +254,7 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
         twilioConferenceSid: existingCall.twilioConferenceSid || `episode-${existingCall.episodeId}`,
         // Keep muted in conference
         isMutedInConference: true,
-        isOnHold: false
+        isOnHold: true // They are on hold with Radio.co stream
       },
       include: {
         caller: true,
@@ -261,9 +262,28 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       }
     });
 
-    // Twilio's waitUrl will continue playing automatically
-    // No need to force-restart (causes errors with conference SID format)
-    console.log(`✅ Participant in queue position ${finalPosition} - will continue hearing waitUrl audio`);
+    // Put participant on hold with Radio.co stream
+    if (call.twilioCallSid && call.twilioConferenceSid && twilioClient) {
+      try {
+        const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+        const conferenceSid = call.episode?.twilioConferenceSid || call.twilioConferenceSid;
+        
+        await twilioClient
+          .conferences(conferenceSid)
+          .participants(call.twilioCallSid)
+          .update({
+            muted: true, // Muted so they can't talk
+            hold: true, // On hold so they hear holdUrl
+            holdUrl: `${appUrl}/api/twilio/wait-audio`, // Radio.co stream
+            holdMethod: 'POST'
+          } as any);
+        
+        console.log(`✅ [APPROVE] Participant on hold with Radio.co stream (queue position ${finalPosition})`);
+      } catch (holdError) {
+        console.error('⚠️ [APPROVE] Failed to set hold with Radio.co stream:', holdError);
+        // Continue anyway - database is updated
+      }
+    }
 
     const io = req.app.get('io');
     emitToEpisode(io, call.episodeId, 'call:approved', call);
