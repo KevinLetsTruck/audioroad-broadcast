@@ -10,6 +10,8 @@ export default function ScreeningRoom() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [activeEpisode, setActiveEpisode] = useState<any>(null);
   const [incomingCalls, setIncomingCalls] = useState<any[]>([]);
+  const [approvedCalls, setApprovedCalls] = useState<any[]>([]);
+  const [onAirCalls, setOnAirCalls] = useState<any[]>([]);
   const [activeCall, setActiveCall] = useState<any>(null);
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -197,7 +199,11 @@ export default function ScreeningRoom() {
     // Auto-refresh every 2 seconds to catch missed events (more frequent!)
     const refreshInterval = setInterval(() => {
       fetchQueuedCalls();
+      fetchApprovedAndOnAir(); // Also fetch host queue and on-air
     }, 2000);
+    
+    // Initial fetch
+    fetchApprovedAndOnAir();
 
     return () => {
       socket.off('call:incoming');
@@ -241,6 +247,32 @@ export default function ScreeningRoom() {
       setIncomingCalls(activeCalls);
     } catch (error) {
       console.error('Error fetching queued calls:', error);
+    }
+  };
+
+  const fetchApprovedAndOnAir = async () => {
+    if (!activeEpisode) return;
+    
+    try {
+      // Fetch approved calls (in host queue)
+      const response = await fetch(`/api/calls?episodeId=${activeEpisode.id}`);
+      const allCalls = await response.json();
+      
+      // Filter for approved (waiting for host)
+      const approved = allCalls.filter((c: any) => 
+        c.status === 'approved' && !c.endedAt
+      );
+      setApprovedCalls(approved);
+      
+      // Filter for on-air
+      const onAir = allCalls.filter((c: any) => 
+        c.participantState === 'on-air' && !c.endedAt
+      );
+      setOnAirCalls(onAir);
+      
+      console.log(`📊 [SCREENER] Queue: ${incomingCalls.length} to screen, ${approved.length} approved, ${onAir.length} on-air`);
+    } catch (error) {
+      console.error('Error fetching approved/on-air calls:', error);
     }
   };
 
@@ -549,64 +581,78 @@ export default function ScreeningRoom() {
               </div>
             )}
 
-            {/* Queued Calls - Only show if no active call being screened */}
+            {/* Call Queue Sections - Only show if no active call being screened */}
             {!activeCall && activeEpisode && (
-              <div>
-                {incomingCalls.length === 0 ? (
-                <div className="text-center py-16 bg-gray-800 rounded-lg">
-                  <div className="text-6xl mb-6">☎️</div>
-                  <h3 className="text-2xl font-bold mb-4">Waiting for incoming calls...</h3>
-                  <p className="text-gray-400">
-                    Callers will appear here when they click "Call Now"
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {incomingCalls.map((call) => (
-                    <div
-                      key={call.id}
-                      className="bg-gray-800 border border-gray-700 rounded-lg p-6"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <h4 className="text-xl font-bold">{call.caller?.name || 'Unknown Caller'}</h4>
-                          <p className="text-sm text-gray-400">
-                            {call.caller?.location || 'Location not provided'}
-                          </p>
-                          {call.caller?.phoneNumber && (
-                            <p className="text-sm text-gray-500">{call.caller.phoneNumber}</p>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-gray-400">
-                            {new Date(call.incomingAt).toLocaleTimeString()}
-                          </p>
-                        </div>
-                      </div>
-
-                      {call.topic && (
-                        <div className="mt-4 bg-gray-900 p-4 rounded">
-                          <p className="text-sm font-semibold text-gray-300 mb-1">Topic:</p>
-                          <p className="text-gray-300">{call.topic}</p>
-                        </div>
-                      )}
-
-                      {/* Don't show button if THIS call is being screened */}
-                      {activeCall && activeCall.id === call.id ? null : (
-                        <div className="mt-4">
+              <div className="space-y-6">
+                {/* Section 1: Calls to Screen */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 text-yellow-400 flex items-center gap-2">
+                    📞 To Screen ({incomingCalls.length})
+                  </h3>
+                  {incomingCalls.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No calls waiting to be screened</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {incomingCalls.map((call) => (
+                        <div key={call.id} className="bg-gray-800 border border-yellow-600 rounded-lg p-4">
+                          <h4 className="font-bold">{call.caller?.name || 'Unknown'}</h4>
+                          <p className="text-sm text-gray-400">{call.caller?.phoneNumber}</p>
+                          <p className="text-xs text-gray-500">{new Date(call.incomingAt).toLocaleTimeString()}</p>
                           <button
                             onClick={() => handlePickUpCall(call)}
                             disabled={!!activeCall || !screenerReady}
-                            className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-bold text-lg transition-colors"
+                            className="mt-2 w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded text-sm font-semibold"
                           >
-                            {!screenerReady ? '⏳ Phone System Loading...' : activeCall ? '🔒 Screening Another Call' : '📞 Pick Up & Screen This Call'}
+                            {!screenerReady ? '⏳ Loading...' : '📞 Pick Up & Screen'}
                           </button>
                         </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
+
+                {/* Section 2: Host Queue */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 text-blue-400 flex items-center gap-2">
+                    ⏳ Host Queue ({approvedCalls.length})
+                  </h3>
+                  {approvedCalls.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No calls waiting for host</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {approvedCalls.map((call) => (
+                        <div key={call.id} className="bg-gray-800 border border-blue-600 rounded-lg p-4">
+                          <h4 className="font-bold">{call.caller?.name}</h4>
+                          <p className="text-sm text-gray-400">{call.topic}</p>
+                          <p className="text-xs text-blue-400">Position #{approvedCalls.indexOf(call) + 1}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Section 3: On Air */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 text-red-400 flex items-center gap-2">
+                    🔴 On Air ({onAirCalls.length})
+                  </h3>
+                  {onAirCalls.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No calls on air</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {onAirCalls.map((call) => (
+                        <div key={call.id} className="bg-gray-800 border border-red-600 rounded-lg p-4">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                            <h4 className="font-bold">{call.caller?.name}</h4>
+                          </div>
+                          <p className="text-sm text-gray-400">{call.topic}</p>
+                          <p className="text-xs text-red-400">LIVE with host</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
