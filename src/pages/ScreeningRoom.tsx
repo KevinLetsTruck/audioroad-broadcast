@@ -288,27 +288,44 @@ export default function ScreeningRoom() {
     }
 
     console.log('🎙️ Connecting screener to caller...');
+    console.log('📊 Call ID:', call.id);
+    console.log('📊 Episode ID:', activeEpisode.id);
+    
     try {
       const callerName = call.caller?.name || 'Caller';
       
       // Connect screener to conference
+      console.log('🔌 Step 1: Connecting screener to Twilio conference...');
       await broadcast.connectToCall(call.id, callerName, activeEpisode.id, 'screener');
-      console.log('✅ Screener audio connection initiated');
+      console.log('✅ Step 1 complete: Screener connected');
       
-      // Wait a moment for screener to fully connect to conference
+      // Wait for screener to fully join
+      console.log('⏳ Step 2: Waiting 1.5 seconds for screener to fully join...');
       await new Promise(resolve => setTimeout(resolve, 1500));
+      console.log('✅ Step 2 complete: Wait finished');
       
       // CRITICAL: Take caller OFF hold so they can hear screener
-      // Without this, caller only hears music, not the screener!
-      console.log('📞 Taking caller off hold for screening...');
-      try {
-        await fetch(`/api/participants/${call.id}/on-air`, { method: 'PATCH' });
-        console.log('✅ Caller taken off hold - can now hear screener');
-      } catch (holdError) {
-        console.error('⚠️ Failed to take caller off hold:', holdError);
+      console.log('📞 Step 3: Taking caller off hold via API call...');
+      console.log(`   API endpoint: /api/participants/${call.id}/on-air`);
+      
+      const response = await fetch(`/api/participants/${call.id}/on-air`, { 
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      console.log(`   Response status: ${response.status}`);
+      const responseData = await response.json();
+      console.log('   Response data:', responseData);
+      
+      if (!response.ok) {
+        throw new Error(`API call failed with status ${response.status}`);
       }
+      
+      console.log('✅ Step 3 complete: Caller taken off hold');
+      console.log('🎉 ALL STEPS COMPLETE - Caller should now hear screener!');
     } catch (error) {
-      console.error('❌ Error connecting to caller:', error);
+      console.error('❌ Error in screening connection process:', error);
+      console.error('   Error details:', error);
       setActiveCall(null);
     }
   };
