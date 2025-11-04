@@ -628,10 +628,10 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     dial.conference({
       startConferenceOnEnter: true, // IMPORTANT: Caller can keep conference alive when waiting for host
       endConferenceOnExit: false, // Don't end when caller leaves
-      waitUrl: `${appUrl}/api/twilio/wait-audio`, // Smart: live show if HLS running, else hold music
+      waitUrl: `${appUrl}/api/twilio/wait-audio`, // Radio.co stream (Auto DJ or Live)
       waitMethod: 'POST',
       maxParticipants: 40,
-      muted: true, // Caller starts muted
+      muted: false, // Join UNMUTED to avoid beeps from unmute operations (Oct 31 fix!)
       statusCallback: `${appUrl}/api/twilio/conference-status`,
       statusCallbackEvent: ['start', 'end', 'join', 'leave'],
       statusCallbackMethod: 'POST'
@@ -661,8 +661,9 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
       dial.conference({
         startConferenceOnEnter: true,
         endConferenceOnExit: false,
-        waitUrl: `${appUrl}/api/twilio/live-show-audio`,
-        muted: false
+        waitUrl: `${appUrl}/api/twilio/wait-audio`, // Use Radio.co stream
+        waitMethod: 'POST',
+        muted: false // Join UNMUTED to avoid beeps
       }, 'episode-fallback');
       
       res.type('text/xml').send(twiml.toString());
@@ -1085,7 +1086,7 @@ router.post('/sms', async (req: Request, res: Response) => {
  */
 router.get('/cached-audio-chunk', (req: Request, res: Response) => {
   try {
-    const duration = 10; // 10 seconds
+    const duration = 30; // 30 seconds for smoother playback (less gaps/repeating)
     console.log(`🎵 [CACHED-CHUNK] Serving ${duration}-second cached chunk...`);
     
     // Get chunk from cache (instant!)
