@@ -716,6 +716,34 @@ router.get('/queue-audio', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/twilio/queue-announcement - Simple announcement when caller muted in queue
+ */
+router.post('/queue-announcement', async (req: Request, res: Response) => {
+  try {
+    const position = parseInt(req.query.position as string) || 1;
+    const positionText = position === 1 ? 'first' : position === 2 ? 'second' : position === 3 ? 'third' : `number ${position}`;
+    
+    const VoiceResponse = twilio.twiml.VoiceResponse;
+    const twiml = new VoiceResponse();
+    
+    // Simple message
+    twiml.say({
+      voice: 'Polly.Joanna',
+      language: 'en-US'
+    }, `Thank you. The host will be with you shortly. You are ${positionText} in the queue.`);
+    
+    res.type('text/xml').send(twiml.toString());
+  } catch (error) {
+    console.error('Error generating queue announcement:', error);
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+        <Say voice="Polly.Joanna">The host will be with you shortly.</Say>
+      </Response>`;
+    res.type('text/xml').send(twiml);
+  }
+});
+
+/**
  * POST /api/twilio/queue-message - Queue position message after screening approval
  * Called by Twilio when announceUrl is triggered for a participant
  * After playing message, redirects back to conference waitUrl to continue live show audio

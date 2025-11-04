@@ -271,10 +271,12 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
           .conferences(conferenceSid)
           .participants(call.twilioCallSid)
           .update({
-            muted: true
-          });
+            muted: true,
+            announceUrl: `${appUrl}/api/twilio/queue-announcement?position=${finalPosition}`,
+            announceMethod: 'POST'
+          } as any);
         
-        console.log(`✅ [APPROVE] Participant muted in queue (position ${finalPosition})`);
+        console.log(`✅ [APPROVE] Participant muted with announcement (position ${finalPosition})`);
       } catch (muteError) {
         console.error('⚠️ [APPROVE] Failed to mute:', muteError);
       }
