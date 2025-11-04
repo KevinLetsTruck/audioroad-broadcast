@@ -274,10 +274,30 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     try {
       console.log(`📞 [CALL] Connecting as ${role}:`, callId, callerName);
 
-      // Simple - Twilio handles audio natively (worked perfectly on Oct 31!)
-      const call = await twilioDevice.connect({
+      // For host: use mixer's mic stream so caller can hear host
+      // For screener: use default browser mic
+      const connectOptions: any = {
         params: { callId, episodeId, role }
-      });
+      };
+      
+      if (role === 'host' && mixer) {
+        const hostMicStream = mixer.getHostMicStreamForConference();
+        if (hostMicStream) {
+          connectOptions.rtcConfiguration = {
+            audio: true
+          };
+          connectOptions.audioConstraints = {
+            audio: {
+              deviceId: hostMicStream.getAudioTracks()[0]?.getSettings().deviceId
+            }
+          };
+          console.log('🎤 [CALL] Using host mic from mixer for Twilio');
+        } else {
+          console.warn('⚠️ [CALL] No host mic stream from mixer, using default');
+        }
+      }
+
+      const call = await twilioDevice.connect(connectOptions);
 
       // Wait for call to connect
       await new Promise((resolve, reject) => {
