@@ -348,7 +348,7 @@ export default function ScreeningRoom() {
       if (screenerConnected) {
         console.log('📴 Screener ending screening session (connection will close naturally)');
         // Just disconnect the specific call for this screener, not all calls
-        const screenerCall = broadcast.activeCalls.get(call.id);
+        const screenerCall = broadcast.activeCalls.get(callToApprove.id);
         if (screenerCall?.twilioCall) {
           try {
             screenerCall.twilioCall.disconnect();
