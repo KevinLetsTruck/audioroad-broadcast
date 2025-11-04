@@ -272,8 +272,8 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
           .conferences(conferenceSid)
           .participants(call.twilioCallSid)
           .update({
-            muted: true
-            // No hold - caller hears conference in real-time
+            muted: true,
+            hold: false // Explicitly ensure NOT on hold - can hear conference
           });
         
         console.log(`✅ [APPROVE] Participant muted, hearing live conference (position ${finalPosition})`);
