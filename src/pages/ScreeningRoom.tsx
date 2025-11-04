@@ -182,6 +182,18 @@ export default function ScreeningRoom() {
       fetchQueuedCalls();
     });
 
+    socket.on('participant:state-changed', (data) => {
+      console.log('🔄 [SCREENER] Participant state changed:', data);
+      // Refresh call list when host sends call back to screening
+      fetchQueuedCalls();
+    });
+
+    socket.on('call:screening', (data) => {
+      console.log('🔍 [SCREENER] Call sent back to screening from host:', data);
+      // Immediately refresh to show the call
+      fetchQueuedCalls();
+    });
+
     // Auto-refresh every 2 seconds to catch missed events (more frequent!)
     const refreshInterval = setInterval(() => {
       fetchQueuedCalls();
@@ -193,6 +205,8 @@ export default function ScreeningRoom() {
       socket.off('call:rejected');
       socket.off('call:completed');
       socket.off('call:hungup');
+      socket.off('participant:state-changed');
+      socket.off('call:screening');
       clearInterval(refreshInterval);
     };
   }, [socket, activeEpisode]);
@@ -202,7 +216,8 @@ export default function ScreeningRoom() {
     
     try {
       // Fetch all queued and screening calls (not completed/rejected)
-      const response = await fetch(`/api/calls?episodeId=${activeEpisode.id}&status=queued`);
+      // Note: Fetch ALL calls for episode, then filter client-side for both queued AND screening
+      const response = await fetch(`/api/calls?episodeId=${activeEpisode.id}`);
       const data = await response.json();
       
       // Filter out any that shouldn't be shown:

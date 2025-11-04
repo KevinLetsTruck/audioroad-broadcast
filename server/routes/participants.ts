@@ -67,11 +67,28 @@ router.patch('/:callId/hold', async (req: Request, res: Response) => {
 router.patch('/:callId/screening', async (req: Request, res: Response) => {
   try {
     const { callId } = req.params;
+    
+    // Get call to find episodeId for targeted emit
+    const call = await prisma.call.findUnique({
+      where: { id: callId },
+      include: { caller: true }
+    });
+    
+    if (!call) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+    
     await ParticipantService.putInScreening(callId);
     
-    // Emit WebSocket event
+    // Emit WebSocket event to episode room AND globally (for screener)
     const io = req.app.get('io');
-    io.emit('participant:state-changed', { callId, state: 'screening' });
+    const { emitToEpisode } = await import('../services/socketService.js');
+    
+    // Emit to episode room (host sees update)
+    emitToEpisode(io, call.episodeId, 'participant:state-changed', { callId, state: 'screening' });
+    
+    // ALSO emit as call:screening for screener room to pick up
+    emitToEpisode(io, call.episodeId, 'call:screening', call);
     
     res.json({ success: true, state: 'screening' });
   } catch (error) {
