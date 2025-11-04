@@ -621,7 +621,7 @@ export default function ScreeningRoom() {
         </div>
 
         {/* Right: Chat Sidebar - 50% */}
-        <div className="flex-1 border-l border-gray-700">
+        <div className="flex-1 border-l border-gray-700 overflow-hidden">
           {activeEpisode && <ChatPanel episodeId={activeEpisode.id} userRole="screener" />}
         </div>
       </div>
