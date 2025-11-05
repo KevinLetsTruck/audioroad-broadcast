@@ -168,28 +168,22 @@ export default function HostDashboard() {
     try {
       console.log('🎙️ [START-BROADCAST] Starting show broadcast...');
       
-      // CRITICAL: Check for active calls and device state
+      // CRITICAL: ALWAYS destroy device when starting show as host
+      // Device might be initialized as "screener" which causes identity mismatch
       console.log('🔍 [START-BROADCAST] Pre-flight checks:');
       console.log(`   - activeCalls.size: ${broadcast.activeCalls.size}`);
       console.log(`   - twilioDevice exists: ${broadcast.twilioDevice ? 'yes' : 'no'}`);
-      console.log(`   - twilioDevice.calls: ${broadcast.twilioDevice?.calls?.length || 0}`);
       
-      // Only destroy if device has ACTUAL active calls (not just stale Map entries)
-      const deviceHasActiveCalls = broadcast.twilioDevice?.calls && broadcast.twilioDevice.calls.length > 0;
-      
-      if (deviceHasActiveCalls) {
-        console.warn(`⚠️ Device has ${broadcast.twilioDevice?.calls?.length || 0} active call(s) - destroying for clean start`);
+      if (broadcast.twilioDevice) {
+        console.warn('⚠️ Destroying existing device for clean HOST identity');
         try {
           await broadcast.destroyTwilioDevice();
-          console.log('✅ Twilio device destroyed - ready for host connection');
+          console.log('✅ Twilio device destroyed - ready for fresh host connection');
           // Wait for cleanup
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 800));
         } catch (e) {
           console.error('❌ Error destroying device:', e);
-          // Continue anyway - initializeTwilio will handle it
         }
-      } else {
-        console.log('✅ No active calls - proceeding with initialization');
       }
       
       // Get show for opener
