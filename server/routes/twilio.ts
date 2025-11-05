@@ -68,7 +68,13 @@ router.post('/voice', async (req: Request, res: Response) => {
       let conferenceName = '';
       let episode = null;
       
-      if (callId) {
+      // HOST uses episodeId directly (callId is just "host-{episodeId}", not a real Call record)
+      if (role === 'host' && episodeId) {
+        conferenceName = `episode-${episodeId}`;
+        episode = await prisma.episode.findUnique({ where: { id: episodeId } });
+      }
+      // SCREENER uses actual Call record
+      else if (callId) {
         const call = await prisma.call.findUnique({
           where: { id: callId },
           include: { episode: true }
