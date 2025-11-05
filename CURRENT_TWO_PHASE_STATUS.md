@@ -1,6 +1,33 @@
 # Two-Phase Workflow - Current Status
 
-## CRITICAL FIX DEPLOYED (Nov 5, 2025 - 8:52 PM)
+## FIX DEPLOYED (Nov 5, 2025 - 9:08 PM) - Commit `9ab132b`
+
+**Issue:** Sent-back calls couldn't be picked up again (button unresponsive)
+
+**Root Cause:** React state (`activeCall`) was cleared when call sent back, but Twilio Device still had the call in its internal `device.calls` array. State check didn't catch this.
+
+**Fix:** Check **actual Twilio SDK state** instead of React state:
+```typescript
+const deviceHasActiveCalls = device?.calls && device.calls.length > 0;
+```
+
+Now checks the Device's internal call array, catches stale connections even after React state is cleared.
+
+---
+
+## HOTFIX (Nov 5, 2025 - 9:02 PM) - Commit `0ae692f`
+
+**Previous Issue:** Device was being destroyed unconditionally, breaking normal pickup/approve flows
+
+**Fix:** Only destroy device when there are ACTIVE calls:
+- **ScreeningRoom**: Check `activeCalls.size` and `device.calls.length`
+- **HostDashboard**: Only destroy if `activeCalls.size > 0`
+
+This preserves the fix for "Call already active" while restoring normal functionality.
+
+---
+
+## CRITICAL FIX (Nov 5, 2025 - 8:52 PM) - Commit `8778a6c`
 
 **Issue:** "InvalidStateError: A Call is already active" when:
 - Starting show after being on ScreeningRoom
@@ -13,8 +40,6 @@
 2. Destroys the Twilio Device completely
 3. Clears all call state
 4. Forces creation of fresh Device on next connection
-
-**Deployment:** Commit `8778a6c` - Railway deploying now (3-4 min)
 
 ---
 
