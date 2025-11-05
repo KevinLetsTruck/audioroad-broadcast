@@ -168,12 +168,28 @@ export default function HostDashboard() {
     try {
       console.log('🎙️ [START-BROADCAST] Starting show broadcast...');
       
-      // CRITICAL: Only destroy device if there are active calls (prevents "Call already active")
-      // This happens when switching from ScreeningRoom → HostDashboard with active screener call
-      if (broadcast.activeCalls.size > 0) {
-        console.warn('⚠️ Active calls detected - destroying device for clean host start');
-        await broadcast.destroyTwilioDevice();
-        console.log('✅ Twilio device destroyed - ready for host connection');
+      // CRITICAL: Check for active calls and device state
+      console.log('🔍 [START-BROADCAST] Pre-flight checks:');
+      console.log(`   - activeCalls.size: ${broadcast.activeCalls.size}`);
+      console.log(`   - twilioDevice exists: ${broadcast.twilioDevice ? 'yes' : 'no'}`);
+      console.log(`   - twilioDevice.calls: ${broadcast.twilioDevice?.calls?.length || 0}`);
+      
+      // Only destroy if device has ACTUAL active calls (not just stale Map entries)
+      const deviceHasActiveCalls = broadcast.twilioDevice?.calls && broadcast.twilioDevice.calls.length > 0;
+      
+      if (deviceHasActiveCalls) {
+        console.warn(`⚠️ Device has ${broadcast.twilioDevice.calls.length} active call(s) - destroying for clean start`);
+        try {
+          await broadcast.destroyTwilioDevice();
+          console.log('✅ Twilio device destroyed - ready for host connection');
+          // Wait for cleanup
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (e) {
+          console.error('❌ Error destroying device:', e);
+          // Continue anyway - initializeTwilio will handle it
+        }
+      } else {
+        console.log('✅ No active calls - proceeding with initialization');
       }
       
       // Get show for opener
@@ -181,6 +197,7 @@ export default function HostDashboard() {
       const show = showResponse.ok ? await showResponse.json() : null;
       
       // Step 1: Initialize Twilio and connect host to conference
+      console.log('🔄 [START-BROADCAST] Initializing Twilio...');
       const device = await broadcast.initializeTwilio(`host-${Date.now()}`);
       console.log('✅ Twilio device ready:', device ? 'yes' : 'no');
       

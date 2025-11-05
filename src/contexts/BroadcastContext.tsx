@@ -386,21 +386,33 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
 
     console.log('🔥 [TWILIO] Destroying device for clean slate...');
     
-    // Disconnect all active calls first
-    const calls = Array.from(activeCalls.values());
-    for (const call of calls) {
-      if (call.twilioCall) {
-        call.twilioCall.disconnect();
+    try {
+      // Disconnect all active calls first
+      const calls = Array.from(activeCalls.values());
+      for (const call of calls) {
+        if (call.twilioCall) {
+          try {
+            call.twilioCall.disconnect();
+          } catch (e) {
+            console.warn('⚠️ [TWILIO] Error disconnecting call:', e);
+          }
+        }
       }
+      
+      // Destroy device
+      twilioDevice.destroy();
+      console.log('✅ [TWILIO] Device.destroy() called successfully');
+    } catch (error) {
+      console.error('❌ [TWILIO] Error during device destruction:', error);
+      // Continue with cleanup even if destroy fails
     }
     
-    // Destroy device
-    twilioDevice.destroy();
+    // Always clear state regardless of destroy success
     setTwilioDevice(null);
     setActiveCalls(new Map());
     setOnAirCallState(null);
     
-    console.log('✅ [TWILIO] Device destroyed - ready for fresh start');
+    console.log('✅ [TWILIO] Device state cleared - ready for fresh start');
   };
 
   const value: BroadcastContextType = {
