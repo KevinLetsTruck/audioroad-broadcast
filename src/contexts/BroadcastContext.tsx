@@ -273,23 +273,16 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
   /**
    * Connect to a call (host = adds to mixer, screener = just audio)
    */
-  const connectToCall = async (callId: string, callerName: string, episodeId: string, role: 'host' | 'screener' = 'host', deviceToUse?: Device) => {
-    // Use provided device OR fall back to state device
-    const device = deviceToUse || twilioDevice;
-    
-    if (!device) {
+  const connectToCall = async (callId: string, callerName: string, episodeId: string, role: 'host' | 'screener' = 'host') => {
+    if (!twilioDevice) {
       throw new Error('Twilio device not initialized');
-    }
-    
-    if (device.state === 'destroyed') {
-      throw new Error('Cannot connect - device has been destroyed');
     }
 
     try {
       console.log(`📞 [CALL] Connecting as ${role}:`, callId, callerName);
 
       // Simple - Twilio handles audio natively (worked perfectly on Oct 31!)
-      const call = await device.connect({
+      const call = await twilioDevice.connect({
         params: { callId, episodeId, role }
       });
 

@@ -27,18 +27,18 @@ export default function ScreeningRoom() {
   const screenerReady = broadcast.twilioDevice !== null || localDeviceReady;
   const screenerConnected = activeCall !== null;
   
-  // Initialize Twilio if global device not available
+  // Initialize session Twilio device (one per session, reused for all roles)
   useEffect(() => {
     if (!broadcast.twilioDevice && !localDeviceReady) {
-      console.log('📞 [SCREENER] Global device not available, initializing local device');
-      const identity = `screener-${Date.now()}`;
-      broadcast.initializeTwilio(identity)
+      console.log('📞 [SCREENER] Initializing session device');
+      const sessionId = `session-${Date.now()}`;
+      broadcast.initializeTwilio(sessionId)
         .then(() => {
           setLocalDeviceReady(true);
-          console.log('✅ [SCREENER] Twilio device ready');
+          console.log('✅ [SCREENER] Session device ready');
         })
         .catch(err => {
-          console.error('❌ [SCREENER] Failed to initialize Twilio:', err);
+          console.error('❌ [SCREENER] Failed to initialize:', err);
         });
     }
   }, [broadcast.twilioDevice]);
@@ -291,28 +291,17 @@ export default function ScreeningRoom() {
   const handlePickUpCall = async (call: any) => {
     console.log('📞 Picking up call:', call.id);
     
-    // CRITICAL: Check actual Twilio device state
-    // The device might still have an active call even if our React state is cleared
-    const hasActiveCalls = broadcast.activeCalls.size > 0;
-    const device = broadcast.twilioDevice;
-    const deviceHasActiveCalls = device?.calls && device.calls.length > 0;
-    
-    console.log('🔍 Pre-pickup state check:');
-    console.log(`   - activeCalls in context: ${broadcast.activeCalls.size}`);
-    console.log(`   - Local activeCall: ${activeCall?.id || 'none'}`);
-    console.log(`   - Twilio device exists: ${device ? 'yes' : 'no'}`);
-    console.log(`   - Device active calls: ${device?.calls?.length || 0}`);
-    
-    if (hasActiveCalls || deviceHasActiveCalls) {
-      console.warn('⚠️ Device has active calls - destroying for clean slate');
+    // SIMPLIFIED: If we have an active call, disconnect it first (don't destroy device)
+    if (activeCall) {
+      console.warn('⚠️ Active call exists - disconnecting before pickup');
       try {
-        await broadcast.destroyTwilioDevice();
+        await broadcast.disconnectCurrentCall();
         setActiveCall(null);
-        // Wait for Twilio to fully clean up
-        await new Promise(resolve => setTimeout(resolve, 800));
-        console.log('✅ Twilio device destroyed - ready for fresh connection');
+        // Brief wait for disconnect
+        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log('✅ Previous call disconnected');
       } catch (e) {
-        console.error('❌ Failed to destroy device:', e);
+        console.error('❌ Failed to disconnect:', e);
       }
     }
     

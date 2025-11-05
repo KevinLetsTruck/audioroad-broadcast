@@ -168,35 +168,13 @@ export default function HostDashboard() {
     try {
       console.log('🎙️ [START-BROADCAST] Starting show broadcast...');
       
-      // CRITICAL: ALWAYS destroy device when starting show as host
-      // Device might be initialized as "screener" which causes identity mismatch
-      console.log('🔍 [START-BROADCAST] Pre-flight checks:');
-      console.log(`   - activeCalls.size: ${broadcast.activeCalls.size}`);
-      console.log(`   - twilioDevice exists: ${broadcast.twilioDevice ? 'yes' : 'no'}`);
-      
-      if (broadcast.twilioDevice) {
-        console.warn('⚠️ Destroying existing device for clean HOST identity');
-        try {
-          await broadcast.destroyTwilioDevice();
-          console.log('✅ Twilio device destroyed - ready for fresh host connection');
-          // Wait for cleanup
-          await new Promise(resolve => setTimeout(resolve, 800));
-        } catch (e) {
-          console.error('❌ Error destroying device:', e);
-        }
-      }
-      
       // Get show for opener
       const showResponse = await fetch(`/api/shows/${activeEpisode.showId}`);
       const show = showResponse.ok ? await showResponse.json() : null;
       
-      // Step 1: Initialize Twilio and connect host to conference
-      console.log('🔄 [START-BROADCAST] Initializing Twilio...');
-      const device = await broadcast.initializeTwilio(`host-${Date.now()}`);
-      console.log('✅ Twilio device ready:', device ? 'yes' : 'no');
-      
-      // CRITICAL: Pass the device directly (don't wait for React state - it might be stale!)
-      await broadcast.connectToCall(`host-${activeEpisode.id}`, 'Host', activeEpisode.id, 'host', device);
+      // Step 1: Connect host to conference (using session device)
+      console.log('🔄 [START-BROADCAST] Connecting host to conference...');
+      await broadcast.connectToCall(`host-${activeEpisode.id}`, 'Host', activeEpisode.id, 'host');
       
       // Step 2: Initialize mixer
       const mixerInstance = await broadcast.initializeMixer();
