@@ -150,8 +150,14 @@ router.patch('/:id/open-lines', async (req: Request, res: Response) => {
     if (!episode) {
       return res.status(404).json({ error: 'Episode not found' });
     }
+    
+    // CRITICAL: Don't open lines on completed episodes
+    if (episode.status === 'completed') {
+      console.log(`❌ [OPEN-LINES] Episode ${episode.id} is completed - cannot open lines`);
+      return res.status(400).json({ error: 'Cannot open lines on completed episode' });
+    }
 
-    console.log(`📞 [OPEN-LINES] Opening phone lines for episode: ${episode.id}`);
+    console.log(`📞 [OPEN-LINES] Opening phone lines for episode: ${episode.id} (status: ${episode.status})`);
     
     // Close lines on all other episodes (scheduled + conference active)
     await prisma.episode.updateMany({

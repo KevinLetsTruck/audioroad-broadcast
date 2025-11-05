@@ -245,17 +245,18 @@ export default function BroadcastControl() {
       console.log('📞 [OPEN-LINES] Opening phone lines...');
       console.log('📞 [OPEN-LINES] Current state:', { linesOpen: status.linesOpen, episodeId: status.episodeId });
 
-      // Get or create today's episode
-      let episode;
-      if (status.episodeId) {
-        const res = await fetch(`/api/episodes/${status.episodeId}`);
-        episode = await res.json();
-      } else {
-        episode = await getOrCreateTodaysEpisode();
-      }
+      // Always create a fresh episode (don't reuse old ones)
+      const episode = await getOrCreateTodaysEpisode();
+      console.log('✅ Episode ready:', episode.id, 'Status:', episode.status);
 
       // Open phone lines (creates conference, does NOT start recording/streaming)
-      await fetch(`/api/episodes/${episode.id}/open-lines`, { method: 'PATCH' });
+      const openLinesRes = await fetch(`/api/episodes/${episode.id}/open-lines`, { method: 'PATCH' });
+      
+      if (!openLinesRes.ok) {
+        const error = await openLinesRes.json();
+        throw new Error(error.error || 'Failed to open lines');
+      }
+      
       console.log('✅ Phone lines opened');
 
       // Update context
