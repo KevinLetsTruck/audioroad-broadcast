@@ -57,8 +57,8 @@ interface BroadcastContextType {
   
   // Actions - Calls
   initializeTwilio: (identity: string) => Promise<Device>;
-  destroyTwilioDevice: () => Promise<void>;
-  connectToCall: (callId: string, callerName: string, episodeId: string, role?: 'host' | 'screener', deviceToUse?: Device) => Promise<void>;
+  destroyTwilioDevice: () => Promise<void>; // Keep for cleanup, but don't use for role switching
+  connectToCall: (callId: string, callerName: string, episodeId: string, role?: 'host' | 'screener') => Promise<void>;
   disconnectCall: (callId: string) => Promise<void>;
   setOnAir: (callId: string) => void;
   disconnectCurrentCall: () => Promise<void>;
@@ -213,20 +213,14 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
    * Initialize Twilio Device (global, persists across pages)
    */
   const initializeTwilio = async (identity: string): Promise<Device> => {
-    // Check if device exists AND is not destroyed
-    if (twilioDevice && twilioDevice.state !== 'destroyed') {
-      console.log('⚠️ [TWILIO] Device already initialized - returning existing');
+    // Reuse existing device if available (one device per session)
+    if (twilioDevice) {
+      console.log('⚠️ [TWILIO] Device already initialized - reusing for all roles');
       return twilioDevice;
     }
 
-    // If device exists but is destroyed, clear it
-    if (twilioDevice && twilioDevice.state === 'destroyed') {
-      console.log('🔥 [TWILIO] Clearing destroyed device reference');
-      setTwilioDevice(null);
-    }
-
     try {
-      console.log('📞 [TWILIO] Initializing device for:', identity);
+      console.log('📞 [TWILIO] Initializing session device');
       
       // Get token from backend
       const response = await fetch('/api/twilio/token', {
