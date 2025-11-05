@@ -69,6 +69,26 @@ Replaced the entire Radio.co chunking system with **Twilio's built-in hold music
 - Commented out audioCache.start()
 - Documented why (using Twilio hold music instead)
 
+### 3. `server/routes/calls.ts` - CRITICAL FIX for live show audio
+
+**Before (lines 282-283):**
+```javascript
+hold: true,  // ← WRONG! Callers only hear holdUrl, NOT conference
+holdUrl: `${appUrl}/api/twilio/wait-audio`
+```
+
+**After:**
+```javascript
+muted: true,  // Can't talk
+hold: false   // CAN hear conference (live show!)
+```
+
+**Why this matters:**
+- With `hold: true` → Callers ONLY hear holdUrl music, miss the live show completely
+- With `hold: false` → Callers hear conference audio when host starts broadcasting
+
+This ensures approved callers hear your voice, the show opener, and the live show in real-time while waiting in the host queue.
+
 ---
 
 ## Audio Flow Now
