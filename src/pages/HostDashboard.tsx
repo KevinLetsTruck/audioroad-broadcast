@@ -114,17 +114,32 @@ export default function HostDashboard() {
       const response = await fetch(`/api/calls?episodeId=${activeEpisode.id}&status=approved`);
       const calls = await response.json();
       
+      console.log(`📞 [HOST] Fetching approved calls for episode: ${activeEpisode.id}`);
+      console.log(`   API returned ${calls.length} calls with status=approved`);
+      
       // Filter for truly active calls (not ended, recent)
       const now = Date.now();
       const activeCalls = calls.filter((call: any) => {
-        if (call.endedAt) return false; // Already ended
-        if (call.status === 'completed') return false; // Marked completed
-        
-        // Only show calls from last 4 hours (prevent ancient calls showing up)
+        const isEnded = call.endedAt !== null;
+        const isCompleted = call.status === 'completed';
         const callTime = new Date(call.incomingAt || call.createdAt).getTime();
         const age = now - callTime;
-        if (age > 4 * 60 * 60 * 1000) return false; // Older than 4 hours
+        const isTooOld = age > 4 * 60 * 60 * 1000;
         
+        if (isEnded) {
+          console.log(`   🗑️ Filtering out ended call: ${call.id}`);
+          return false;
+        }
+        if (isCompleted) {
+          console.log(`   🗑️ Filtering out completed call: ${call.id}`);
+          return false;
+        }
+        if (isTooOld) {
+          console.log(`   🗑️ Filtering out old call: ${call.id} (age: ${Math.round(age/1000/60)} min)`);
+          return false;
+        }
+        
+        console.log(`   ✅ Active call: ${call.caller?.name || 'Unknown'} (${call.id})`);
         return true;
       });
       
