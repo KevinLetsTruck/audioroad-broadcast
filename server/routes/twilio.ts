@@ -711,12 +711,41 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     const VoiceResponse = twilio.twiml.VoiceResponse;
     const twiml = new VoiceResponse();
     
-    // Use simple TwiML Say for now (reliable, no encoding issues)
-    // TODO: Re-enable ElevenLabs after fixing audio encoding
-    twiml.say({
-      voice: 'Polly.Joanna',
-      language: 'en-US'
-    }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
+    // Play AI-generated welcome message with ElevenLabs voice
+    // Falls back to TTS Say if ElevenLabs fails
+    try {
+      // Generate AI message
+      const message = await generateWelcomeMessage(showName);
+      console.log(`🤖 [WELCOME] AI message: "${message}"`);
+      
+      // Convert to speech with ElevenLabs
+      const audioBuffer = await generateSpeech(message, {
+        voiceId: process.env.ELEVENLABS_GREETING_VOICE || '21m00Tcm4TlvDq8ikWAM', // Rachel default
+        stability: 0.4, // More expressive
+        similarity_boost: 0.85 // High quality
+      });
+      
+      // Save to temporary file for Twilio to stream
+      const tempDir = '/tmp/welcome-messages';
+      await import('fs/promises').then(fs => fs.mkdir(tempDir, { recursive: true }));
+      
+      const filename = `welcome-${CallSid}.mp3`;
+      const filepath = `/tmp/welcome-messages/${filename}`;
+      await import('fs/promises').then(fs => fs.writeFile(filepath, audioBuffer));
+      
+      // Serve via our endpoint (Twilio will stream from this URL)
+      const audioUrl = `${appUrl}/api/twilio/temp-audio/${filename}`;
+      console.log(`🎤 [WELCOME] Playing ElevenLabs audio: ${audioUrl}`);
+      
+      twiml.play(audioUrl);
+    } catch (error) {
+      console.warn('⚠️ [WELCOME] ElevenLabs failed, using fallback TTS:', error);
+      // Fallback to basic TwiML Say
+      twiml.say({
+        voice: 'Polly.Joanna',
+        language: 'en-US'
+      }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
+    }
     
     // Connect to conference with smart wait audio (live show or hold music)
     // Uses LOCAL HLS server (started when broadcast begins)
