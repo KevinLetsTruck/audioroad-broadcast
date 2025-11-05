@@ -248,13 +248,13 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
         screenerNotes,
         topic,
         priority: priority || 'normal',
-        // Set participant state to HOLD (muted, can hear show)
-        participantState: 'hold',
+        // Set participant state to APPROVED (muted but listening to conference)
+        participantState: 'approved',
         // Preserve existing conference SID or set it if missing
         twilioConferenceSid: existingCall.twilioConferenceSid || `episode-${existingCall.episodeId}`,
         // Keep muted in conference
         isMutedInConference: true,
-        isOnHold: true // They are on hold with Radio.co stream
+        isOnHold: false // NOT on hold - they can hear conference audio!
       },
       include: {
         caller: true,
@@ -272,30 +272,18 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
         // Check if already on hold to avoid restarting audio
         const wasOnHold = existingCall.isOnHold;
         
-        if (!wasOnHold) {
-          // First time on hold - set holdUrl
-          await twilioClient
-            .conferences(conferenceSid)
-            .participants(call.twilioCallSid)
-            .update({
-              muted: true,
-              hold: true,
-              holdUrl: `${appUrl}/api/twilio/wait-audio`,
-              holdMethod: 'POST'
-            } as any);
-          
-          console.log(`✅ [APPROVE] Participant on hold with Radio.co stream (queue position ${finalPosition})`);
-        } else {
-          // Already on hold - just ensure still muted, don't reset holdUrl
-          await twilioClient
-            .conferences(conferenceSid)
-            .participants(call.twilioCallSid)
-            .update({
-              muted: true
-            });
-          
-          console.log(`✅ [APPROVE] Participant already on hold, kept existing audio (queue position ${finalPosition})`);
-        }
+        // CRITICAL: muted=true (can't talk) but hold=false (CAN hear conference)
+        // This allows callers to hear the live show when host starts broadcasting
+        await twilioClient
+          .conferences(conferenceSid)
+          .participants(call.twilioCallSid)
+          .update({
+            muted: true,  // Mic off (can't talk)
+            hold: false   // Can hear conference (will hear host when show starts!)
+          });
+        
+        console.log(`✅ [APPROVE] Participant muted but listening (queue position ${finalPosition})`);
+        console.log(`   Will hear host mic when show starts`);
       } catch (holdError) {
         console.error('⚠️ [APPROVE] Failed to set hold status:', holdError);
         // Continue anyway - database is updated
