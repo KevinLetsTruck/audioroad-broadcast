@@ -335,14 +335,18 @@ export default function ScreeningRoom() {
       // Wait a moment for screener to fully connect to conference
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // CRITICAL: Take caller OFF hold so they can hear screener
-      // Without this, caller only hears music, not the screener!
-      console.log('📞 Taking caller off hold for screening...');
+      // CRITICAL: Unmute caller so screener can talk to them
+      console.log('📞 Unmuting caller for screening...');
       try {
-        await fetch(`/api/participants/${call.id}/on-air`, { method: 'PATCH' });
-        console.log('✅ Caller taken off hold - can now hear screener');
+        // Use on-air endpoint to unmute (removes hold and unmutes)
+        const onAirRes = await fetch(`/api/participants/${call.id}/on-air`, { method: 'PATCH' });
+        if (onAirRes.ok) {
+          console.log('✅ Caller unmuted for screening');
+        } else {
+          console.error('⚠️ on-air endpoint failed');
+        }
       } catch (holdError) {
-        console.error('⚠️ Failed to take caller off hold:', holdError);
+        console.error('⚠️ Failed to unmute caller:', holdError);
       }
     } catch (error) {
       console.error('❌ Error connecting to caller:', error);
