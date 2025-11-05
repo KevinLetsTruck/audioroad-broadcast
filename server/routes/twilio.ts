@@ -658,7 +658,7 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
       waitUrl: `${appUrl}/api/twilio/wait-audio`, // Radio.co stream (Auto DJ or Live)
       waitMethod: 'POST',
       maxParticipants: 40,
-      muted: false, // Join UNMUTED to avoid beeps from unmute operations (Oct 31 fix!)
+      muted: true, // Join MUTED for privacy - screener will unmute when picking up
       statusCallback: `${appUrl}/api/twilio/conference-status`,
       statusCallbackEvent: ['start', 'end', 'join', 'leave'],
       statusCallbackMethod: 'POST'
