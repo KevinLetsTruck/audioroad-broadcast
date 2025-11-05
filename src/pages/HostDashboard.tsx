@@ -215,100 +215,35 @@ export default function HostDashboard() {
       // Step 6: Mark episode as live
       const response = await fetch(`/api/episodes/${activeEpisode.id}/start`, { method: 'PATCH' });
       
-      if (response.ok) {
-        const episode = await response.json();
-        setActiveEpisode(episode);
-        setIsLive(true);
-        
-        // Update global state
-        broadcast.setState({
-          isLive: true,
-          linesOpen: true,
-          episodeId: episode.id,
-          showId: episode.showId,
-          showName: episode.title || 'Live Show',
-          startTime: new Date(),
-          selectedShow: show
-        });
-        
-        // Step 7: Play show opener
-        if (show?.openerAudioUrl) {
-          await mixerInstance.playAudioFile(show.openerAudioUrl);
-        }
-        
-        console.log('🎉 SHOW STARTED! You are LIVE!');
-      } else {
-        // If episode doesn't exist, create show and episode
-        console.log('📝 Creating new show and episode in database...');
-        
-        // First, ensure show exists
-        let showId = activeEpisode.showId || 'show-1';
-        try {
-          const showResponse = await fetch(`/api/shows/${showId}`);
-          if (!showResponse.ok) {
-            // Create the show first
-            const newShowResponse = await fetch('/api/shows', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                name: 'The AudioRoad Show',
-                slug: 'audioroad-show',
-                hostId: 'default-host',
-                hostName: 'Host',
-                description: 'Live broadcast for the trucking community',
-                schedule: { days: ['mon', 'wed', 'fri'], time: '15:00', duration: 180 },
-                color: '#3b82f6'
-              })
-            });
-            if (newShowResponse.ok) {
-              const newShow = await newShowResponse.json();
-              showId = newShow.id;
-              console.log('✅ Show created:', newShow.name);
-            }
-          }
-        } catch (err) {
-          console.log('Show check failed, continuing with default ID');
-        }
-        
-        // Now create episode
-        const now = new Date();
-        const createResponse = await fetch('/api/episodes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            showId,
-            title: activeEpisode.title,
-            date: now.toISOString(),
-            scheduledStart: now.toISOString(),
-            scheduledEnd: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
-            description: 'Live show created from Host Dashboard'
-          })
-        });
-        
-        if (createResponse.ok) {
-          const newEpisode = await createResponse.json();
-          
-          // Now start the episode to make it live
-          const startResponse = await fetch(`/api/episodes/${newEpisode.id}/start`, {
-            method: 'PATCH'
-          });
-          
-          if (startResponse.ok) {
-            const liveEpisode = await startResponse.json();
-            setActiveEpisode(liveEpisode);
-            setIsLive(true);
-            console.log('✅ Episode created and started:', liveEpisode.title);
-          } else {
-            throw new Error('Failed to start episode');
-          }
-        } else {
-          const error = await createResponse.json().catch(() => ({}));
-          console.error('Create episode error:', error);
-          throw new Error(error.error || 'Failed to create episode');
-        }
+      if (!response.ok) {
+        throw new Error('Failed to start episode');
       }
+      
+      const episode = await response.json();
+      setActiveEpisode(episode);
+      setIsLive(true);
+      
+      // Update global state
+      broadcast.setState({
+        isLive: true,
+        linesOpen: true,
+        episodeId: episode.id,
+        showId: episode.showId,
+        showName: episode.title || 'Live Show',
+        startTime: new Date(),
+        selectedShow: show
+      });
+      
+      // Step 7: Play show opener (goes to mixer → conference → callers hear it)
+      if (show?.openerAudioUrl) {
+        await mixerInstance.playAudioFile(show.openerAudioUrl);
+      }
+      
+      console.log('🎉 SHOW STARTED! You are LIVE!');
+      
     } catch (error) {
-      console.error('Error starting episode:', error);
+      console.error('❌ [START-BROADCAST] Error:', error);
+      alert(`Failed to start show: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
