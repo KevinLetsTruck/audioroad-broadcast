@@ -173,7 +173,12 @@ export default function HostDashboard() {
       const show = showResponse.ok ? await showResponse.json() : null;
       
       // Step 1: Initialize Twilio and connect host to conference
-      await broadcast.initializeTwilio(`host-${Date.now()}`);
+      const device = await broadcast.initializeTwilio(`host-${Date.now()}`);
+      console.log('✅ Twilio device ready:', !!device);
+      
+      // Wait for state to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       await broadcast.connectToCall(`host-${activeEpisode.id}`, 'Host', activeEpisode.id, 'host');
       
       // Step 2: Initialize mixer
