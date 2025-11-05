@@ -329,7 +329,7 @@ export default function HostDashboard() {
   ];
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-2 dark:bg-dark">
+    <div className="h-screen flex flex-col bg-gray-2 dark:bg-dark overflow-hidden">
       {/* TailAdmin Header */}
       <div className="px-6 py-4 bg-white dark:bg-gray-dark border-b border-stroke dark:border-dark-3 shadow-1">
         <div className="flex items-center justify-between flex-wrap gap-3">

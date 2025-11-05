@@ -503,7 +503,7 @@ export default function ScreeningRoom() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="h-screen flex flex-col overflow-hidden">
       {/* Single Header Bar */}
       <div className="px-6 py-3 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
         <div className="flex items-center gap-6">
@@ -526,7 +526,7 @@ export default function ScreeningRoom() {
       </div>
 
       {/* Main Layout: Content + Chat - 50/50 Split */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex overflow-hidden">
         {/* Left: Screening Content - 50% */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
@@ -676,7 +676,7 @@ export default function ScreeningRoom() {
         </div>
 
         {/* Right: Chat Sidebar - 50% */}
-        <div className="flex-1 border-l border-gray-700">
+        <div className="flex-1 border-l border-gray-700 flex flex-col overflow-hidden">
           {activeEpisode && <ChatPanel episodeId={activeEpisode.id} userRole="screener" />}
         </div>
       </div>
