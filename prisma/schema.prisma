@@ -80,6 +80,10 @@ model Episode {
   
   status          String    // 'scheduled', 'live', 'completed', 'cancelled', 'archived'
   
+  // Phone Lines (pre-show)
+  linesOpen       Boolean   @default(false) // Phone lines open for screener
+  linesOpenedAt   DateTime? // When lines were opened
+  
   // Twilio Conference
   twilioConferenceSid String?  // Active conference SID for this episode
   conferenceActive    Boolean  @default(false) // Is conference currently active
