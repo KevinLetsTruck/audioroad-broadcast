@@ -676,14 +676,18 @@ export default function BroadcastControl() {
     const episodesRes = await fetch(`/api/episodes?showId=${show.id}`);
     const episodes = await episodesRes.json();
 
+    // Find today's episode that's NOT completed
     const todaysEpisode = episodes.find((ep: any) => {
       const epDate = new Date(ep.date).toISOString().split('T')[0];
-      return epDate === today;
+      return epDate === today && ep.status !== 'completed';
     });
 
     if (todaysEpisode) {
+      console.log('✅ Found existing episode:', todaysEpisode.title, 'Status:', todaysEpisode.status);
       return todaysEpisode;
     }
+    
+    console.log('📝 No active episode for today - creating new one...');
 
     // Create today's episode with proper naming
     const now = new Date();
