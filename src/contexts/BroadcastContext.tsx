@@ -12,6 +12,7 @@ import { StreamEncoder } from '../services/streamEncoder';
 
 interface BroadcastState {
   isLive: boolean;
+  linesOpen: boolean;
   episodeId: string | null;
   showId: string | null;
   showName: string;
@@ -67,6 +68,7 @@ const BroadcastContext = createContext<BroadcastContextType | null>(null);
 export function BroadcastProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<BroadcastState>({
     isLive: false,
+    linesOpen: false,
     episodeId: null,
     showId: null,
     showName: '',

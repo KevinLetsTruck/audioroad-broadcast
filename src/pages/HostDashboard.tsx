@@ -45,8 +45,23 @@ export default function HostDashboard() {
         // On-air call managed globally now - no need to clear locally
       });
       
+      socket.on('episode:lines-opened', (episode) => {
+        console.log('📞 [HOST] Lines opened event:', episode);
+        setActiveEpisode(episode);
+        setIsLive(false);
+      });
+      
+      socket.on('episode:start', (episode) => {
+        console.log('🎙️ [HOST] Episode started event:', episode);
+        setActiveEpisode(episode);
+        setIsLive(true);
+      });
+      
       return () => {
         clearInterval(interval);
+        socket.off('call:completed');
+        socket.off('episode:lines-opened');
+        socket.off('episode:start');
         socket.close();
       };
     }
@@ -115,6 +130,19 @@ export default function HostDashboard() {
 
   const fetchActiveEpisode = async () => {
     try {
+      // Use episode from broadcast context first
+      const contextEpisodeId = broadcast.state.episodeId;
+      
+      if (contextEpisodeId) {
+        const response = await fetch(`/api/episodes/${contextEpisodeId}`);
+        const episode = await response.json();
+        setActiveEpisode(episode);
+        setIsLive(episode.status === 'live');
+        console.log('✅ Found episode from context:', episode.title);
+        return;
+      }
+      
+      // Fallback: fetch live episodes
       const response = await fetch('/api/episodes?status=live');
       const episodes = await response.json();
       
@@ -134,20 +162,81 @@ export default function HostDashboard() {
     }
   };
 
-  const startEpisode = async () => {
+  const startBroadcast = async () => {
     if (!activeEpisode) return;
     
     try {
-      // Try to start the episode in the database
-      const response = await fetch(`/api/episodes/${activeEpisode.id}/start`, {
-        method: 'PATCH'
-      });
+      console.log('🎙️ [START-BROADCAST] Starting show broadcast...');
+      
+      // Get show for opener
+      const showResponse = await fetch(`/api/shows/${activeEpisode.showId}`);
+      const show = showResponse.ok ? await showResponse.json() : null;
+      
+      // Step 1: Initialize Twilio and connect host to conference
+      await broadcast.initializeTwilio(`host-${Date.now()}`);
+      await broadcast.connectToCall(`host-${activeEpisode.id}`, 'Host', activeEpisode.id, 'host');
+      
+      // Step 2: Initialize mixer
+      const mixerInstance = await broadcast.initializeMixer();
+      
+      // Step 3: Connect host mic
+      await mixerInstance.connectMicrophone('default');
+      broadcast.refreshAudioSources();
+      
+      // Step 4: Start recording
+      const autoRecord = localStorage.getItem('autoRecord') !== 'false';
+      if (autoRecord) {
+        mixerInstance.startRecording();
+      }
+      
+      // Step 5: Start streaming
+      const autoStream = localStorage.getItem('autoStream') !== 'false';
+      const radioCoPassword = localStorage.getItem('radioCoPassword') || '';
+      
+      if (autoStream && radioCoPassword) {
+        const { StreamEncoder } = await import('../services/streamEncoder');
+        const encoder = new StreamEncoder();
+        encoder.configure({
+          serverUrl: 's923c25be7.dj.radio.co',
+          port: 80,
+          password: radioCoPassword,
+          streamName: activeEpisode.title || 'AudioRoad Network LIVE',
+          genre: 'Trucking',
+          url: 'http://audioroad.letstruck.com',
+          bitrate: 256,
+          mode: 'radio.co' as const
+        });
+        const outputStream = mixerInstance.getOutputStream();
+        if (outputStream) {
+          await encoder.startStreaming(outputStream);
+        }
+      }
+      
+      // Step 6: Mark episode as live
+      const response = await fetch(`/api/episodes/${activeEpisode.id}/start`, { method: 'PATCH' });
       
       if (response.ok) {
         const episode = await response.json();
         setActiveEpisode(episode);
         setIsLive(true);
-        console.log('✅ Episode started in database:', episode.title);
+        
+        // Update global state
+        broadcast.setState({
+          isLive: true,
+          linesOpen: true,
+          episodeId: episode.id,
+          showId: episode.showId,
+          showName: episode.title || 'Live Show',
+          startTime: new Date(),
+          selectedShow: show
+        });
+        
+        // Step 7: Play show opener
+        if (show?.openerAudioUrl) {
+          await mixerInstance.playAudioFile(show.openerAudioUrl);
+        }
+        
+        console.log('🎉 SHOW STARTED! You are LIVE!');
       } else {
         // If episode doesn't exist, create show and episode
         console.log('📝 Creating new show and episode in database...');
@@ -239,6 +328,7 @@ export default function HostDashboard() {
       // IMPORTANT: Update global broadcast state so Broadcast Control knows!
       broadcast.setState({
         isLive: false,
+        linesOpen: false,
         episodeId: null,
         showId: null,
         showName: '',
@@ -277,9 +367,9 @@ export default function HostDashboard() {
               onChange={(id) => setActiveTab(id as 'calls' | 'documents')}
               variant="pills"
             />
-            {!isLive && activeEpisode && (
-              <Button variant="success" size="sm" onClick={startEpisode}>
-                GO LIVE
+            {!isLive && activeEpisode && activeEpisode.linesOpen && (
+              <Button variant="success" size="sm" onClick={startBroadcast}>
+                START SHOW
               </Button>
             )}
             {isLive && (

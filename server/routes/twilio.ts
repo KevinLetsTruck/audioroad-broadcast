@@ -103,17 +103,30 @@ router.post('/voice', async (req: Request, res: Response) => {
       return res.type('text/xml').send(twiml);
     }
 
-    // Find active episode
-    const activeEpisode = await prisma.episode.findFirst({
+    // Find active episode - live OR with lines open
+    let activeEpisode = await prisma.episode.findFirst({
       where: { status: 'live' },
       orderBy: { scheduledStart: 'desc' }
     });
+    
+    if (!activeEpisode) {
+      // Check for episode with lines open
+      activeEpisode = await prisma.episode.findFirst({
+        where: { 
+          linesOpen: true,
+          status: 'scheduled'
+        },
+        orderBy: { linesOpenedAt: 'desc' }
+      });
+    }
 
     if (!activeEpisode) {
-      console.log('⚠️  No live episode - sending to voicemail');
+      console.log('⚠️  No active episode - sending to voicemail');
       const twiml = generateTwiML('voicemail');
       return res.type('text/xml').send(twiml);
     }
+    
+    console.log(`✅ [VOICE] Found active episode: ${activeEpisode.title} (status: ${activeEpisode.status})`);
 
     // Create call record if we have caller info
     if (callerId) {
@@ -248,17 +261,31 @@ router.post('/incoming-call', verifyTwilioWebhook, async (req: Request, res: Res
       });
     }
 
-    // Find active episode (for now, just get the most recent live episode)
-    const activeEpisode = await prisma.episode.findFirst({
+    // Find active episode - live OR with lines open
+    let activeEpisode = await prisma.episode.findFirst({
       where: { status: 'live' },
       orderBy: { scheduledStart: 'desc' }
     });
+    
+    if (!activeEpisode) {
+      // Check for episode with lines open
+      activeEpisode = await prisma.episode.findFirst({
+        where: { 
+          linesOpen: true,
+          status: 'scheduled'
+        },
+        orderBy: { linesOpenedAt: 'desc' }
+      });
+    }
 
     if (!activeEpisode) {
+      console.log('⚠️ No active episode - sending to voicemail');
       const twiml = generateTwiML('voicemail');
       res.type('text/xml').send(twiml);
       return;
     }
+    
+    console.log(`✅ [INCOMING] Found active episode: ${activeEpisode.title} (status: ${activeEpisode.status})`);
 
     // Create call record first
     const call = await prisma.call.create({
@@ -457,42 +484,22 @@ router.post('/wait-music', (req: Request, res: Response) => {
 });
 
 /**
- * POST /api/twilio/wait-audio - Smart wait audio (live show or hold music)
- * Used as waitUrl for conference - plays live show if available, otherwise hold music
+ * POST /api/twilio/wait-audio - Smart wait audio
+ * Before show: Hold music
+ * During show: Hold music (callers hear conference audio directly - opener, host mic, etc.)
  */
 router.post('/wait-audio', async (req: Request, res: Response) => {
   try {
     console.log('🎵 [WAIT-AUDIO] Request received');
     
-    // Check if stream is live on the main broadcast server
-    const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
-    
-    let isLive = false;
-    try {
-      const statusResponse = await fetch(`${appUrl}/api/stream/status`, { 
-        signal: AbortSignal.timeout(2000) // 2 second timeout
-      });
-      const status = await statusResponse.json() as { live?: boolean };
-      isLive = status.live || false;
-      console.log(`   Stream status: ${isLive ? 'LIVE ✅' : 'OFFLINE ❌'}`);
-    } catch (statusError) {
-      console.warn('⚠️ [WAIT-AUDIO] Could not check stream status (assuming offline)');
-      isLive = false;
-    }
-
-    // Use pre-cached MP3 files instead of live HLS conversion
-    // Generate chunks in ADVANCE and cache them, serve from cache
-    console.log('🎙️ [WAIT-AUDIO] Using cached MP3 chunks...');
-    
-    const chunkUrl = `${appUrl}/api/twilio/cached-audio-chunk`;
-    
+    // Always serve hold music
+    // Note: During live show, callers in conference hear host mic and opener DIRECTLY
+    // WaitUrl is only fallback when no active conference audio
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play>${chunkUrl}</Play>
-        <Redirect method="POST">${appUrl}/api/twilio/wait-audio</Redirect>
+        <Play loop="20">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
       </Response>`;
     
-    console.log(`   Cached chunk URL: ${chunkUrl}`);
     res.type('text/xml').send(twiml);
     
   } catch (error) {

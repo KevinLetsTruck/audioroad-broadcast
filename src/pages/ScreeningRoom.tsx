@@ -46,19 +46,32 @@ export default function ScreeningRoom() {
   useEffect(() => {
     console.log('🚀 ScreeningRoom mounted - initializing...');
     
-    // Fetch active episode
-    fetch('/api/episodes?status=live')
-      .then(res => res.json())
-      .then(episodes => {
-        console.log('📺 Episodes response:', episodes);
-        if (episodes.length > 0) {
-          setActiveEpisode(episodes[0]);
-          console.log('✅ Active episode loaded:', episodes[0].title, 'ID:', episodes[0].id);
-        } else {
-          console.log('⚠️ No live episodes found');
-        }
-      })
-      .catch(err => console.error('❌ Error fetching episodes:', err));
+    // Use episode from broadcast context first
+    const contextEpisodeId = broadcast.state.episodeId;
+    
+    if (contextEpisodeId) {
+      fetch(`/api/episodes/${contextEpisodeId}`)
+        .then(res => res.json())
+        .then(episode => {
+          setActiveEpisode(episode);
+          console.log('✅ Active episode loaded from context:', episode.title, 'ID:', episode.id);
+        })
+        .catch(err => console.error('❌ Error fetching episode:', err));
+    } else {
+      // Fallback: fetch active episode
+      fetch('/api/episodes?status=live')
+        .then(res => res.json())
+        .then(episodes => {
+          console.log('📺 Episodes response:', episodes);
+          if (episodes.length > 0) {
+            setActiveEpisode(episodes[0]);
+            console.log('✅ Active episode loaded:', episodes[0].title, 'ID:', episodes[0].id);
+          } else {
+            console.log('⚠️ No live episodes found');
+          }
+        })
+        .catch(err => console.error('❌ Error fetching episodes:', err));
+    }
 
     // Setup socket connection
     console.log('🔌 Creating Socket.IO connection...');
@@ -193,6 +206,16 @@ export default function ScreeningRoom() {
       // Immediately refresh to show the call
       fetchQueuedCalls();
     });
+    
+    socket.on('episode:lines-opened', (episode) => {
+      console.log('📞 [SCREENER] Lines opened event:', episode);
+      setActiveEpisode(episode);
+    });
+    
+    socket.on('episode:start', (episode) => {
+      console.log('🎙️ [SCREENER] Episode started event:', episode);
+      setActiveEpisode(episode);
+    });
 
     // Auto-refresh every 2 seconds to catch missed events (more frequent!)
     const refreshInterval = setInterval(() => {
@@ -207,6 +230,8 @@ export default function ScreeningRoom() {
       socket.off('call:hungup');
       socket.off('participant:state-changed');
       socket.off('call:screening');
+      socket.off('episode:lines-opened');
+      socket.off('episode:start');
       clearInterval(refreshInterval);
     };
   }, [socket, activeEpisode]);

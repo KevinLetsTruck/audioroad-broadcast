@@ -137,44 +137,110 @@ router.patch('/:id', async (req: Request, res: Response) => {
 });
 
 /**
- * PATCH /api/episodes/:id/start - Start episode (go live)
+ * PATCH /api/episodes/:id/open-lines - Open phone lines (Phase 1: Pre-show)
+ */
+router.patch('/:id/open-lines', async (req: Request, res: Response) => {
+  try {
+    const episode = await prisma.episode.findUnique({
+      where: { id: req.params.id },
+      include: { show: true }
+    });
+
+    if (!episode) {
+      return res.status(404).json({ error: 'Episode not found' });
+    }
+
+    console.log(`📞 [OPEN-LINES] Opening phone lines for episode: ${episode.id}`);
+    
+    // Close lines on all other episodes
+    await prisma.episode.updateMany({
+      where: {
+        id: { not: req.params.id },
+        linesOpen: true
+      },
+      data: { linesOpen: false }
+    });
+
+    // Create Twilio conference if needed
+    let conferenceSid = episode.twilioConferenceSid;
+    if (!conferenceSid) {
+      try {
+        const conference = await createEpisodeConference(episode.id);
+        conferenceSid = conference.sid || `episode-${episode.id}`;
+        console.log(`📞 [CONFERENCE] Created conference: ${conference.friendlyName || conference.sid}`);
+      } catch (confError) {
+        console.error('⚠️ [CONFERENCE] Failed to create conference:', confError);
+      }
+    }
+
+    // Open lines - episode stays 'scheduled', not 'live' yet
+    const updatedEpisode = await prisma.episode.update({
+      where: { id: req.params.id },
+      data: {
+        linesOpen: true,
+        linesOpenedAt: new Date(),
+        twilioConferenceSid: conferenceSid,
+        conferenceActive: conferenceSid ? true : false
+      },
+      include: { show: true }
+    });
+
+    console.log(`✅ [OPEN-LINES] Phone lines opened - screener can take calls`);
+
+    const io = req.app.get('io');
+    io.emit('episode:lines-opened', updatedEpisode);
+
+    res.json(updatedEpisode);
+  } catch (error) {
+    console.error('Error opening phone lines:', error);
+    res.status(500).json({ error: 'Failed to open phone lines' });
+  }
+});
+
+/**
+ * PATCH /api/episodes/:id/start - Start episode (Phase 2: Go live)
  */
 router.patch('/:id/start', async (req: Request, res: Response) => {
   try {
-    // Update episode status
-    const episode = await prisma.episode.update({
+    const episode = await prisma.episode.findUnique({
+      where: { id: req.params.id },
+      include: { show: true }
+    });
+
+    if (!episode) {
+      return res.status(404).json({ error: 'Episode not found' });
+    }
+
+    console.log(`🎙️ [START] Starting episode: ${episode.id}`);
+
+    // Ensure conference exists (may have been created when lines opened)
+    let conferenceSid = episode.twilioConferenceSid;
+    if (!conferenceSid) {
+      try {
+        const conference = await createEpisodeConference(episode.id);
+        conferenceSid = conference.sid || `episode-${episode.id}`;
+        console.log(`📞 [CONFERENCE] Created conference: ${conference.friendlyName || conference.sid}`);
+      } catch (confError) {
+        console.error('⚠️ [CONFERENCE] Failed to create conference:', confError);
+      }
+    }
+
+    // Mark as live
+    const updatedEpisode = await prisma.episode.update({
       where: { id: req.params.id },
       data: {
         status: 'live',
         actualStart: new Date(),
-        conferenceActive: true
-      }
+        conferenceActive: true,
+        twilioConferenceSid: conferenceSid
+      },
+      include: { show: true }
     });
 
-    console.log(`🎙️ [EPISODE] Starting episode: ${episode.id}`);
-
-    // Create Twilio conference for this episode
-    try {
-      const conference = await createEpisodeConference(episode.id);
-      console.log(`📞 [CONFERENCE] Created conference: ${conference.friendlyName || conference.sid}`);
-      
-      // Store conference SID
-      await prisma.episode.update({
-        where: { id: episode.id },
-        data: {
-          twilioConferenceSid: conference.sid || `episode-${episode.id}`
-        }
-      });
-    } catch (confError) {
-      console.error('⚠️ [CONFERENCE] Failed to create conference (will retry on first call):', confError);
-      // Don't fail the whole request if conference creation fails
-      // Conference will be created automatically when first call joins
-    }
-
     const io = req.app.get('io');
-    io.to(`episode:${episode.id}`).emit('episode:start', episode);
+    io.emit('episode:start', updatedEpisode);
 
-    res.json(episode);
+    res.json(updatedEpisode);
   } catch (error) {
     console.error('Error starting episode:', error);
     res.status(500).json({ error: 'Failed to start episode' });

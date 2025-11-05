@@ -237,7 +237,52 @@ export default function BroadcastControl() {
   };
 
   /**
-   * Main "START SHOW" button handler
+   * Phase 1: "OPEN PHONE LINES" button handler
+   * Opens phone lines for screener WITHOUT starting broadcast
+   */
+  const handleOpenLines = async () => {
+    setIsStarting(true);
+    setErrorMessage('');
+
+    try {
+      console.log('📞 [OPEN-LINES] Opening phone lines...');
+      console.log('📞 [OPEN-LINES] Current state:', { linesOpen: status.linesOpen, episodeId: status.episodeId });
+
+      // Get or create today's episode
+      let episode;
+      if (status.episodeId) {
+        const res = await fetch(`/api/episodes/${status.episodeId}`);
+        episode = await res.json();
+      } else {
+        episode = await getOrCreateTodaysEpisode();
+      }
+
+      // Open phone lines (creates conference, does NOT start recording/streaming)
+      await fetch(`/api/episodes/${episode.id}/open-lines`, { method: 'PATCH' });
+      console.log('✅ Phone lines opened');
+
+      // Update context
+      broadcast.setState({
+        isLive: false,
+        linesOpen: true,
+        episodeId: episode.id,
+        showId: episode.showId,
+        showName: episode.title || 'Pre-Show',
+        startTime: null,
+        selectedShow: selectedShow
+      });
+
+      console.log('🎉 PHONE LINES OPEN! Screener can take calls.');
+    } catch (error: any) {
+      console.error('❌ Failed to open phone lines:', error);
+      setErrorMessage(error.message || 'Failed to open phone lines');
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  /**
+   * Main "START SHOW" button handler (LEGACY - kept for compatibility)
    * Does EVERYTHING automatically
    */
   const handleStartShow = async () => {
@@ -685,12 +730,22 @@ export default function BroadcastControl() {
           {!status.isLive ? (
             /* PRE-SHOW STATE */
             <>
-              {status.episodeId ? (
-                /* Episode exists but mixer not connected */
+              {status.linesOpen ? (
+                /* Phone lines open - waiting for host to start show */
+                <div className="text-center mb-8">
+                  <div className="inline-flex items-center gap-2 mb-2">
+                    <span className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse"></span>
+                    <h2 className="text-3xl font-bold">Phone Lines Open</h2>
+                  </div>
+                  <p className="text-xl text-gray-300 mb-2">{status.showName}</p>
+                  <p className="text-gray-400 mb-4">Screener can take calls. Go to Host Dashboard to start show.</p>
+                </div>
+              ) : status.episodeId ? (
+                /* Episode exists but lines not open */
                 <div className="text-center mb-8">
                   <div className="inline-flex items-center gap-2 mb-2">
                     <span className="w-3 h-3 bg-orange-500 rounded-full animate-pulse"></span>
-                    <h2 className="text-3xl font-bold">Episode Live</h2>
+                    <h2 className="text-3xl font-bold">Episode Exists</h2>
                   </div>
                   <p className="text-xl text-gray-300 mb-2">{status.showName}</p>
                   <p className="text-gray-400 mb-4">This episode was started earlier</p>
@@ -701,6 +756,7 @@ export default function BroadcastControl() {
                       // Reset state
                       broadcast.setState({
                         isLive: false,
+                        linesOpen: false,
                         episodeId: null,
                         showId: null,
                         showName: '',
@@ -909,18 +965,18 @@ export default function BroadcastControl() {
                 )}
               </div>
 
-              {/* BIG START BUTTON - Only show if NO old episode */}
-              {!status.episodeId && (
+              {/* BIG OPEN LINES BUTTON - Show if lines not open */}
+              {!status.linesOpen && !status.episodeId && (
                 <>
                   <button
-                    onClick={handleStartShow}
+                    onClick={handleOpenLines}
                     disabled={isStarting || !selectedShow}
                     className="w-full py-6 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded-lg font-bold text-2xl transition-all transform hover:scale-105 disabled:scale-100"
                   >
                     {isStarting 
-                      ? '⏳ Starting...' 
+                      ? '⏳ Opening Lines...' 
                       : selectedShow
-                      ? `🎙️ START ${selectedShow.name.toUpperCase()} - GO LIVE!`
+                      ? `📞 OPEN PHONE LINES`
                       : '⏳ Loading...'}
                   </button>
 
