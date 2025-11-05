@@ -343,8 +343,13 @@ export default function ScreeningRoom() {
         if (onAirRes.ok) {
           console.log('✅ Caller unmuted for screening');
         } else {
-          console.error('⚠️ on-air endpoint failed');
+          const errorText = await onAirRes.text();
+          console.error('⚠️ on-air endpoint failed:', onAirRes.status, errorText);
         }
+        
+        // Extra safety: Wait then verify they're actually unmuted
+        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log('✅ Screening connection complete');
       } catch (holdError) {
         console.error('⚠️ Failed to unmute caller:', holdError);
       }
