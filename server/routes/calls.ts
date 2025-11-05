@@ -248,8 +248,8 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
         screenerNotes,
         topic,
         priority: priority || 'normal',
-        // Set participant state to APPROVED (on hold until show starts)
-        participantState: 'approved',
+        // Set participant state to HOLD (waiting for host, will show in "On Hold" section)
+        participantState: 'hold',
         // Preserve existing conference SID or set it if missing
         twilioConferenceSid: existingCall.twilioConferenceSid || `episode-${existingCall.episodeId}`,
         // Keep muted in conference
