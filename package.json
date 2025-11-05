@@ -1,7 +1,7 @@
 {
   "name": "audioroad-broadcast",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "AudioRoad Network Broadcast Platform - Live call-in radio show management system",
   "scripts": {
