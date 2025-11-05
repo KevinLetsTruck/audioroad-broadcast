@@ -289,13 +289,22 @@ export default function ScreeningRoom() {
   };
 
   const handlePickUpCall = async (call: any) => {
-    // Prevent picking up multiple calls
-    if (activeCall) {
-      console.warn('⚠️ Already screening a call - ignoring pick up request');
-      return;
-    }
-
     console.log('📞 Picking up call:', call.id);
+    
+    // CRITICAL: If there's ANY existing call, disconnect it first
+    if (activeCall) {
+      console.warn('⚠️ Existing call detected - disconnecting before pickup');
+      try {
+        await broadcast.disconnectCurrentCall();
+        setActiveCall(null);
+        // Wait for disconnect to complete
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('✅ Previous call disconnected');
+      } catch (e) {
+        console.error('❌ Failed to disconnect previous call:', e);
+        // Continue anyway
+      }
+    }
     
     // Update call status to 'screening' in database
     try {
