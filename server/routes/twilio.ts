@@ -690,7 +690,7 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
         endConferenceOnExit: false,
         waitUrl: `${appUrl}/api/twilio/wait-audio`, // Use Radio.co stream
         waitMethod: 'POST',
-        muted: false // Join UNMUTED to avoid beeps
+        muted: true // Join MUTED for privacy
       }, 'episode-fallback');
       
       res.type('text/xml').send(twiml.toString());
