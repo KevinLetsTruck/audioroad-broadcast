@@ -174,7 +174,7 @@ export default function HostDashboard() {
       
       // Step 1: Initialize Twilio and connect host to conference
       const device = await broadcast.initializeTwilio(`host-${Date.now()}`);
-      console.log('✅ Twilio device ready:', !!device);
+      console.log('✅ Twilio device ready:', device ? 'yes' : 'no');
       
       // Wait for state to update
       await new Promise(resolve => setTimeout(resolve, 500));

@@ -56,7 +56,7 @@ interface BroadcastContextType {
   refreshAudioSources: () => void;
   
   // Actions - Calls
-  initializeTwilio: (identity: string) => Promise<void>;
+  initializeTwilio: (identity: string) => Promise<Device>;
   connectToCall: (callId: string, callerName: string, episodeId: string, role?: 'host' | 'screener') => Promise<void>;
   disconnectCall: (callId: string) => Promise<void>;
   setOnAir: (callId: string) => void;
