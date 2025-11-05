@@ -8,8 +8,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useBroadcast } from '../contexts/BroadcastContext';
-import { StreamEncoder, StreamConfig } from '../services/streamEncoder';
-import { VideoCapture } from '../services/videoCapture';
+// StreamEncoder and VideoCapture only used in legacy START SHOW handler (commented out)
 import VUMeter from '../components/VUMeter';
 import ParticipantBoard from '../components/ParticipantBoard';
 import { detectCurrentShow, getShowDisplayName } from '../utils/showScheduler';
@@ -20,10 +19,9 @@ export default function BroadcastControl() {
   
   const [isStarting, setIsStarting] = useState(false);
   const [isEnding, setIsEnding] = useState(false);
-  const [playingOpener, setPlayingOpener] = useState(false);
   const [playingAd, setPlayingAd] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [masterLevel, setMasterLevel] = useState(0);
+  const [masterLevel] = useState(0); // Used for VU meter display
   
   // Audio device selection
   const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
@@ -72,9 +70,8 @@ export default function BroadcastControl() {
   // Platform streaming
   const [streamPlatforms, setStreamPlatforms] = useState<any[]>([]);
 
-  // Local refs (encoder still local, mixer from context)
-  const encoderRef = useRef<StreamEncoder | null>(null);
-  const videoCaptureRef = useRef<VideoCapture | null>(null);
+  // Local refs - only encoderRef still used in END SHOW handler
+  const encoderRef = useRef<any | null>(null);
   
   // Get state from context
   const status = broadcast.state;
@@ -282,9 +279,10 @@ export default function BroadcastControl() {
   };
 
   /**
-   * Main "START SHOW" button handler (LEGACY - kept for compatibility)
-   * Does EVERYTHING automatically
+   * LEGACY: Main "START SHOW" button handler 
+   * Kept for potential emergency fallback - not currently used
    */
+  /*
   const handleStartShow = async () => {
     setIsStarting(true);
     setErrorMessage('');
@@ -417,6 +415,7 @@ export default function BroadcastControl() {
       const startTime = new Date();
       broadcast.setState({
         isLive: true,
+        linesOpen: false,
         episodeId: episode.id,
         showId: episode.showId,
         showName: episode.title || 'Live Show',
@@ -472,6 +471,7 @@ export default function BroadcastControl() {
       console.log('🏁 [START] Start show sequence finished');
     }
   };
+  */
 
   /**
    * Main "END SHOW" button handler
@@ -636,6 +636,7 @@ export default function BroadcastControl() {
       console.log('📴 [END] Resetting state...');
       broadcast.setState({
         isLive: false,
+        linesOpen: false,
         episodeId: null,
         showId: null,
         showName: '',
@@ -1045,14 +1046,12 @@ export default function BroadcastControl() {
               )}
 
               {/* Audio Playback Indicator */}
-              {(playingOpener || playingAd) && (
+              {playingAd && (
                 <div className="mb-6 p-4 bg-purple-900/30 border-2 border-purple-500 rounded-lg animate-pulse">
                   <div className="flex items-center justify-center gap-3">
                     <span className="text-3xl">🎵</span>
                     <div className="text-center">
-                      <div className="font-bold text-lg">
-                        {playingOpener ? 'Playing Show Opener...' : 'Playing Ad...'}
-                      </div>
+                      <div className="font-bold text-lg">Playing Ad...</div>
                       <div className="text-sm text-gray-400">Audio broadcasting now</div>
                     </div>
                   </div>
