@@ -1,0 +1,7 @@
+# Force rebuild - changed v2
+node_modules/
+dist/
+.env
+.git/
+*.log
+
