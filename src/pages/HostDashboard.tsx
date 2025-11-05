@@ -39,6 +39,11 @@ export default function HostDashboard() {
       const socket = io();
       socket.emit('join:episode', activeEpisode.id);
       
+      socket.on('call:approved', () => {
+        console.log('🔔 Call approved event - refreshing queue');
+        fetchApprovedCalls();
+      });
+      
       socket.on('call:completed', () => {
         console.log('🔔 Call completed event - refreshing queue');
         fetchApprovedCalls();
@@ -226,13 +231,36 @@ export default function HostDashboard() {
       // Update global state
       broadcast.setState({
         isLive: true,
-        linesOpen: true,
+        linesOpen: false,  // Lines were open, now show is live
         episodeId: episode.id,
         showId: episode.showId,
         showName: episode.title || 'Live Show',
         startTime: new Date(),
         selectedShow: show
       });
+      
+      // Step 6b: Take all approved callers OFF hold so they hear the live show
+      console.log('📞 [START-BROADCAST] Taking approved callers off hold...');
+      try {
+        const approvedResponse = await fetch(`/api/calls?episodeId=${activeEpisode.id}&status=approved`);
+        if (approvedResponse.ok) {
+          const approvedCallers = await approvedResponse.json();
+          console.log(`   Found ${approvedCallers.length} approved callers in queue`);
+          
+          // Take each off hold concurrently
+          await Promise.all(approvedCallers.map(async (caller: any) => {
+            try {
+              await fetch(`/api/participants/${caller.id}/off-hold`, { method: 'PATCH' });
+              console.log(`   ✅ ${caller.caller?.name || 'Caller'} can now hear live show`);
+            } catch (err) {
+              console.error(`   ⚠️ Failed to take ${caller.id} off hold:`, err);
+            }
+          }));
+        }
+      } catch (err) {
+        console.error('⚠️ Failed to process approved callers:', err);
+        // Continue anyway - not critical to show starting
+      }
       
       // Step 7: Play show opener (goes to mixer → conference → callers hear it)
       if (show?.openerAudioUrl) {

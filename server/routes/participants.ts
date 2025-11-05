@@ -64,6 +64,55 @@ router.patch('/:callId/hold', async (req: Request, res: Response) => {
 });
 
 /**
+ * PATCH /api/participants/:callId/off-hold - Take participant off hold
+ * They remain muted but can hear conference audio (for approved callers during live show)
+ */
+router.patch('/:callId/off-hold', async (req: Request, res: Response) => {
+  try {
+    const { callId } = req.params;
+    
+    const call = await prisma.call.findUnique({
+      where: { id: callId },
+      include: { episode: true }
+    });
+    
+    if (!call || !call.twilioCallSid || !call.twilioConferenceSid) {
+      return res.status(404).json({ error: 'Call or conference not found' });
+    }
+    
+    // Take off hold - they can now hear conference audio
+    const twilioClient = (await import('../services/twilioService.js')).default;
+    
+    if (!twilioClient) {
+      return res.status(500).json({ error: 'Twilio client not available' });
+    }
+    
+    const conferenceSid = call.episode?.twilioConferenceSid || call.twilioConferenceSid;
+    
+    await twilioClient
+      .conferences(conferenceSid)
+      .participants(call.twilioCallSid)
+      .update({
+        hold: false  // Can now hear conference (host mic, opener, etc.)
+        // Keep muted: true (already set when approved)
+      });
+    
+    // Update database
+    await prisma.call.update({
+      where: { id: callId },
+      data: { isOnHold: false }
+    });
+    
+    console.log(`✅ [OFF-HOLD] Participant ${callId} can now hear live show`);
+    
+    res.json({ success: true, state: 'listening' });
+  } catch (error) {
+    console.error('Error taking participant off hold:', error);
+    res.status(500).json({ error: 'Failed to take participant off hold' });
+  }
+});
+
+/**
  * PATCH /api/participants/:callId/screening - Move participant to screening
  */
 router.patch('/:callId/screening', async (req: Request, res: Response) => {

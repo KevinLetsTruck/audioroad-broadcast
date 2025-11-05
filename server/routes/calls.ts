@@ -248,13 +248,13 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
         screenerNotes,
         topic,
         priority: priority || 'normal',
-        // Set participant state to APPROVED (muted but listening to conference)
+        // Set participant state to APPROVED (on hold until show starts)
         participantState: 'approved',
         // Preserve existing conference SID or set it if missing
         twilioConferenceSid: existingCall.twilioConferenceSid || `episode-${existingCall.episodeId}`,
         // Keep muted in conference
         isMutedInConference: true,
-        isOnHold: false // NOT on hold - they can hear conference audio!
+        isOnHold: true // On hold with music until host starts show
       },
       include: {
         caller: true,
@@ -272,18 +272,20 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
         // Check if already on hold to avoid restarting audio
         const wasOnHold = existingCall.isOnHold;
         
-        // CRITICAL: muted=true (can't talk) but hold=false (CAN hear conference)
-        // This allows callers to hear the live show when host starts broadcasting
+        // Keep on hold with music until show starts (prevents silence when conference is empty)
+        // Host will take them off hold when starting the show
         await twilioClient
           .conferences(conferenceSid)
           .participants(call.twilioCallSid)
           .update({
             muted: true,  // Mic off (can't talk)
-            hold: false   // Can hear conference (will hear host when show starts!)
-          });
+            hold: true,   // Hear hold music (not silence!)
+            holdUrl: `${appUrl}/api/twilio/wait-audio`,
+            holdMethod: 'POST'
+          } as any);
         
-        console.log(`✅ [APPROVE] Participant muted but listening (queue position ${finalPosition})`);
-        console.log(`   Will hear host mic when show starts`);
+        console.log(`✅ [APPROVE] Participant on hold (queue position ${finalPosition})`);
+        console.log(`   Will be taken off hold when show starts`);
       } catch (holdError) {
         console.error('⚠️ [APPROVE] Failed to set hold status:', holdError);
         // Continue anyway - database is updated
