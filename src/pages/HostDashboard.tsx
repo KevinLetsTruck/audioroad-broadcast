@@ -362,7 +362,7 @@ export default function HostDashboard() {
       </div>
 
       {/* Main Layout: Content + Chat Sidebar */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex overflow-hidden">
         {/* Left: Main Content */}
         <div className="flex-1 overflow-y-auto p-4">
           {activeTab === 'calls' ? (
@@ -469,7 +469,7 @@ export default function HostDashboard() {
         </div>
 
         {/* Right: Chat Sidebar - 50/50 Split */}
-        <div className="flex-1 border-l border-gray-700">
+        <div className="flex-1 border-l border-gray-700 flex flex-col overflow-hidden">
           {activeEpisode && <ChatPanel episodeId={activeEpisode.id} userRole="host" />}
         </div>
       </div>
