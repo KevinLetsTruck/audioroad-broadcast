@@ -213,9 +213,16 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
    * Initialize Twilio Device (global, persists across pages)
    */
   const initializeTwilio = async (identity: string): Promise<Device> => {
-    if (twilioDevice) {
+    // Check if device exists AND is not destroyed
+    if (twilioDevice && twilioDevice.state !== 'destroyed') {
       console.log('⚠️ [TWILIO] Device already initialized - returning existing');
       return twilioDevice;
+    }
+
+    // If device exists but is destroyed, clear it
+    if (twilioDevice && twilioDevice.state === 'destroyed') {
+      console.log('🔥 [TWILIO] Clearing destroyed device reference');
+      setTwilioDevice(null);
     }
 
     try {
