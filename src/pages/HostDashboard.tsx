@@ -37,10 +37,12 @@ export default function HostDashboard() {
       
       // Also listen for WebSocket events for immediate updates
       const socket = io();
+      
+      console.log('🔌 [HOST] Joining episode room:', activeEpisode.id);
       socket.emit('join:episode', activeEpisode.id);
       
-      socket.on('call:approved', () => {
-        console.log('🔔 Call approved event - refreshing queue');
+      socket.on('call:approved', (data) => {
+        console.log('🔔 [HOST] Call approved event received:', data);
         fetchApprovedCalls();
       });
       
