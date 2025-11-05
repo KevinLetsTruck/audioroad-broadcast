@@ -4,6 +4,7 @@ import { emitToEpisode } from '../services/socketService.js';
 import { createCallSchema, updateCallStatusSchema, sanitizeString } from '../utils/validation.js';
 import twilio from 'twilio';
 import { twilioClient } from '../services/twilioService.js';
+import { applyFirstCallerAudioFix } from '../utils/twilioAudioFix.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -262,23 +263,21 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       }
     });
 
-    // Mute caller while in approved queue
-    // NO hold state - they stay in conference and hear it live
+    // Apply audio fix for first-time muted participants
     if (call.twilioCallSid && call.twilioConferenceSid && twilioClient) {
       try {
         const conferenceSid = call.episode?.twilioConferenceSid || call.twilioConferenceSid;
         
-        await twilioClient
-          .conferences(conferenceSid)
-          .participants(call.twilioCallSid)
-          .update({
-            muted: true,
-            hold: false // Explicitly ensure NOT on hold - can hear conference
-          });
+        // Use the smart audio fix that handles the first-caller issue
+        await applyFirstCallerAudioFix(
+          twilioClient,
+          conferenceSid,
+          call.twilioCallSid
+        );
         
-        console.log(`✅ [APPROVE] Participant muted, hearing live conference (position ${finalPosition})`);
+        console.log(`✅ [APPROVE] Participant muted with audio fix applied (position ${finalPosition})`);
       } catch (error) {
-        console.error('⚠️ [APPROVE] Failed to mute:', error);
+        console.error('⚠️ [APPROVE] Failed to apply audio fix:', error);
       }
     }
 

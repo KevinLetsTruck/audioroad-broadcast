@@ -219,6 +219,67 @@ This helps isolate where it breaks.
 
 ---
 
+## 🎧 The First-Caller Audio Issue (FIXED!)
+
+### The Problem
+
+**Symptom**: The first caller who gets approved can't hear the conference (host, music, etc.), but subsequent callers work fine.
+
+**Root Cause**: 
+When a Twilio participant:
+1. Joins a conference unmuted
+2. Is then muted programmatically without ever transmitting audio
+3. The receive audio channel may not be properly established
+
+This is a Twilio conference behavior where the audio receive channel needs an "audio handshake" to be properly established.
+
+### Why Only First Caller?
+
+Once ANY participant has been actively unmuted in a conference, Twilio establishes the necessary audio channels for the entire conference. That's why subsequent callers work fine - the channels are already established.
+
+### The Solution
+
+We implemented a smart audio fix (`server/utils/twilioAudioFix.ts`) that:
+
+1. **Detects** if this is the first muted participant
+2. **Unmutes** them briefly (300ms) to establish audio channels
+3. **Re-mutes** them immediately
+4. **Result**: Caller can now hear the conference!
+
+The fix is so quick (300ms) that it's imperceptible to users.
+
+### How It Works
+
+```javascript
+// In the approve endpoint:
+await applyFirstCallerAudioFix(
+  twilioClient,
+  conferenceSid,
+  call.twilioCallSid
+);
+```
+
+The utility:
+- Counts existing muted participants
+- If this is the first one, applies the unmute/mute cycle
+- If not, just mutes normally (no fix needed)
+- Has fallback error handling
+
+### Implementation Details
+
+**File locations**:
+- Fix utility: `server/utils/twilioAudioFix.ts`
+- Used in: `server/routes/calls.ts` (approve endpoint)
+- Old workaround removed from: `src/pages/ScreeningRoom.tsx`
+
+**Logs to watch**:
+```
+[AUDIO-FIX] First muted participant detected. Applying audio channel fix...
+[AUDIO-FIX] ✅ Audio fix applied successfully - participant can now hear conference
+```
+
+---
+
 ## ✅ Your Working System
 
 **Current version works because**:
