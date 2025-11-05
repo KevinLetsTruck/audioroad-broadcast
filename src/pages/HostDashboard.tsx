@@ -168,15 +168,10 @@ export default function HostDashboard() {
     try {
       console.log('🎙️ [START-BROADCAST] Starting show broadcast...');
       
-      // CRITICAL: Disconnect any existing call first (e.g., from switching dashboards)
-      try {
-        await broadcast.disconnectCurrentCall();
-        console.log('✅ Disconnected any existing call before starting show');
-        // Wait for disconnect to complete
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } catch (e) {
-        console.log('ℹ️ No existing call to disconnect (this is normal)');
-      }
+      // CRITICAL: Destroy old Twilio device for clean slate (prevents "Call already active")
+      // This is needed when switching from ScreeningRoom to HostDashboard
+      await broadcast.destroyTwilioDevice();
+      console.log('✅ Twilio device destroyed - ready for host connection');
       
       // Get show for opener
       const showResponse = await fetch(`/api/shows/${activeEpisode.showId}`);

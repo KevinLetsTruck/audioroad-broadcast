@@ -291,17 +291,15 @@ export default function ScreeningRoom() {
   const handlePickUpCall = async (call: any) => {
     console.log('📞 Picking up call:', call.id);
     
-    // CRITICAL: If there's ANY existing call, disconnect it first
-    if (activeCall) {
-      console.warn('⚠️ Existing call detected - disconnecting before pickup');
+    // CRITICAL: If there's ANY existing call, destroy device and recreate for clean slate
+    if (activeCall || broadcast.twilioDevice) {
+      console.warn('⚠️ Existing call/device detected - destroying for clean slate');
       try {
-        await broadcast.disconnectCurrentCall();
+        await broadcast.destroyTwilioDevice();
         setActiveCall(null);
-        // Wait for disconnect to complete
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        console.log('✅ Previous call disconnected');
+        console.log('✅ Twilio device destroyed - ready for fresh connection');
       } catch (e) {
-        console.error('❌ Failed to disconnect previous call:', e);
+        console.error('❌ Failed to destroy device:', e);
         // Continue anyway
       }
     }

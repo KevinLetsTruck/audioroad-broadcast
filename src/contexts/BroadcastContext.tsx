@@ -57,6 +57,7 @@ interface BroadcastContextType {
   
   // Actions - Calls
   initializeTwilio: (identity: string) => Promise<Device>;
+  destroyTwilioDevice: () => Promise<void>;
   connectToCall: (callId: string, callerName: string, episodeId: string, role?: 'host' | 'screener') => Promise<void>;
   disconnectCall: (callId: string) => Promise<void>;
   setOnAir: (callId: string) => void;
@@ -374,6 +375,34 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     await disconnectCall(mostRecent.callId);
   };
 
+  /**
+   * Destroy Twilio device completely (for clean slate when switching roles)
+   */
+  const destroyTwilioDevice = async () => {
+    if (!twilioDevice) {
+      console.log('ℹ️ [TWILIO] No device to destroy');
+      return;
+    }
+
+    console.log('🔥 [TWILIO] Destroying device for clean slate...');
+    
+    // Disconnect all active calls first
+    const calls = Array.from(activeCalls.values());
+    for (const call of calls) {
+      if (call.twilioCall) {
+        call.twilioCall.disconnect();
+      }
+    }
+    
+    // Destroy device
+    twilioDevice.destroy();
+    setTwilioDevice(null);
+    setActiveCalls(new Map());
+    setOnAirCallState(null);
+    
+    console.log('✅ [TWILIO] Device destroyed - ready for fresh start');
+  };
+
   const value: BroadcastContextType = {
     state,
     setState: setStateWithLogging,
@@ -391,6 +420,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     setMuted: setMutedFunc,
     refreshAudioSources,
     initializeTwilio,
+    destroyTwilioDevice,
     connectToCall,
     disconnectCall,
     setOnAir,
