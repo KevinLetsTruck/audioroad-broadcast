@@ -21,9 +21,15 @@ RUN npm ci
 
 # Accept build-time environment variables (from Railway)
 ARG VITE_CLERK_PUBLISHABLE_KEY
+ARG DATABASE_URL
 ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
+ENV DATABASE_URL=$DATABASE_URL
 
-# Build application (Vite will use VITE_CLERK_PUBLISHABLE_KEY)
+# CRITICAL: Run migrations BEFORE building so Prisma has correct schema
+RUN npx prisma migrate deploy
+RUN npx prisma generate
+
+# Build application with updated Prisma client
 RUN npm run build
 
 # Remove dev dependencies to reduce image size
