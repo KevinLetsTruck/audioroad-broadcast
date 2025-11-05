@@ -291,13 +291,25 @@ export default function ScreeningRoom() {
   const handlePickUpCall = async (call: any) => {
     console.log('📞 Picking up call:', call.id);
     
-    // CRITICAL: Only destroy device if we have an ACTIVE call (prevents "Call already active")
-    // Don't destroy if device exists but is idle - that's normal state
-    if (activeCall) {
-      console.warn('⚠️ Active call detected - destroying for clean slate before pickup');
+    // CRITICAL: Check actual Twilio device state
+    // The device might still have an active call even if our React state is cleared
+    const hasActiveCalls = broadcast.activeCalls.size > 0;
+    const device = broadcast.twilioDevice;
+    const deviceHasActiveCalls = device?.calls && device.calls.length > 0;
+    
+    console.log('🔍 Pre-pickup state check:');
+    console.log(`   - activeCalls in context: ${broadcast.activeCalls.size}`);
+    console.log(`   - Local activeCall: ${activeCall?.id || 'none'}`);
+    console.log(`   - Twilio device exists: ${device ? 'yes' : 'no'}`);
+    console.log(`   - Device active calls: ${device?.calls?.length || 0}`);
+    
+    if (hasActiveCalls || deviceHasActiveCalls) {
+      console.warn('⚠️ Device has active calls - destroying for clean slate');
       try {
         await broadcast.destroyTwilioDevice();
         setActiveCall(null);
+        // Wait for Twilio to fully clean up
+        await new Promise(resolve => setTimeout(resolve, 800));
         console.log('✅ Twilio device destroyed - ready for fresh connection');
       } catch (e) {
         console.error('❌ Failed to destroy device:', e);
