@@ -270,8 +270,19 @@ router.patch('/:id/end', async (req: Request, res: Response) => {
 
     console.log(`🎙️ [EPISODE] Ending episode: ${req.params.id}`);
 
-    // 1. Clean up all active calls FIRST
-    console.log(`🧹 [EPISODE] Cleaning up active calls...`);
+    // 1. End the Twilio conference FIRST (this disconnects all participants)
+    if (episode.twilioConferenceSid && episode.twilioConferenceSid.startsWith('CF')) {
+      try {
+        const { endConference } = await import('../services/conferenceService.js');
+        await endConference(episode.twilioConferenceSid);
+        console.log(`📴 [EPISODE] Conference ended: ${episode.twilioConferenceSid} - all participants disconnected`);
+      } catch (confError) {
+        console.error(`⚠️ [EPISODE] Error ending conference:`, confError);
+      }
+    }
+
+    // 2. Clean up all active calls in database
+    console.log(`🧹 [EPISODE] Cleaning up active calls in database...`);
     const activeCalls = await prisma.call.findMany({
       where: {
         episodeId: req.params.id,
@@ -281,21 +292,6 @@ router.patch('/:id/end', async (req: Request, res: Response) => {
         }
       }
     });
-
-    console.log(`📞 [EPISODE] Found ${activeCalls.length} active calls to end`);
-
-    // End each active Twilio call
-    for (const call of activeCalls) {
-      if (call.twilioCallSid && call.twilioCallSid.startsWith('CA')) {
-        try {
-          const { endCall } = await import('../services/twilioService.js');
-          await endCall(call.twilioCallSid);
-          console.log(`📴 [EPISODE] Ended call: ${call.twilioCallSid}`);
-        } catch (twilioError) {
-          console.error(`⚠️ [EPISODE] Error ending call ${call.twilioCallSid}:`, twilioError);
-        }
-      }
-    }
 
     // Mark all as completed
     await prisma.call.updateMany({
@@ -313,17 +309,6 @@ router.patch('/:id/end', async (req: Request, res: Response) => {
     });
 
     console.log(`✅ [EPISODE] All active calls cleaned up`);
-
-    // 2. End the Twilio conference if it exists
-    if (episode.twilioConferenceSid && episode.twilioConferenceSid.startsWith('CF')) {
-      try {
-        const { endConference } = await import('../services/conferenceService.js');
-        await endConference(episode.twilioConferenceSid);
-        console.log(`📴 [EPISODE] Conference ended: ${episode.twilioConferenceSid}`);
-      } catch (confError) {
-        console.error(`⚠️ [EPISODE] Error ending conference:`, confError);
-      }
-    }
 
     // 3. Update episode status
     const duration = Math.floor((Date.now() - episode.actualStart.getTime()) / (1000 * 60));
