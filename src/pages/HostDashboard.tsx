@@ -178,7 +178,7 @@ export default function HostDashboard() {
       const deviceHasActiveCalls = broadcast.twilioDevice?.calls && broadcast.twilioDevice.calls.length > 0;
       
       if (deviceHasActiveCalls) {
-        console.warn(`⚠️ Device has ${broadcast.twilioDevice.calls.length} active call(s) - destroying for clean start`);
+        console.warn(`⚠️ Device has ${broadcast.twilioDevice?.calls?.length || 0} active call(s) - destroying for clean start`);
         try {
           await broadcast.destroyTwilioDevice();
           console.log('✅ Twilio device destroyed - ready for host connection');
