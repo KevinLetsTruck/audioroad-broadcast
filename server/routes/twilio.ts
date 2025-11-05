@@ -603,6 +603,51 @@ router.get('/welcome-audio', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/twilio/temp-audio/:filename - Serve temporary welcome message audio files
+ */
+router.get('/temp-audio/:filename', async (req: Request, res: Response) => {
+  try {
+    const { filename } = req.params;
+    const filepath = `/tmp/welcome-messages/${filename}`;
+    
+    console.log(`🎵 [TEMP-AUDIO] Serving: ${filename}`);
+    
+    // Check if file exists
+    const fs = await import('fs/promises');
+    try {
+      await fs.access(filepath);
+      console.log(`✅ [TEMP-AUDIO] File found, streaming...`);
+      
+      // Stream the audio file
+      res.set({
+        'Content-Type': 'audio/mpeg',
+        'Cache-Control': 'no-cache'
+      });
+      
+      const fileStream = (await import('fs')).createReadStream(filepath);
+      fileStream.pipe(res);
+      
+      // Clean up after serving (in background)
+      setTimeout(async () => {
+        try {
+          await fs.unlink(filepath);
+          console.log(`🗑️ [TEMP-AUDIO] Cleaned up: ${filename}`);
+        } catch (e) {
+          // File already deleted, ignore
+        }
+      }, 60000); // Delete after 1 minute
+      
+    } catch (error) {
+      console.error(`❌ [TEMP-AUDIO] File not found: ${filename}`);
+      res.status(404).send('Audio file not found');
+    }
+  } catch (error) {
+    console.error('❌ [TEMP-AUDIO] Error serving audio:', error);
+    res.status(500).send('Error serving audio');
+  }
+});
+
+/**
  * POST /api/twilio/welcome-message - Welcome message with show name and redirect to conference
  */
 router.post('/welcome-message', async (req: Request, res: Response) => {
@@ -664,11 +709,47 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     const VoiceResponse = twilio.twiml.VoiceResponse;
     const twiml = new VoiceResponse();
     
-    // Say welcome message (simple, reliable)
-    twiml.say({
-      voice: 'Polly.Joanna',
-      language: 'en-US'
-    }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
+    // Play AI-generated welcome message with ElevenLabs voice
+    // Falls back to TTS Say if ElevenLabs fails
+    try {
+      // Generate AI message
+      const message = await generateWelcomeMessage(showName);
+      console.log(`🤖 [WELCOME] AI message: "${message}"`);
+      
+      // Convert to speech with ElevenLabs
+      // You can change the voiceId to any ElevenLabs voice you prefer
+      // Popular options:
+      //   21m00Tcm4TlvDq8ikWAM - Rachel (professional female)
+      //   pNInz6obpgDQGcFmaJgB - Adam (energetic male)
+      //   EXAVITQu4vr4xnSDxMaL - Bella (smooth female)
+      //   VR6AewLTigWG4xSOukaG - Arnold (classic radio announcer)
+      const audioBuffer = await generateSpeech(message, {
+        voiceId: process.env.ELEVENLABS_GREETING_VOICE || '21m00Tcm4TlvDq8ikWAM', // Rachel default
+        stability: 0.4, // More expressive (0-1, lower = more dynamic)
+        similarity_boost: 0.85 // High quality (0-1, higher = closer to original voice)
+      });
+      
+      // Save to temporary file for Twilio to stream
+      const tempDir = '/tmp/welcome-messages';
+      await import('fs/promises').then(fs => fs.mkdir(tempDir, { recursive: true }));
+      
+      const filename = `welcome-${CallSid}.mp3`;
+      const filepath = `/tmp/welcome-messages/${filename}`;
+      await import('fs/promises').then(fs => fs.writeFile(filepath, audioBuffer));
+      
+      // Serve via our endpoint (Twilio will stream from this URL)
+      const audioUrl = `${appUrl}/api/twilio/temp-audio/${filename}`;
+      console.log(`🎤 [WELCOME] Playing ElevenLabs audio: ${audioUrl}`);
+      
+      twiml.play(audioUrl);
+    } catch (error) {
+      console.warn('⚠️ [WELCOME] ElevenLabs failed, using fallback TTS:', error);
+      // Fallback to basic TwiML Say
+      twiml.say({
+        voice: 'Polly.Joanna',
+        language: 'en-US'
+      }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
+    }
     
     // Connect to conference with smart wait audio (live show or hold music)
     // Uses LOCAL HLS server (started when broadcast begins)
