@@ -1,5 +1,23 @@
 # Two-Phase Workflow - Current Status
 
+## CRITICAL FIX DEPLOYED (Nov 5, 2025 - 8:52 PM)
+
+**Issue:** "InvalidStateError: A Call is already active" when:
+- Starting show after being on ScreeningRoom
+- Picking up calls sent back from on-air
+
+**Root Cause:** Twilio Device object was persisting across dashboard switches. Disconnecting calls wasn't enough - the Device itself retained state.
+
+**Solution:** Added `destroyTwilioDevice()` function that:
+1. Disconnects all active calls
+2. Destroys the Twilio Device completely
+3. Clears all call state
+4. Forces creation of fresh Device on next connection
+
+**Deployment:** Commit `8778a6c` - Railway deploying now (3-4 min)
+
+---
+
 ## What's Fixed
 
 ✅ **Core Prisma issue solved** - Migrations run during build, not runtime  

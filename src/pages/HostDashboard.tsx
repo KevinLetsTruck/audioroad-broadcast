@@ -168,10 +168,13 @@ export default function HostDashboard() {
     try {
       console.log('🎙️ [START-BROADCAST] Starting show broadcast...');
       
-      // CRITICAL: Destroy old Twilio device for clean slate (prevents "Call already active")
-      // This is needed when switching from ScreeningRoom to HostDashboard
-      await broadcast.destroyTwilioDevice();
-      console.log('✅ Twilio device destroyed - ready for host connection');
+      // CRITICAL: Only destroy device if there are active calls (prevents "Call already active")
+      // This happens when switching from ScreeningRoom → HostDashboard with active screener call
+      if (broadcast.activeCalls.size > 0) {
+        console.warn('⚠️ Active calls detected - destroying device for clean host start');
+        await broadcast.destroyTwilioDevice();
+        console.log('✅ Twilio device destroyed - ready for host connection');
+      }
       
       // Get show for opener
       const showResponse = await fetch(`/api/shows/${activeEpisode.showId}`);

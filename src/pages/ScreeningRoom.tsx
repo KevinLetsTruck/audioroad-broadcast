@@ -291,16 +291,16 @@ export default function ScreeningRoom() {
   const handlePickUpCall = async (call: any) => {
     console.log('📞 Picking up call:', call.id);
     
-    // CRITICAL: If there's ANY existing call, destroy device and recreate for clean slate
-    if (activeCall || broadcast.twilioDevice) {
-      console.warn('⚠️ Existing call/device detected - destroying for clean slate');
+    // CRITICAL: Only destroy device if we have an ACTIVE call (prevents "Call already active")
+    // Don't destroy if device exists but is idle - that's normal state
+    if (activeCall) {
+      console.warn('⚠️ Active call detected - destroying for clean slate before pickup');
       try {
         await broadcast.destroyTwilioDevice();
         setActiveCall(null);
         console.log('✅ Twilio device destroyed - ready for fresh connection');
       } catch (e) {
         console.error('❌ Failed to destroy device:', e);
-        // Continue anyway
       }
     }
     
