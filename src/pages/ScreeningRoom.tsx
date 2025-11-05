@@ -201,18 +201,25 @@ export default function ScreeningRoom() {
       fetchQueuedCalls();
     });
 
-    socket.on('call:screening', (data) => {
+    socket.on('call:screening', async (data) => {
       console.log('🔍 [SCREENER] Call sent back to screening from host:', data);
       
       // CRITICAL: If this is our active call being sent back, clear it
       if (activeCall && (data.id === activeCall.id || data.callId === activeCall.id)) {
         console.log('🔴 Active call sent back to screening - clearing active state');
-        setActiveCall(null);
         
-        // Disconnect screener audio
+        // CRITICAL: Disconnect screener audio FIRST before clearing state
         if (screenerConnected) {
-          broadcast.disconnectCurrentCall();
+          try {
+            await broadcast.disconnectCurrentCall();
+            console.log('✅ Screener disconnected from call');
+          } catch (e) {
+            console.error('⚠️ Error disconnecting screener:', e);
+          }
         }
+        
+        // Now clear state
+        setActiveCall(null);
       }
       
       // Immediately refresh to show the call
