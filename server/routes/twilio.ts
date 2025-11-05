@@ -103,20 +103,20 @@ router.post('/voice', async (req: Request, res: Response) => {
       return res.type('text/xml').send(twiml);
     }
 
-    // Find active episode - live OR with lines open
+    // Find active episode - live OR lines open (scheduled + conferenceActive)
     let activeEpisode = await prisma.episode.findFirst({
       where: { status: 'live' },
       orderBy: { scheduledStart: 'desc' }
     });
     
     if (!activeEpisode) {
-      // Check for episode with lines open
+      // Check for episode with lines open (scheduled + conferenceActive=true)
       activeEpisode = await prisma.episode.findFirst({
         where: { 
-          linesOpen: true,
-          status: 'scheduled'
+          status: 'scheduled',
+          conferenceActive: true
         },
-        orderBy: { linesOpenedAt: 'desc' }
+        orderBy: { scheduledStart: 'desc' }
       });
     }
 
@@ -126,7 +126,7 @@ router.post('/voice', async (req: Request, res: Response) => {
       return res.type('text/xml').send(twiml);
     }
     
-    console.log(`✅ [VOICE] Found active episode: ${activeEpisode.title} (status: ${activeEpisode.status})`);
+    console.log(`✅ [VOICE] Found episode: ${activeEpisode.title} (status=${activeEpisode.status}, conferenceActive=${activeEpisode.conferenceActive})`);
 
     // Create call record if we have caller info
     if (callerId) {
@@ -261,20 +261,20 @@ router.post('/incoming-call', verifyTwilioWebhook, async (req: Request, res: Res
       });
     }
 
-    // Find active episode - live OR with lines open
+    // Find active episode - live OR lines open (scheduled + conferenceActive)
     let activeEpisode = await prisma.episode.findFirst({
       where: { status: 'live' },
       orderBy: { scheduledStart: 'desc' }
     });
     
     if (!activeEpisode) {
-      // Check for episode with lines open
+      // Check for episode with lines open (scheduled + conferenceActive=true)
       activeEpisode = await prisma.episode.findFirst({
         where: { 
-          linesOpen: true,
-          status: 'scheduled'
+          status: 'scheduled',
+          conferenceActive: true
         },
-        orderBy: { linesOpenedAt: 'desc' }
+        orderBy: { scheduledStart: 'desc' }
       });
     }
 
@@ -285,7 +285,7 @@ router.post('/incoming-call', verifyTwilioWebhook, async (req: Request, res: Res
       return;
     }
     
-    console.log(`✅ [INCOMING] Found active episode: ${activeEpisode.title} (status: ${activeEpisode.status})`);
+    console.log(`✅ [INCOMING] Found episode: ${activeEpisode.title} (status=${activeEpisode.status}, conferenceActive=${activeEpisode.conferenceActive})`);
 
     // Create call record first
     const call = await prisma.call.create({

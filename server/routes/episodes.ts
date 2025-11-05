@@ -138,6 +138,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
 
 /**
  * PATCH /api/episodes/:id/open-lines - Open phone lines (Phase 1: Pre-show)
+ * Uses EXISTING fields: status='scheduled' + conferenceActive=true
  */
 router.patch('/:id/open-lines', async (req: Request, res: Response) => {
   try {
@@ -152,13 +153,14 @@ router.patch('/:id/open-lines', async (req: Request, res: Response) => {
 
     console.log(`📞 [OPEN-LINES] Opening phone lines for episode: ${episode.id}`);
     
-    // Close lines on all other episodes
+    // Close lines on all other episodes (scheduled + conference active)
     await prisma.episode.updateMany({
       where: {
         id: { not: req.params.id },
-        linesOpen: true
+        status: 'scheduled',
+        conferenceActive: true
       },
-      data: { linesOpen: false }
+      data: { conferenceActive: false }
     });
 
     // Create Twilio conference if needed
@@ -173,19 +175,17 @@ router.patch('/:id/open-lines', async (req: Request, res: Response) => {
       }
     }
 
-    // Open lines - episode stays 'scheduled', not 'live' yet
+    // Open lines: status stays 'scheduled', conferenceActive=true
     const updatedEpisode = await prisma.episode.update({
       where: { id: req.params.id },
       data: {
-        linesOpen: true,
-        linesOpenedAt: new Date(),
-        twilioConferenceSid: conferenceSid,
-        conferenceActive: conferenceSid ? true : false
+        conferenceActive: true,
+        twilioConferenceSid: conferenceSid
       },
       include: { show: true }
     });
 
-    console.log(`✅ [OPEN-LINES] Phone lines opened - screener can take calls`);
+    console.log(`✅ [OPEN-LINES] Phone lines opened (status=scheduled, conferenceActive=true)`);
 
     const io = req.app.get('io');
     io.emit('episode:lines-opened', updatedEpisode);

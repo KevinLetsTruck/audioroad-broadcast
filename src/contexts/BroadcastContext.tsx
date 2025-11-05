@@ -12,7 +12,7 @@ import { StreamEncoder } from '../services/streamEncoder';
 
 interface BroadcastState {
   isLive: boolean;
-  linesOpen: boolean;
+  linesOpen: boolean; // Frontend tracking only
   episodeId: string | null;
   showId: string | null;
   showName: string;
