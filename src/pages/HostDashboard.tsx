@@ -195,10 +195,8 @@ export default function HostDashboard() {
       const device = await broadcast.initializeTwilio(`host-${Date.now()}`);
       console.log('✅ Twilio device ready:', device ? 'yes' : 'no');
       
-      // Wait for state to update
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      await broadcast.connectToCall(`host-${activeEpisode.id}`, 'Host', activeEpisode.id, 'host');
+      // CRITICAL: Pass the device directly (don't wait for React state - it might be stale!)
+      await broadcast.connectToCall(`host-${activeEpisode.id}`, 'Host', activeEpisode.id, 'host', device);
       
       // Step 2: Initialize mixer
       const mixerInstance = await broadcast.initializeMixer();
