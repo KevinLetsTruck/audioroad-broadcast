@@ -85,10 +85,12 @@ router.post('/voice', async (req: Request, res: Response) => {
         episode = await prisma.episode.findUnique({ where: { id: episodeId } });
       }
 
-      // Screener always starts conference, host joins active one
-      const startConference = role === 'screener' ? true : (episode?.conferenceActive || false);
+      // CRITICAL: Both screener AND host start conference (prevents "Decline" if conference died)
+      // Twilio will reuse existing conference if it's still active
+      const startConference = true;
       
       console.log(`🎙️ ${role} joining conference:`, conferenceName);
+      console.log(`   startConferenceOnEnter: ${startConference} (${role} always starts/restarts)`);
 
       // 🎧 Host joins UNMUTED so callers can hear them
       // Host mic goes to Twilio (for callers) AND mixer (for broadcast stream)
