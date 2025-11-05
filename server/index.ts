@@ -242,19 +242,16 @@ const startServer = async () => {
       console.log('📡 [STREAMING] Using dedicated streaming server (microservice architecture)');
       
       // ========================================
-      // CRITICAL: Audio cache uses Radio.co stream
+      // Audio cache DISABLED - Using Twilio's built-in hold music instead
       // ========================================
-      // Radio.co handles Auto DJ ↔ Live switching with ZERO overlap!
-      // Callers on hold hear same professional stream as listeners
-      // Radio.co provides AAC stream (not HLS), works perfectly with FFmpeg
-      const radioCoStreamUrl = 'https://stream.radio.co/s923c25be7/listen';
+      // Callers waiting for screener: Twilio hold music (no restarts)
+      // Callers in host queue: Hear live conference audio directly when show starts
+      // 
+      // This eliminates the audio restart/jump issue caused by chunking from rolling buffer
       console.log('========================================');
-      console.log('🎵 [AUDIO-CACHE] STARTING WITH RADIO.CO STREAM');
-      console.log(`   URL: ${radioCoStreamUrl}`);
-      console.log(`   Format: AAC (64kbps - Standard Quality)`);
-      console.log('========================================');
-      audioCache.start(radioCoStreamUrl);
-      console.log('✅ [AUDIO-CACHE] Radio.co stream ACTIVE\n');
+      console.log('🎵 [AUDIO] Using Twilio hold music (simple, no restarts)');
+      console.log('   Approved callers hear live conference when show starts');
+      console.log('========================================\n');
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
