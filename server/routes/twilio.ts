@@ -424,7 +424,9 @@ router.post('/conference-status', verifyTwilioWebhook, async (req: Request, res:
       });
 
       if (call && !call.twilioConferenceSid) {
-        console.log(`🎙️ [CONFERENCE] Participant joined, storing conference SID: ${call.id}`);
+        console.log(`🎙️ [CONFERENCE] Participant joined: ${call.id} (status: ${call.status})`);
+        console.log(`   CallSid: ${CallSid}`);
+        console.log(`   Conference: ${ConferenceSid}`);
         
         await prisma.call.update({
           where: { id: call.id },
