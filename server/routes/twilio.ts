@@ -439,16 +439,16 @@ router.post('/conference-status', verifyTwilioWebhook, async (req: Request, res:
         // TwiML muted setting doesn't always work for 2nd+ participants
         if (call.status === 'queued') {
           try {
-            const { getTwilioClient } = await import('../services/twilioService.js');
-            const twilioClient = getTwilioClient();
+            const twilioClient = twilio(
+              process.env.TWILIO_ACCOUNT_SID!,
+              process.env.TWILIO_AUTH_TOKEN!
+            );
             
-            if (twilioClient) {
-              await twilioClient
-                .conferences(ConferenceSid)
-                .participants(CallSid)
-                .update({ muted: true });
-              console.log('✅ [CONFERENCE] Participant force-muted for privacy');
-            }
+            await twilioClient
+              .conferences(ConferenceSid)
+              .participants(CallSid)
+              .update({ muted: true });
+            console.log('✅ [CONFERENCE] Participant force-muted for privacy');
           } catch (muteError) {
             console.error('⚠️ [CONFERENCE] Failed to force-mute participant:', muteError);
           }
