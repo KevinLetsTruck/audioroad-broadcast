@@ -174,7 +174,7 @@ export default function BroadcastControl() {
       return; // Don't poll when live
     }
     
-    checkForLiveEpisode();
+    checkForActiveEpisode();
     
     // Poll every 10 seconds (only when not live)
     const interval = setInterval(checkForLiveEpisode, 10000);
