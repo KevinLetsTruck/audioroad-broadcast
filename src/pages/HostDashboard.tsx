@@ -269,19 +269,32 @@ export default function HostDashboard() {
       console.log('📞 [START-BROADCAST] Taking approved callers off hold...');
       try {
         const approvedResponse = await fetch(`/api/calls?episodeId=${activeEpisode.id}&status=approved`);
+        console.log(`   Response status: ${approvedResponse.status}`);
+        
         if (approvedResponse.ok) {
           const approvedCallers = await approvedResponse.json();
           console.log(`   Found ${approvedCallers.length} approved callers in queue`);
+          console.log(`   Caller IDs:`, approvedCallers.map((c: any) => c.id));
           
-          // Take each off hold concurrently
-          await Promise.all(approvedCallers.map(async (caller: any) => {
+          // Take each off hold sequentially (not concurrent) for better logging
+          for (const caller of approvedCallers) {
             try {
-              await fetch(`/api/participants/${caller.id}/off-hold`, { method: 'PATCH' });
-              console.log(`   ✅ ${caller.caller?.name || 'Caller'} can now hear live show`);
+              console.log(`   📞 Taking ${caller.caller?.name || caller.id} off hold...`);
+              const offHoldRes = await fetch(`/api/participants/${caller.id}/off-hold`, { method: 'PATCH' });
+              console.log(`   Response: ${offHoldRes.status} - ${offHoldRes.ok ? 'Success' : 'Failed'}`);
+              
+              if (offHoldRes.ok) {
+                console.log(`   ✅ ${caller.caller?.name || 'Caller'} can now hear live show`);
+              } else {
+                const errorText = await offHoldRes.text();
+                console.error(`   ❌ Failed to take ${caller.id} off hold: ${errorText}`);
+              }
             } catch (err) {
-              console.error(`   ⚠️ Failed to take ${caller.id} off hold:`, err);
+              console.error(`   ⚠️ Exception taking ${caller.id} off hold:`, err);
             }
-          }));
+          }
+        } else {
+          console.error(`   ❌ Failed to fetch approved callers: ${approvedResponse.status}`);
         }
       } catch (err) {
         console.error('⚠️ Failed to process approved callers:', err);
