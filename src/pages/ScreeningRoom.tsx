@@ -274,19 +274,19 @@ export default function ScreeningRoom() {
     }
   };
 
-  // @ts-ignore - Kept for compatibility but not currently used
   const handlePickUpCall = async (call: any) => {
     console.log('📞 Picking up call:', call.id);
     
-    // SIMPLIFIED: If we have an active call, disconnect it first (don't destroy device)
-    if (activeCall) {
-      console.warn('⚠️ Active call exists - disconnecting before pickup');
+    // CRITICAL: ALWAYS disconnect any existing calls, even if React state is cleared
+    // Check the device itself, not just React state
+    if (broadcast.activeCalls.size > 0 || broadcast.twilioDevice?.calls?.length > 0) {
+      console.warn('⚠️ Active call detected - disconnecting before pickup');
       try {
         await broadcast.disconnectCurrentCall();
         setActiveCall(null);
-        // Brief wait for disconnect
-        await new Promise(resolve => setTimeout(resolve, 500));
-        console.log('✅ Previous call disconnected');
+        // Longer wait to ensure Twilio releases the device
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        console.log('✅ Previous call disconnected, device free');
       } catch (e) {
         console.error('❌ Failed to disconnect:', e);
       }
