@@ -279,7 +279,8 @@ export default function ScreeningRoom() {
     
     // CRITICAL: ALWAYS disconnect any existing calls, even if React state is cleared
     // Check the device itself, not just React state
-    if (broadcast.activeCalls.size > 0 || broadcast.twilioDevice?.calls?.length > 0) {
+    const deviceHasActiveCalls = broadcast.twilioDevice?.calls && broadcast.twilioDevice.calls.length > 0;
+    if (broadcast.activeCalls.size > 0 || deviceHasActiveCalls) {
       console.warn('⚠️ Active call detected - disconnecting before pickup');
       try {
         await broadcast.disconnectCurrentCall();
