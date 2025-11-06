@@ -591,12 +591,58 @@ export default function ScreeningRoom() {
               </div>
             )}
 
-            {/* All Calls - Show complete status using ParticipantBoard */}
-            {activeEpisode ? (
+            {/* Queued Calls Waiting to be Screened */}
+            {!activeCall && activeEpisode && incomingCalls.length > 0 && (
+              <div className="space-y-4 mb-6">
+                <h3 className="text-lg font-semibold text-gray-300">📞 Incoming Calls ({incomingCalls.length})</h3>
+                {incomingCalls.map((call) => {
+                  const waitTime = Math.floor((Date.now() - new Date(call.incomingAt).getTime()) / 1000 / 60);
+                  const waitSeconds = Math.floor((Date.now() - new Date(call.incomingAt).getTime()) / 1000) % 60;
+                  const borderColor = waitTime >= 5 ? 'border-red-500' :
+                                     waitTime >= 2 ? 'border-yellow-500' :
+                                     'border-gray-700';
+                  
+                  return (
+                    <div
+                      key={call.id}
+                      className={`bg-gray-800 border-2 ${borderColor} rounded-lg p-6 transition-colors`}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h4 className="text-xl font-bold">{call.caller?.name || 'Unknown Caller'}</h4>
+                          <p className="text-sm text-gray-400">{call.caller?.location || 'Location not provided'}</p>
+                          {call.caller?.phoneNumber && (
+                            <p className="text-sm text-gray-500">{call.caller.phoneNumber}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-bold text-yellow-400">
+                            {waitTime}:{waitSeconds.toString().padStart(2, '0')}
+                          </div>
+                          <p className="text-xs text-gray-500">Waiting</p>
+                        </div>
+                      </div>
+                      
+                      <button
+                        onClick={() => handlePickUpCall(call)}
+                        disabled={!!activeCall || !screenerReady}
+                        className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-bold text-lg transition-colors"
+                      >
+                        {!screenerReady ? '⏳ Phone System Loading...' : '📞 Pick Up & Screen This Call'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* All Other Calls - Show complete status using ParticipantBoard */}
+            {activeEpisode && !activeCall && (
               <div>
+                <h3 className="text-lg font-semibold text-gray-300 mb-4">📊 All Call States</h3>
                 <ParticipantBoard episodeId={activeEpisode.id} />
               </div>
-            ) : null}
+            )}
 
             {!activeEpisode && (
           <div className="text-center py-16 bg-gray-800 rounded-lg">
