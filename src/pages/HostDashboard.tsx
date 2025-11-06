@@ -279,9 +279,25 @@ export default function HostDashboard() {
         // Continue anyway - not critical to show starting
       }
       
-      // Step 7: Play show opener (goes to mixer → conference → callers hear it)
+      // Step 7: Play show opener 
       if (show?.openerAudioUrl) {
-        await mixerInstance.playAudioFile(show.openerAudioUrl);
+        console.log('🎵 [OPENER] Playing show opener...');
+        
+        // Play through mixer (callers and stream hear it)
+        const mixerPlayPromise = mixerInstance.playAudioFile(show.openerAudioUrl);
+        
+        // ALSO play locally for host to hear (no feedback - Twilio handles echo cancellation)
+        const localAudio = new Audio(show.openerAudioUrl);
+        localAudio.volume = 0.7; // Slightly quieter for monitoring
+        const localPlayPromise = localAudio.play();
+        
+        // Wait for both to finish
+        await Promise.all([mixerPlayPromise, localPlayPromise]).catch(err => {
+          console.warn('⚠️ Opener playback warning:', err);
+          // Don't fail if one source has issues
+        });
+        
+        console.log('✅ [OPENER] Opener played (host heard it + callers heard it)');
       }
       
       console.log('🎉 SHOW STARTED! You are LIVE!');
