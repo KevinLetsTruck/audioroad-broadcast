@@ -190,6 +190,15 @@ export default function HostDashboard() {
     try {
       console.log('🎙️ [START-BROADCAST] Starting show broadcast...');
       
+      // CRITICAL: Disconnect any existing calls first (e.g., if you were on Screening Room)
+      if (broadcast.activeCalls.size > 0) {
+        console.log('📞 [START-BROADCAST] Disconnecting existing calls before starting show...');
+        await broadcast.disconnectCurrentCall();
+        // Wait for disconnect to complete
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        console.log('✅ [START-BROADCAST] Existing calls disconnected');
+      }
+      
       // Get show for opener
       const showResponse = await fetch(`/api/shows/${activeEpisode.showId}`);
       const show = showResponse.ok ? await showResponse.json() : null;
