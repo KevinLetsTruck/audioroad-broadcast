@@ -617,14 +617,37 @@ export default function ScreeningRoom() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {incomingCalls.map((call) => (
+                  {incomingCalls.map((call) => {
+                    // Calculate wait time
+                    const waitTime = Math.floor((Date.now() - new Date(call.incomingAt).getTime()) / 1000 / 60);
+                    const waitSeconds = Math.floor((Date.now() - new Date(call.incomingAt).getTime()) / 1000) % 60;
+                    
+                    // Priority badge color
+                    const priorityColor = call.priority === 'urgent' ? 'bg-red-500' : 
+                                         call.priority === 'high' ? 'bg-orange-500' : 
+                                         'bg-gray-600';
+                    
+                    // Border color based on wait time
+                    const borderColor = waitTime >= 5 ? 'border-red-500' :
+                                       waitTime >= 2 ? 'border-yellow-500' :
+                                       'border-gray-700';
+                    
+                    return (
                     <div
                       key={call.id}
-                      className="bg-gray-800 border border-gray-700 rounded-lg p-6"
+                      className={`bg-gray-800 border-2 ${borderColor} rounded-lg p-6 transition-colors`}
                     >
-                      <div className="flex items-center justify-between">
+                      {/* Header Row */}
+                      <div className="flex items-start justify-between mb-3">
                         <div className="flex-1">
-                          <h4 className="text-xl font-bold">{call.caller?.name || 'Unknown Caller'}</h4>
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="text-xl font-bold">{call.caller?.name || 'Unknown Caller'}</h4>
+                            {call.priority && call.priority !== 'normal' && (
+                              <span className={`${priorityColor} text-white text-xs px-2 py-1 rounded font-semibold uppercase`}>
+                                {call.priority}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-sm text-gray-400">
                             {call.caller?.location || 'Location not provided'}
                           </p>
@@ -632,22 +655,32 @@ export default function ScreeningRoom() {
                             <p className="text-sm text-gray-500">{call.caller.phoneNumber}</p>
                           )}
                         </div>
+                        
+                        {/* Status Info */}
                         <div className="text-right">
-                          <p className="text-sm text-gray-400">
+                          <div className="text-lg font-bold text-yellow-400">
+                            {waitTime}:{waitSeconds.toString().padStart(2, '0')}
+                          </div>
+                          <p className="text-xs text-gray-500">Waiting</p>
+                          <p className="text-xs text-gray-400">
                             {new Date(call.incomingAt).toLocaleTimeString()}
                           </p>
                         </div>
                       </div>
 
                       {call.topic && (
-                        <div className="mt-4 bg-gray-900 p-4 rounded">
-                          <p className="text-sm font-semibold text-gray-300 mb-1">Topic:</p>
-                          <p className="text-gray-300">{call.topic}</p>
+                        <div className="mt-3 bg-gray-900 p-3 rounded">
+                          <p className="text-xs font-semibold text-gray-400 mb-1">Topic:</p>
+                          <p className="text-sm text-gray-300">{call.topic}</p>
                         </div>
                       )}
 
-                      {/* Don't show button if THIS call is being screened */}
-                      {activeCall && activeCall.id === call.id ? null : (
+                      {/* Action Button */}
+                      {activeCall && activeCall.id === call.id ? (
+                        <div className="mt-4 bg-green-900/30 border border-green-500 rounded p-3 text-center">
+                          <p className="text-green-400 font-semibold">Currently Screening This Call</p>
+                        </div>
+                      ) : (
                         <div className="mt-4">
                           <button
                             onClick={() => handlePickUpCall(call)}
@@ -659,7 +692,8 @@ export default function ScreeningRoom() {
                         </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               </div>
