@@ -199,39 +199,55 @@ export default function BroadcastControl() {
     }
   };
 
-  const checkForLiveEpisode = async () => {
+  const checkForActiveEpisode = async () => {
     try {
-      // Don't check if we're already running a show!
-      if (status.isLive) {
-        console.log('📡 [CHECK] Already live, skipping check');
+      // Don't check if we already have state
+      if (status.isLive || status.linesOpen) {
         return;
       }
       
-      const response = await fetch('/api/episodes?status=live');
-      const episodes = await response.json();
+      const response = await fetch('/api/episodes');
+      const allEpisodes = await response.json();
       
-      if (episodes.length > 0) {
-        const liveEpisode = episodes[0];
-        console.log('📡 [CHECK] Found existing live episode:', liveEpisode.title);
-        
-        // Only update if it's different from current state
-        if (status.episodeId !== liveEpisode.id) {
-          console.log('📡 [CHECK] Updating to show existing episode');
-          broadcast.setState({
-            ...status,
-            episodeId: liveEpisode.id,
-            showId: liveEpisode.showId,
-            showName: liveEpisode.title,
-            startTime: liveEpisode.actualStart ? new Date(liveEpisode.actualStart) : new Date(),
-            isLive: false, // Don't auto-mark as live
-            selectedShow: null
-          });
-        }
+      // Check for live episode first
+      const liveEpisode = allEpisodes.find((ep: any) => ep.status === 'live');
+      if (liveEpisode) {
+        console.log('📡 [SYNC] Found live episode:', liveEpisode.title);
+        broadcast.setState({
+          isLive: true,
+          linesOpen: false,
+          episodeId: liveEpisode.id,
+          showId: liveEpisode.showId,
+          showName: liveEpisode.title,
+          startTime: liveEpisode.actualStart ? new Date(liveEpisode.actualStart) : null,
+          selectedShow: null
+        });
+        return;
+      }
+      
+      // Check for lines-open episode (scheduled + conferenceActive)
+      const linesOpenEpisode = allEpisodes.find((ep: any) => 
+        ep.status === 'scheduled' && ep.conferenceActive === true
+      );
+      
+      if (linesOpenEpisode) {
+        console.log('📡 [SYNC] Found lines-open episode:', linesOpenEpisode.title);
+        broadcast.setState({
+          isLive: false,
+          linesOpen: true,
+          episodeId: linesOpenEpisode.id,
+          showId: linesOpenEpisode.showId,
+          showName: linesOpenEpisode.title,
+          startTime: null,
+          selectedShow: null
+        });
       }
     } catch (error) {
-      console.error('Error checking for live episode:', error);
+      console.error('Error checking for active episode:', error);
     }
   };
+  
+  const checkForLiveEpisode = checkForActiveEpisode; // Alias for compatibility
 
   /**
    * Phase 1: "OPEN PHONE LINES" button handler
