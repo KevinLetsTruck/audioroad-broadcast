@@ -194,7 +194,7 @@ router.patch('/:id/open-lines', async (req: Request, res: Response) => {
     console.log(`✅ [OPEN-LINES] Phone lines opened (status=scheduled, conferenceActive=true)`);
 
     const io = req.app.get('io');
-    io.emit('episode:lines-opened', updatedEpisode);
+    io.to(`episode:${updatedEpisode.id}`).emit('episode:lines-opened', updatedEpisode);
 
     res.json(updatedEpisode);
   } catch (error) {
@@ -244,7 +244,7 @@ router.patch('/:id/start', async (req: Request, res: Response) => {
     });
 
     const io = req.app.get('io');
-    io.emit('episode:start', updatedEpisode);
+    io.to(`episode:${updatedEpisode.id}`).emit('episode:start', updatedEpisode);
 
     res.json(updatedEpisode);
   } catch (error) {

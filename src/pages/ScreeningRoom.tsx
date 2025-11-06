@@ -338,11 +338,11 @@ export default function ScreeningRoom() {
       // Wait a moment for screener to fully connect to conference
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // CRITICAL: Unmute caller so screener can talk to them
+      // CRITICAL: Unmute caller so screener can talk to them (keep in screening state)
       console.log('📞 Unmuting caller for screening...');
       try {
-        // Use on-air endpoint to unmute (removes hold and unmutes)
-        const onAirRes = await fetch(`/api/participants/${call.id}/on-air`, { method: 'PATCH' });
+        // Use unmute endpoint to just unmute (keeps participant in screening state)
+        const onAirRes = await fetch(`/api/participants/${call.id}/unmute`, { method: 'PATCH' });
         if (onAirRes.ok) {
           console.log('✅ Caller unmuted for screening');
         } else {

@@ -140,22 +140,23 @@ router.post('/voice', async (req: Request, res: Response) => {
     if (callerId) {
       console.log('📝 [VOICE] Creating call record for callerId:', callerId);
       
-      // First, mark any previous incomplete calls from this caller as completed
-      // This handles the case where a caller refreshed or had a network issue
-      const previousCalls = await prisma.call.findMany({
+      // Check if call already exists for this CallSid to prevent duplicates
+      const existingCall = await prisma.call.findFirst({
         where: {
-          callerId: callerId,
+          twilioCallSid: CallSid,
           episodeId: activeEpisode.id,
           endedAt: null,
-          status: {
-            notIn: ['completed', 'rejected']
-          }
+          status: { notIn: ['completed', 'rejected'] }
         }
       });
 
-      if (previousCalls.length > 0) {
-        console.log(`🧹 [VOICE] Found ${previousCalls.length} incomplete calls from this caller, marking as completed`);
-        await prisma.call.updateMany({
+      if (existingCall) {
+        console.log(`⚠️ [VOICE] Call already exists for CallSid ${CallSid}, skipping duplicate creation`);
+        // Don't create new call, don't emit event, just continue to TwiML response
+      } else {
+        // First, mark any previous incomplete calls from this caller as completed
+        // This handles the case where a caller refreshed or had a network issue
+        const previousCalls = await prisma.call.findMany({
           where: {
             callerId: callerId,
             episodeId: activeEpisode.id,
@@ -163,42 +164,56 @@ router.post('/voice', async (req: Request, res: Response) => {
             status: {
               notIn: ['completed', 'rejected']
             }
-          },
-          data: {
-            status: 'completed',
-            endedAt: new Date()
           }
         });
-      }
-      
-      const call = await prisma.call.create({
-        data: {
-          episodeId: activeEpisode.id,
-          callerId: callerId,
-          twilioCallSid: CallSid || `web-${Date.now()}`,
-          status: 'queued',
-          incomingAt: new Date(),
-          queuedAt: new Date()
+
+        if (previousCalls.length > 0) {
+          console.log(`🧹 [VOICE] Found ${previousCalls.length} incomplete calls from this caller, marking as completed`);
+          await prisma.call.updateMany({
+            where: {
+              callerId: callerId,
+              episodeId: activeEpisode.id,
+              endedAt: null,
+              status: {
+                notIn: ['completed', 'rejected']
+              }
+            },
+            data: {
+              status: 'completed',
+              endedAt: new Date()
+            }
+          });
         }
-      });
-
-      console.log('✅ Call record created:', call.id, 'CallSid:', CallSid, 'CallerId:', callerId);
-
-      // Notify screening room via WebSocket
-      const io = req.app.get('io');
-      if (io) {
-        console.log('📡 [VOICE] Emitting call:incoming to episode:', activeEpisode.id);
-        console.log('📡 [VOICE] Call details:', { callId: call.id, callerId: callerId, status: call.status });
         
-        io.to(`episode:${activeEpisode.id}`).emit('call:incoming', {
-          callId: call.id,
-          callerId: callerId,
-          twilioCallSid: CallSid || call.twilioCallSid
+        const call = await prisma.call.create({
+          data: {
+            episodeId: activeEpisode.id,
+            callerId: callerId,
+            twilioCallSid: CallSid || `web-${Date.now()}`,
+            status: 'queued',
+            incomingAt: new Date(),
+            queuedAt: new Date()
+          }
         });
-        
-        console.log('✅ [VOICE] WebSocket event emitted');
-      } else {
-        console.warn('⚠️ [VOICE] No Socket.IO instance available!');
+
+        console.log('✅ Call record created:', call.id, 'CallSid:', CallSid, 'CallerId:', callerId);
+
+        // Notify screening room via WebSocket
+        const io = req.app.get('io');
+        if (io) {
+          console.log('📡 [VOICE] Emitting call:incoming to episode:', activeEpisode.id);
+          console.log('📡 [VOICE] Call details:', { callId: call.id, callerId: callerId, status: call.status });
+          
+          io.to(`episode:${activeEpisode.id}`).emit('call:incoming', {
+            callId: call.id,
+            callerId: callerId,
+            twilioCallSid: CallSid || call.twilioCallSid
+          });
+          
+          console.log('✅ [VOICE] WebSocket event emitted');
+        } else {
+          console.warn('⚠️ [VOICE] No Socket.IO instance available!');
+        }
       }
     }
 

@@ -294,6 +294,10 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
 
     const io = req.app.get('io');
     emitToEpisode(io, call.episodeId, 'call:approved', call);
+    emitToEpisode(io, call.episodeId, 'participant:state-changed', { 
+      callId: call.id, 
+      state: 'hold' 
+    });
 
     console.log(`✅ Call approved: ${call.id} - Participant in HOLD state (conference: ${call.twilioConferenceSid}, queue position: ${finalPosition})`);
 
