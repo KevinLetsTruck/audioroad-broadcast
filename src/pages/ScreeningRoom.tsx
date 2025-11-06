@@ -257,38 +257,24 @@ export default function ScreeningRoom() {
   }, [socket, activeEpisode]);
 
   const fetchQueuedCalls = async () => {
+    // Kept for WebSocket event handlers, but ParticipantBoard shows the calls
     if (!activeEpisode) return;
-    
     try {
-      // Fetch all queued and screening calls (not completed/rejected)
-      // Note: Fetch ALL calls for episode, then filter client-side for both queued AND screening
       const response = await fetch(`/api/calls?episodeId=${activeEpisode.id}`);
       const data = await response.json();
-      
-      // Filter out any that shouldn't be shown:
-      // - Must be queued or screening status
-      // - Must not have endedAt set (caller hung up)
-      // - Must not be completed or rejected
-      const activeCalls = data.filter((call: any) => {
-        const isActive = (call.status === 'queued' || call.status === 'screening') && 
-                         !call.endedAt && 
-                         call.status !== 'completed' && 
-                         call.status !== 'rejected';
-        
-        if (!isActive && call.endedAt) {
-          console.log(`🗑️ Filtering out completed call: ${call.id} (status: ${call.status}, endedAt: ${call.endedAt})`);
-        }
-        
-        return isActive;
-      });
-      
-      console.log('📋 Active queued calls:', activeCalls.length, '(filtered from', data.length, 'total)');
+      const activeCalls = data.filter((call: any) => 
+        (call.status === 'queued' || call.status === 'screening') && 
+        !call.endedAt && 
+        call.status !== 'completed' && 
+        call.status !== 'rejected'
+      );
       setIncomingCalls(activeCalls);
     } catch (error) {
       console.error('Error fetching queued calls:', error);
     }
   };
 
+  // @ts-ignore - Kept for compatibility but not currently used
   const handlePickUpCall = async (call: any) => {
     console.log('📞 Picking up call:', call.id);
     
