@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { useBroadcast } from '../contexts/BroadcastContext';
 import ChatPanel from '../components/ChatPanel';
 import DocumentUploadWidget from '../components/DocumentUploadWidget';
+import ParticipantBoard from '../components/ParticipantBoard';
 
 export default function ScreeningRoom() {
   const broadcast = useBroadcast(); // Use global broadcast context
@@ -604,100 +605,12 @@ export default function ScreeningRoom() {
               </div>
             )}
 
-            {/* Queued Calls - Only show if no active call being screened */}
-            {!activeCall && activeEpisode && (
+            {/* All Calls - Show complete status using ParticipantBoard */}
+            {activeEpisode ? (
               <div>
-                {incomingCalls.length === 0 ? (
-                <div className="text-center py-16 bg-gray-800 rounded-lg">
-                  <div className="text-6xl mb-6">☎️</div>
-                  <h3 className="text-2xl font-bold mb-4">Waiting for incoming calls...</h3>
-                  <p className="text-gray-400">
-                    Callers will appear here when they click "Call Now"
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {incomingCalls.map((call) => {
-                    // Calculate wait time
-                    const waitTime = Math.floor((Date.now() - new Date(call.incomingAt).getTime()) / 1000 / 60);
-                    const waitSeconds = Math.floor((Date.now() - new Date(call.incomingAt).getTime()) / 1000) % 60;
-                    
-                    // Priority badge color
-                    const priorityColor = call.priority === 'urgent' ? 'bg-red-500' : 
-                                         call.priority === 'high' ? 'bg-orange-500' : 
-                                         'bg-gray-600';
-                    
-                    // Border color based on wait time
-                    const borderColor = waitTime >= 5 ? 'border-red-500' :
-                                       waitTime >= 2 ? 'border-yellow-500' :
-                                       'border-gray-700';
-                    
-                    return (
-                    <div
-                      key={call.id}
-                      className={`bg-gray-800 border-2 ${borderColor} rounded-lg p-6 transition-colors`}
-                    >
-                      {/* Header Row */}
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="text-xl font-bold">{call.caller?.name || 'Unknown Caller'}</h4>
-                            {call.priority && call.priority !== 'normal' && (
-                              <span className={`${priorityColor} text-white text-xs px-2 py-1 rounded font-semibold uppercase`}>
-                                {call.priority}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-400">
-                            {call.caller?.location || 'Location not provided'}
-                          </p>
-                          {call.caller?.phoneNumber && (
-                            <p className="text-sm text-gray-500">{call.caller.phoneNumber}</p>
-                          )}
-                        </div>
-                        
-                        {/* Status Info */}
-                        <div className="text-right">
-                          <div className="text-lg font-bold text-yellow-400">
-                            {waitTime}:{waitSeconds.toString().padStart(2, '0')}
-                          </div>
-                          <p className="text-xs text-gray-500">Waiting</p>
-                          <p className="text-xs text-gray-400">
-                            {new Date(call.incomingAt).toLocaleTimeString()}
-                          </p>
-                        </div>
-                      </div>
-
-                      {call.topic && (
-                        <div className="mt-3 bg-gray-900 p-3 rounded">
-                          <p className="text-xs font-semibold text-gray-400 mb-1">Topic:</p>
-                          <p className="text-sm text-gray-300">{call.topic}</p>
-                        </div>
-                      )}
-
-                      {/* Action Button */}
-                      {activeCall && activeCall.id === call.id ? (
-                        <div className="mt-4 bg-green-900/30 border border-green-500 rounded p-3 text-center">
-                          <p className="text-green-400 font-semibold">Currently Screening This Call</p>
-                        </div>
-                      ) : (
-                        <div className="mt-4">
-                          <button
-                            onClick={() => handlePickUpCall(call)}
-                            disabled={!!activeCall || !screenerReady}
-                            className="w-full px-6 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-bold text-lg transition-colors"
-                          >
-                            {!screenerReady ? '⏳ Phone System Loading...' : activeCall ? '🔒 Screening Another Call' : '📞 Pick Up & Screen This Call'}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    );
-                  })}
-                </div>
-              )}
+                <ParticipantBoard episodeId={activeEpisode.id} />
               </div>
-            )}
+            ) : null}
 
             {!activeEpisode && (
           <div className="text-center py-16 bg-gray-800 rounded-lg">
