@@ -9,6 +9,15 @@ import { useState, useEffect } from 'react';
 import { io } from 'socket.io-client';
 import { useBroadcast } from '../contexts/BroadcastContext';
 
+interface CallerHistory {
+  totalCalls: number;
+  previousCalls: any[];
+  documentsCount: number;
+  aiSummary: string | null;
+  sentiment: string | null;
+  isFavorite: boolean;
+}
+
 interface Participant {
   id: string;
   caller: {
@@ -37,6 +46,9 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
     onHold: [],
     screening: []
   });
+  
+  const [expandedCallerId, setExpandedCallerId] = useState<string | null>(null);
+  const [callerHistories, setCallerHistories] = useState<Record<string, CallerHistory>>({});
 
   useEffect(() => {
     fetchParticipants();
@@ -189,6 +201,76 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
     }
   };
 
+  const fetchCallerHistory = async (participant: Participant) => {
+    // Get the actual caller record to find their ID
+    try {
+      console.log('📊 Fetching history for caller:', participant.caller?.name);
+      
+      // Find the call to get callerId
+      const callResponse = await fetch(`/api/calls/${participant.id}`);
+      if (!callResponse.ok) return;
+      
+      const call = await callResponse.json();
+      const callerId = call.callerId;
+      
+      if (!callerId) return;
+      
+      // Fetch full caller details with history
+      const callerResponse = await fetch(`/api/callers/${callerId}`);
+      if (!callerResponse.ok) return;
+      
+      const callerData = await callerResponse.json();
+      
+      // Filter out current call from history
+      const previousCalls = callerData.calls
+        ?.filter((c: any) => c.id !== participant.id)
+        .slice(0, 3) || [];
+      
+      setCallerHistories(prev => ({
+        ...prev,
+        [callerId]: {
+          totalCalls: callerData.totalCalls || 0,
+          previousCalls,
+          documentsCount: callerData._count?.documents || 0,
+          aiSummary: callerData.aiSummary,
+          sentiment: callerData.sentiment,
+          isFavorite: callerData.isFavorite || false
+        }
+      }));
+      
+      console.log('✅ Loaded caller history:', callerData.name, 'Total calls:', callerData.totalCalls);
+    } catch (error) {
+      console.error('Error fetching caller history:', error);
+    }
+  };
+
+  const toggleCallerHistory = async (participant: Participant) => {
+    // Get callerId from the participant
+    const call = await fetch(`/api/calls/${participant.id}`).then(r => r.json());
+    const callerId = call.callerId;
+    
+    if (expandedCallerId === callerId) {
+      // Collapse
+      setExpandedCallerId(null);
+    } else {
+      // Expand and fetch history if we don't have it yet
+      setExpandedCallerId(callerId);
+      if (!callerHistories[callerId]) {
+        await fetchCallerHistory(participant);
+      }
+    }
+  };
+
+  const getCallBadge = (participant: Participant) => {
+    // Check if we have history loaded
+    const call = participants.onHold.find(p => p.id === participant.id) ||
+                 participants.onAir.find(p => p.id === participant.id) ||
+                 participants.screening.find(p => p.id === participant.id);
+    
+    // This is a placeholder - we'll get the actual count from the history
+    return null; // Will be populated after fetching history
+  };
+
   const getRoleIcon = (role: string) => {
     switch (role) {
       case 'co-host': return '🎙️';
@@ -211,57 +293,132 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
           <p className="text-sm text-gray-400">No participants on air</p>
         ) : (
           <div className="space-y-2">
-            {participants.onAir.map((p) => (
-              <div key={p.id} className="bg-gray-800 rounded p-3 flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{getRoleIcon(p.participantRole)}</span>
-                    <div>
+            {participants.onAir.map((p) => {
+              const callerId = (p as any).callerId;
+              const history = callerId ? callerHistories[callerId] : null;
+              const isExpanded = callerId && expandedCallerId === callerId;
+              
+              return (
+                <div key={p.id} className="bg-gray-800 rounded p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold">{p.caller?.name || 'Unknown'}</span>
-                        {p.isMutedInConference && (
-                          <span className="text-xs text-gray-400" title="Muted">
-                            🔇
+                        <span className="text-xl">{getRoleIcon(p.participantRole)}</span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{p.caller?.name || 'Unknown'}</span>
+                            {p.isMutedInConference && (
+                              <span className="text-xs text-gray-400" title="Muted">🔇</span>
+                            )}
+                            {history && history.totalCalls > 1 && (
+                              <span className="px-2 py-0.5 bg-blue-600 rounded text-xs font-bold">
+                                {history.totalCalls}{history.totalCalls === 2 ? 'nd' : history.totalCalls === 3 ? 'rd' : 'th'} call
+                              </span>
+                            )}
+                            {history && history.isFavorite && (
+                              <span className="text-yellow-400" title="VIP Caller">⭐</span>
+                            )}
+                          </div>
+                          {p.caller?.location && (
+                            <div className="text-xs text-gray-500">{p.caller.location}</div>
+                          )}
+                          {p.topic && <div className="text-xs text-gray-400">{p.topic}</div>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      {callerId && (
+                        <button
+                          onClick={() => toggleCallerHistory(p)}
+                          className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs"
+                          title="View caller history"
+                        >
+                          {isExpanded ? '▲' : '▼'}
+                        </button>
+                      )}
+                      {p.isMutedInConference ? (
+                        <button
+                          onClick={() => unmuteParticipant(p.id)}
+                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-semibold"
+                          title="Unmute participant"
+                        >
+                          🔊 Unmute
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => muteParticipant(p.id)}
+                          className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-xs font-semibold"
+                          title="Mute participant"
+                        >
+                          🔇 Mute
+                        </button>
+                      )}
+                      <button
+                        onClick={() => putOnHold(p.id)}
+                        className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs font-semibold"
+                      >
+                        ⏸️ Hold
+                      </button>
+                      <button
+                        onClick={() => endCall(p.id)}
+                        className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-semibold"
+                      >
+                        End
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Expandable Caller History */}
+                  {isExpanded && history && (
+                    <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
+                      {/* AI Summary */}
+                      {history.aiSummary && (
+                        <div className="bg-blue-900/30 border border-blue-600 rounded p-2">
+                          <div className="text-xs font-semibold text-blue-300 mb-1">💡 AI Insights</div>
+                          <p className="text-xs text-gray-300">{history.aiSummary}</p>
+                        </div>
+                      )}
+                      
+                      {/* Previous Calls */}
+                      {history.previousCalls && history.previousCalls.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-gray-400 mb-1">📅 Previous Calls</div>
+                          <div className="space-y-1">
+                            {history.previousCalls.map((call: any) => (
+                              <div key={call.id} className="bg-gray-900 rounded p-2 text-xs">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-300">
+                                    {new Date(call.incomingAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                  </span>
+                                  {call.airDuration && (
+                                    <span className="text-green-400">{Math.floor(call.airDuration / 60)}m on-air</span>
+                                  )}
+                                </div>
+                                {call.topic && (
+                                  <div className="text-gray-500 mt-1">"{call.topic}"</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Stats */}
+                      <div className="flex items-center gap-4 text-xs text-gray-400">
+                        <span>📄 {history.documentsCount} documents</span>
+                        {history.sentiment && (
+                          <span>
+                            {history.sentiment === 'positive' && '😊 Positive'}
+                            {history.sentiment === 'neutral' && '😐 Neutral'}
+                            {history.sentiment === 'negative' && '😔 Negative'}
                           </span>
                         )}
                       </div>
-                      {p.topic && <div className="text-xs text-gray-400">{p.topic}</div>}
                     </div>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  {p.isMutedInConference ? (
-                    <button
-                      onClick={() => unmuteParticipant(p.id)}
-                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-semibold"
-                      title="Unmute participant"
-                    >
-                      🔊 Unmute
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => muteParticipant(p.id)}
-                      className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-xs font-semibold"
-                      title="Mute participant"
-                    >
-                      🔇 Mute
-                    </button>
                   )}
-                  <button
-                    onClick={() => putOnHold(p.id)}
-                    className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs font-semibold"
-                  >
-                    ⏸️ Hold
-                  </button>
-                  <button
-                    onClick={() => endCall(p.id)}
-                    className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-semibold"
-                  >
-                    End
-                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -276,39 +433,118 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
           <p className="text-sm text-gray-400">No participants on hold</p>
         ) : (
           <div className="space-y-2">
-            {participants.onHold.map((p) => (
-              <div key={p.id} className="bg-gray-800 rounded p-3 flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{getRoleIcon(p.participantRole)}</span>
-                    <div>
-                      <div className="font-semibold">{p.caller?.name || 'Unknown'}</div>
-                      {p.topic && <div className="text-xs text-gray-400">{p.topic}</div>}
+            {participants.onHold.map((p) => {
+              const callerId = (p as any).callerId;
+              const history = callerId ? callerHistories[callerId] : null;
+              const isExpanded = callerId && expandedCallerId === callerId;
+              
+              return (
+                <div key={p.id} className="bg-gray-800 rounded p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{getRoleIcon(p.participantRole)}</span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{p.caller?.name || 'Unknown'}</span>
+                            {history && history.totalCalls > 1 && (
+                              <span className="px-2 py-0.5 bg-blue-600 rounded text-xs font-bold">
+                                {history.totalCalls}{history.totalCalls === 2 ? 'nd' : history.totalCalls === 3 ? 'rd' : 'th'} call
+                              </span>
+                            )}
+                            {history && history.isFavorite && (
+                              <span className="text-yellow-400" title="VIP Caller">⭐</span>
+                            )}
+                          </div>
+                          {p.caller?.location && (
+                            <div className="text-xs text-gray-500">{p.caller.location}</div>
+                          )}
+                          {p.topic && <div className="text-xs text-gray-400">{p.topic}</div>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      {callerId && (
+                        <button
+                          onClick={() => toggleCallerHistory(p)}
+                          className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs"
+                          title="View caller history"
+                        >
+                          {isExpanded ? '▲' : '▼'}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => putOnAir(p.id)}
+                        className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-semibold"
+                      >
+                        📡 On Air
+                      </button>
+                      <button
+                        onClick={() => moveToScreening(p.id)}
+                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-semibold"
+                      >
+                        Screen
+                      </button>
+                      <button
+                        onClick={() => endCall(p.id)}
+                        className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-semibold"
+                      >
+                        End
+                      </button>
                     </div>
                   </div>
+                  
+                  {/* Expandable Caller History */}
+                  {isExpanded && history && (
+                    <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
+                      {/* AI Summary */}
+                      {history.aiSummary && (
+                        <div className="bg-blue-900/30 border border-blue-600 rounded p-2">
+                          <div className="text-xs font-semibold text-blue-300 mb-1">💡 AI Insights</div>
+                          <p className="text-xs text-gray-300">{history.aiSummary}</p>
+                        </div>
+                      )}
+                      
+                      {/* Previous Calls */}
+                      {history.previousCalls && history.previousCalls.length > 0 && (
+                        <div>
+                          <div className="text-xs font-semibold text-gray-400 mb-1">📅 Previous Calls</div>
+                          <div className="space-y-1">
+                            {history.previousCalls.map((call: any) => (
+                              <div key={call.id} className="bg-gray-900 rounded p-2 text-xs">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-300">
+                                    {new Date(call.incomingAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                  </span>
+                                  {call.airDuration && (
+                                    <span className="text-green-400">{Math.floor(call.airDuration / 60)}m on-air</span>
+                                  )}
+                                </div>
+                                {call.topic && (
+                                  <div className="text-gray-500 mt-1">"{call.topic}"</div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Stats */}
+                      <div className="flex items-center gap-4 text-xs text-gray-400">
+                        <span>📄 {history.documentsCount} documents</span>
+                        {history.sentiment && (
+                          <span>
+                            {history.sentiment === 'positive' && '😊 Positive'}
+                            {history.sentiment === 'neutral' && '😐 Neutral'}
+                            {history.sentiment === 'negative' && '😔 Negative'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => putOnAir(p.id)}
-                    className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-semibold"
-                  >
-                    📡 On Air
-                  </button>
-                  <button
-                    onClick={() => moveToScreening(p.id)}
-                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-semibold"
-                  >
-                    Screen
-                  </button>
-                  <button
-                    onClick={() => endCall(p.id)}
-                    className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-semibold"
-                  >
-                    End
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
