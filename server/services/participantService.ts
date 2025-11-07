@@ -379,19 +379,34 @@ export class ParticipantService {
         }
       },
       include: {
-        caller: true
+        caller: {
+          select: {
+            id: true,
+            name: true,
+            location: true,
+            phoneNumber: true,
+            totalCalls: true,
+            isFavorite: true,
+            sentiment: true
+          }
+        }
       },
       orderBy: {
         incomingAt: 'asc'
       }
     });
 
-    // Group by state
+    // Group by state and include callerId for easy access
+    const mapParticipant = (p: any) => ({
+      ...p,
+      callerId: p.caller.id // Add callerId at top level for frontend access
+    });
+
     return {
-      onAir: participants.filter(p => p.participantState === 'on-air'),
-      onHold: participants.filter(p => p.participantState === 'hold'),
-      screening: participants.filter(p => p.participantState === 'screening'),
-      all: participants
+      onAir: participants.filter(p => p.participantState === 'on-air').map(mapParticipant),
+      onHold: participants.filter(p => p.participantState === 'hold').map(mapParticipant),
+      screening: participants.filter(p => p.participantState === 'screening').map(mapParticipant),
+      all: participants.map(mapParticipant)
     };
   }
 }
