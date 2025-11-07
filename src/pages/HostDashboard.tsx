@@ -376,6 +376,7 @@ export default function HostDashboard() {
       console.log('✅ [START-BROADCAST] Ready to play audio');
       
       // Step 7: Play today's announcements (if enabled)
+      // NOTE: Announcements play through mixer (for stream) AND Twilio conference (for callers)
       if (autoPlayAnnouncements && todaysAnnouncements.length > 0) {
         console.log(`📢 [ANNOUNCEMENTS] Playing ${todaysAnnouncements.length} announcement(s)...`);
         
@@ -383,16 +384,28 @@ export default function HostDashboard() {
           try {
             console.log(`  ▶️ Playing: ${announcement.name}`);
             
-            // Play through mixer (callers and stream hear it)
+            // Play through mixer (for stream/recording)
             const mixerPlayPromise = mixerInstance.playAudioFile(announcement.fileUrl);
             
-            // ALSO play locally for host to hear
+            // Play locally for host
             const localAudio = new Audio(announcement.fileUrl);
             localAudio.volume = 0.7;
             const localPlayPromise = localAudio.play();
             
-            // Wait for both to finish
-            await Promise.all([mixerPlayPromise, localPlayPromise]).catch(err => {
+            // CRITICAL: Play directly to Twilio conference so CALLERS hear it
+            // Mixer output doesn't go to Twilio - only host mic does
+            // So we need to play audio file directly in the conference
+            const twilioPlayPromise = fetch(`/api/twilio/play-in-conference`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                episodeId: activeEpisode.id,
+                audioUrl: announcement.fileUrl
+              })
+            });
+            
+            // Wait for all to finish
+            await Promise.all([mixerPlayPromise, localPlayPromise, twilioPlayPromise]).catch(err => {
               console.warn(`  ⚠️ Announcement playback warning:`, err);
             });
             
@@ -412,21 +425,30 @@ export default function HostDashboard() {
       if (show?.openerAudioUrl) {
         console.log('🎵 [OPENER] Playing show opener...');
         
-        // Play through mixer (callers and stream hear it)
+        // Play through mixer (for stream/recording)
         const mixerPlayPromise = mixerInstance.playAudioFile(show.openerAudioUrl);
         
-        // ALSO play locally for host to hear (no feedback - Twilio handles echo cancellation)
+        // Play locally for host
         const localAudio = new Audio(show.openerAudioUrl);
-        localAudio.volume = 0.7; // Slightly quieter for monitoring
+        localAudio.volume = 0.7;
         const localPlayPromise = localAudio.play();
         
-        // Wait for both to finish
-        await Promise.all([mixerPlayPromise, localPlayPromise]).catch(err => {
-          console.warn('⚠️ Opener playback warning:', err);
-          // Don't fail if one source has issues
+        // CRITICAL: Play directly to Twilio conference so CALLERS hear it
+        const twilioPlayPromise = fetch(`/api/twilio/play-in-conference`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            episodeId: activeEpisode.id,
+            audioUrl: show.openerAudioUrl
+          })
         });
         
-        console.log('✅ [OPENER] Opener played (host heard it + callers heard it)');
+        // Wait for all to finish
+        await Promise.all([mixerPlayPromise, localPlayPromise, twilioPlayPromise]).catch(err => {
+          console.warn('⚠️ Opener playback warning:', err);
+        });
+        
+        console.log('✅ [OPENER] Opener played');
       }
       
       console.log('🎉 SHOW STARTED! You are LIVE!');

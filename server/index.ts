@@ -18,6 +18,7 @@ import callerRoutes from './routes/callers.js';
 import episodeRoutes from './routes/episodes.js';
 import showRoutes from './routes/shows.js';
 import twilioRoutes from './routes/twilio.js';
+import twilioPlaybackRoutes from './routes/twilio-playback.js';
 import analysisRoutes from './routes/analysis.js';
 import audioAssetRoutes from './routes/audio-assets.js';
 import clipRoutes from './routes/clips.js';
@@ -137,6 +138,7 @@ app.use('/api/callers', apiLimiter, callerRoutes);
 app.use('/api/episodes', apiLimiter, episodeRoutes);
 app.use('/api/shows', apiLimiter, showRoutes);
 app.use('/api/twilio', twilioWebhookLimiter, twilioRoutes); // Twilio webhooks
+app.use('/api/twilio', apiLimiter, twilioPlaybackRoutes); // Twilio conference playback
 app.use('/api/analysis', apiLimiter, analysisRoutes);
 app.use('/api/audio-assets', apiLimiter, audioAssetRoutes);
 app.use('/api/clips', apiLimiter, clipRoutes);
