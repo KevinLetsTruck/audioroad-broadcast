@@ -300,13 +300,13 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
                             {p.isMutedInConference && (
                               <span className="text-xs text-gray-400" title="Muted">🔇</span>
                             )}
-                            {history && history.totalCalls > 1 && (
-                              <span className="px-2 py-0.5 bg-blue-600 rounded text-xs font-bold">
-                                {history.totalCalls}{history.totalCalls === 2 ? 'nd' : history.totalCalls === 3 ? 'rd' : 'th'} call
-                              </span>
-                            )}
                             {history && history.isFavorite && (
                               <span className="text-yellow-400" title="VIP Caller">⭐</span>
+                            )}
+                            {history && history.totalCalls > 1 && (
+                              <span className="text-xs text-blue-400" title={`${history.totalCalls} total calls`}>
+                                🔄{history.totalCalls}x
+                              </span>
                             )}
                           </div>
                           {p.caller?.location && (
@@ -437,13 +437,13 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-semibold">{p.caller?.name || 'Unknown'}</span>
-                            {history && history.totalCalls > 1 && (
-                              <span className="px-2 py-0.5 bg-blue-600 rounded text-xs font-bold">
-                                {history.totalCalls}{history.totalCalls === 2 ? 'nd' : history.totalCalls === 3 ? 'rd' : 'th'} call
-                              </span>
-                            )}
                             {history && history.isFavorite && (
                               <span className="text-yellow-400" title="VIP Caller">⭐</span>
+                            )}
+                            {history && history.totalCalls > 1 && (
+                              <span className="text-xs text-blue-400" title={`${history.totalCalls} total calls`}>
+                                🔄{history.totalCalls}x
+                              </span>
                             )}
                           </div>
                           {p.caller?.location && (
