@@ -94,17 +94,43 @@ export default function ScreeningRoom() {
         .catch(err => console.error('❌ Error fetching episodes:', err));
     }
 
-    // Setup socket connection
+    // Setup socket connection with auto-reconnect
     console.log('🔌 Creating Socket.IO connection...');
-    const newSocket = io();
+    const newSocket = io({
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 10
+    });
     setSocket(newSocket);
     
+    let lastEpisodeId: string | null = null;
+    
     newSocket.on('connect', () => {
-      console.log('✅ Socket connected, ID:', newSocket.id);
+      console.log('✅ [SCREENER] Socket connected, ID:', newSocket.id);
+      // Rejoin episode room if we have one (for reconnections)
+      const currentEpisodeId = activeEpisode?.id || null;
+      if (currentEpisodeId && currentEpisodeId !== lastEpisodeId) {
+        console.log('🔄 [SCREENER] Joining episode room:', currentEpisodeId);
+        newSocket.emit('join:episode', currentEpisodeId);
+        lastEpisodeId = currentEpisodeId;
+      }
     });
     
-    newSocket.on('disconnect', () => {
-      console.log('📴 Socket disconnected');
+    newSocket.on('disconnect', (reason) => {
+      console.log('📴 [SCREENER] Socket disconnected:', reason);
+      if (reason === 'io server disconnect') {
+        // Server disconnected us - manually reconnect
+        console.log('🔄 [SCREENER] Server disconnected, reconnecting...');
+        newSocket.connect();
+      }
+    });
+
+    newSocket.on('reconnect', (attemptNumber) => {
+      console.log(`✅ [SCREENER] Reconnected after ${attemptNumber} attempts`);
+    });
+
+    newSocket.on('reconnect_error', (error) => {
+      console.error('❌ [SCREENER] Reconnection error:', error);
     });
 
     return () => {
