@@ -53,46 +53,37 @@ export default function ScreeningRoom() {
   useEffect(() => {
     console.log('🚀 ScreeningRoom mounted - initializing...');
     
-    // Use episode from broadcast context first
-    const contextEpisodeId = broadcast.state.episodeId;
+    // ALWAYS fetch from database first (don't rely on context for remote screeners)
+    // Context might be empty on remote screener's computer
+    const fetchActiveEpisode = async () => {
+      try {
+        // Try live episodes first
+        const liveRes = await fetch('/api/episodes?status=live');
+        const liveEpisodes = await liveRes.json();
+        
+        if (liveEpisodes.length > 0) {
+          setActiveEpisode(liveEpisodes[0]);
+          console.log('✅ [SCREENER] Active episode loaded (live):', liveEpisodes[0].title);
+          return;
+        }
+        
+        // If no live, try lines open
+        const scheduledRes = await fetch('/api/episodes?status=scheduled&conferenceActive=true');
+        const scheduledEpisodes = await scheduledRes.json();
+        
+        if (scheduledEpisodes.length > 0) {
+          setActiveEpisode(scheduledEpisodes[0]);
+          console.log('✅ [SCREENER] Episode with lines open loaded:', scheduledEpisodes[0].title);
+          return;
+        }
+        
+        console.log('⚠️ [SCREENER] No active episodes found');
+      } catch (err) {
+        console.error('❌ [SCREENER] Error fetching episode:', err);
+      }
+    };
     
-    if (contextEpisodeId) {
-      fetch(`/api/episodes/${contextEpisodeId}`)
-        .then(res => res.json())
-        .then(episode => {
-          setActiveEpisode(episode);
-          console.log('✅ Active episode loaded from context:', episode.title, 'ID:', episode.id);
-        })
-        .catch(err => console.error('❌ Error fetching episode:', err));
-    } else {
-      // Fallback: fetch active episode (live OR lines open)
-      // First try live episodes
-      fetch('/api/episodes?status=live')
-        .then(res => res.json())
-        .then(episodes => {
-          console.log('📺 Episodes response (live):', episodes);
-          if (episodes.length > 0) {
-            setActiveEpisode(episodes[0]);
-            console.log('✅ Active episode loaded:', episodes[0].title, 'ID:', episodes[0].id);
-          } else {
-            // If no live episodes, check for episodes with lines open (scheduled + conferenceActive)
-            console.log('⚠️ No live episodes, checking for episodes with lines open...');
-            fetch('/api/episodes?status=scheduled&conferenceActive=true')
-              .then(res => res.json())
-              .then(scheduledEpisodes => {
-                console.log('📺 Episodes response (lines open):', scheduledEpisodes);
-                if (scheduledEpisodes.length > 0) {
-                  setActiveEpisode(scheduledEpisodes[0]);
-                  console.log('✅ Episode with lines open loaded:', scheduledEpisodes[0].title, 'ID:', scheduledEpisodes[0].id);
-                } else {
-                  console.log('⚠️ No episodes with lines open found');
-                }
-              })
-              .catch(err => console.error('❌ Error fetching scheduled episodes:', err));
-          }
-        })
-        .catch(err => console.error('❌ Error fetching episodes:', err));
-    }
+    fetchActiveEpisode();
 
     // Setup socket connection with auto-reconnect
     console.log('🔌 Creating Socket.IO connection...');

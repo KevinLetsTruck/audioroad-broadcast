@@ -50,20 +50,31 @@ export default function HostDashboard() {
     }
     
     // RECOVERY: If we lost our episode but context says we're live, recover it
+    // BUT: Don't trigger if we just ended the show (context updates async)
     if (!activeEpisode && contextEpisodeId && contextIsLive) {
-      console.warn('🔄 [HOST] RECOVERY: Lost episode during live show, restoring from context...');
-      fetch(`/api/episodes/${contextEpisodeId}`)
-        .then(res => res.json())
-        .then(episode => {
-          console.log('✅ [HOST] RECOVERED episode:', episode.title);
-          setActiveEpisode(episode);
-          setIsLive(true);
-          alert('⚠️ Episode state recovered! The show is still live.');
-        })
-        .catch(err => {
-          console.error('❌ [HOST] RECOVERY FAILED:', err);
-          alert('⚠️ Warning: Lost connection to episode. Please refresh the page.');
-        });
+      // Wait a moment to see if this is a legitimate end or accidental loss
+      const checkTimeout = setTimeout(() => {
+        // Double-check: if context STILL says live after 2 seconds, recover
+        if (broadcast.state.isLive && broadcast.state.episodeId) {
+          console.warn('🔄 [HOST] RECOVERY: Lost episode during live show, restoring from context...');
+          fetch(`/api/episodes/${broadcast.state.episodeId}`)
+            .then(res => res.json())
+            .then(episode => {
+              console.log('✅ [HOST] RECOVERED episode:', episode.title);
+              setActiveEpisode(episode);
+              setIsLive(true);
+              // Show alert silently in console, not popup (less disruptive)
+              console.log('⚠️ [HOST] Episode state recovered automatically');
+            })
+            .catch(err => {
+              console.error('❌ [HOST] RECOVERY FAILED:', err);
+            });
+        } else {
+          console.log('ℹ️ [HOST] Episode cleared intentionally, no recovery needed');
+        }
+      }, 2000);
+      
+      return () => clearTimeout(checkTimeout);
     }
   }, [broadcast.state.episodeId, broadcast.state.isLive, activeEpisode]);
 
