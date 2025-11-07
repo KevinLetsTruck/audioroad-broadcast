@@ -22,6 +22,12 @@ export default function ScreeningRoom() {
     priority: 'normal',
     notes: ''
   });
+  
+  // State for opening phone lines
+  const [allShows, setAllShows] = useState<any[]>([]);
+  const [selectedShow, setSelectedShow] = useState<any | null>(null);
+  const [isOpeningLines, setIsOpeningLines] = useState(false);
+  const [openLinesError, setOpenLinesError] = useState('');
 
   // Check if Twilio device is ready (use global or initialize if needed)
   const [localDeviceReady, setLocalDeviceReady] = useState(false);
@@ -285,6 +291,123 @@ export default function ScreeningRoom() {
       setIncomingCalls(activeCalls);
     } catch (error) {
       console.error('Error fetching queued calls:', error);
+    }
+  };
+
+  // Fetch shows on mount
+  useEffect(() => {
+    const fetchShows = async () => {
+      try {
+        const response = await fetch('/api/shows');
+        const shows = await response.json();
+        setAllShows(shows);
+        // Auto-select first show if available
+        if (shows.length > 0) {
+          setSelectedShow(shows[0]);
+        }
+      } catch (error) {
+        console.error('Error fetching shows:', error);
+      }
+    };
+    fetchShows();
+  }, []);
+
+  const getOrCreateTodaysEpisode = async () => {
+    // Use selected show
+    if (!selectedShow) {
+      throw new Error('No show selected. Please select a show first.');
+    }
+
+    const show = selectedShow;
+
+    // Check if today's episode exists
+    const today = new Date().toISOString().split('T')[0];
+    const episodesRes = await fetch(`/api/episodes?showId=${show.id}`);
+    const episodes = await episodesRes.json();
+
+    // Find today's episode that's NOT completed
+    const todaysEpisode = episodes.find((ep: any) => {
+      const epDate = new Date(ep.date).toISOString().split('T')[0];
+      return epDate === today && ep.status !== 'completed';
+    });
+
+    if (todaysEpisode) {
+      console.log('✅ Found existing episode:', todaysEpisode.title, 'Status:', todaysEpisode.status);
+      return todaysEpisode;
+    }
+    
+    console.log('📝 No active episode for today - creating new one...');
+
+    // Create today's episode with proper naming
+    const now = new Date();
+    const endTime = new Date(now.getTime() + 3 * 60 * 60 * 1000); // 3 hours from now
+    
+    // Format date as "Oct 21, 2025"
+    const formattedDate = now.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+
+    const createRes = await fetch('/api/episodes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        showId: show.id,
+        title: `${show.name} - ${formattedDate}`,
+        scheduledStart: now.toISOString(),
+        scheduledEnd: endTime.toISOString(),
+        status: 'scheduled'
+      })
+    });
+
+    const newEpisode = await createRes.json();
+    console.log('✅ Created episode:', newEpisode.title);
+    return newEpisode;
+  };
+
+  const handleOpenLines = async () => {
+    setIsOpeningLines(true);
+    setOpenLinesError('');
+
+    try {
+      console.log('📞 [OPEN-LINES] Opening phone lines...');
+
+      // Always create a fresh episode (don't reuse old ones)
+      const episode = await getOrCreateTodaysEpisode();
+      console.log('✅ Episode ready:', episode.id, 'Status:', episode.status);
+
+      // Open phone lines (creates conference, does NOT start recording/streaming)
+      const openLinesRes = await fetch(`/api/episodes/${episode.id}/open-lines`, { method: 'PATCH' });
+      
+      if (!openLinesRes.ok) {
+        const error = await openLinesRes.json();
+        throw new Error(error.error || 'Failed to open lines');
+      }
+      
+      const updatedEpisode = await openLinesRes.json();
+      console.log('✅ Phone lines opened');
+
+      // Update local state
+      setActiveEpisode(updatedEpisode);
+
+      // Update context so other pages can see it
+      broadcast.setState({
+        isLive: false,
+        linesOpen: true,
+        episodeId: episode.id,
+        showId: episode.showId,
+        showName: episode.title || 'Pre-Show',
+        startTime: null,
+        selectedShow: selectedShow
+      });
+
+      console.log('🎉 PHONE LINES OPEN! Ready to take calls.');
+    } catch (error: any) {
+      console.error('❌ Failed to open phone lines:', error);
+      setOpenLinesError(error.message || 'Failed to open phone lines');
+    } finally {
+      setIsOpeningLines(false);
     }
   };
 
@@ -661,8 +784,26 @@ export default function ScreeningRoom() {
 
             {!activeEpisode && (
           <div className="text-center py-16 bg-gray-800 rounded-lg">
-            <p className="text-gray-400 text-lg">No active episode</p>
-            <p className="text-gray-500 text-sm mt-2">Start a show to begin screening calls</p>
+            <p className="text-gray-400 text-lg mb-4">No active episode</p>
+            <p className="text-gray-500 text-sm mb-6">Open phone lines to start taking calls</p>
+            
+            {openLinesError && (
+              <div className="mb-4 p-3 bg-red-900/50 border border-red-500 rounded text-red-200 text-sm max-w-md mx-auto">
+                {openLinesError}
+              </div>
+            )}
+            
+            <button
+              onClick={handleOpenLines}
+              disabled={isOpeningLines || !selectedShow}
+              className="px-8 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-bold text-lg transition-colors"
+            >
+              {isOpeningLines ? '⏳ Opening Lines...' : '📞 OPEN PHONE LINES'}
+            </button>
+            
+            {!selectedShow && (
+              <p className="text-yellow-500 text-sm mt-3">Loading shows...</p>
+            )}
           </div>
         )}
 
