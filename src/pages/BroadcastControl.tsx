@@ -275,6 +275,16 @@ export default function BroadcastControl() {
       
       console.log('✅ Phone lines opened');
 
+      // Initialize Twilio device so host can manage calls
+      console.log('📞 [OPEN-LINES] Initializing Twilio device for host...');
+      try {
+        await broadcast.initializeTwilio(`host-${Date.now()}`);
+        console.log('✅ [OPEN-LINES] Twilio device ready - host can now manage calls');
+      } catch (twilioError) {
+        console.error('⚠️ [OPEN-LINES] Twilio init failed:', twilioError);
+        // Continue anyway - they can try again later
+      }
+
       // Update context
       broadcast.setState({
         isLive: false,
@@ -286,12 +296,60 @@ export default function BroadcastControl() {
         selectedShow: selectedShow
       });
 
-      console.log('🎉 PHONE LINES OPEN! Screener can take calls.');
+      console.log('🎉 PHONE LINES OPEN! Screener can take calls, host can manage queue.');
     } catch (error: any) {
       console.error('❌ Failed to open phone lines:', error);
       setErrorMessage(error.message || 'Failed to open phone lines');
     } finally {
       setIsStarting(false);
+    }
+  };
+
+  /**
+   * Close phone lines
+   */
+  const handleCloseLines = async () => {
+    if (!status.episodeId) {
+      console.warn('⚠️ No episode to close lines for');
+      return;
+    }
+
+    if (!confirm('Close phone lines? This will stop accepting new calls.')) {
+      return;
+    }
+
+    try {
+      console.log('📴 [CLOSE-LINES] Closing phone lines...');
+      
+      const response = await fetch(`/api/episodes/${status.episodeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conferenceActive: false
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to close phone lines');
+      }
+
+      console.log('✅ [CLOSE-LINES] Phone lines closed');
+      
+      // Update context
+      broadcast.setState({
+        isLive: false,
+        linesOpen: false,
+        episodeId: status.episodeId, // Keep episode, just close lines
+        showId: status.showId,
+        showName: status.showName,
+        startTime: null,
+        selectedShow: status.selectedShow
+      });
+
+      alert('✅ Phone lines closed. No new calls will be accepted.');
+    } catch (error: any) {
+      console.error('❌ Failed to close phone lines:', error);
+      alert(`Failed to close phone lines: ${error.message}`);
     }
   };
 
@@ -1009,9 +1067,19 @@ export default function BroadcastControl() {
                   )}
 
                   <p className="text-center text-xs text-gray-500 mt-4">
-                    This will auto-create today's episode, connect your mic, and start broadcasting
+                    Opens phone lines for screener and initializes Twilio for call management
                   </p>
                 </>
+              )}
+
+              {/* CLOSE PHONE LINES BUTTON - Show if lines are open but not live */}
+              {status.linesOpen && !status.isLive && (
+                <button
+                  onClick={handleCloseLines}
+                  className="w-full py-4 bg-red-600 hover:bg-red-700 rounded-lg font-bold text-lg transition-colors"
+                >
+                  📴 CLOSE PHONE LINES
+                </button>
               )}
             </>
           ) : (

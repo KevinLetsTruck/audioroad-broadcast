@@ -34,8 +34,9 @@ export default function HostDashboard() {
   // Also check broadcast context for episode updates (in case screener opened lines)
   useEffect(() => {
     const contextEpisodeId = broadcast.state.episodeId;
+    const contextIsLive = broadcast.state.isLive;
     
-    // If context has an episode we don't know about, fetch it immediately
+    // DEFENSIVE: If context has an episode we don't know about, fetch it immediately
     if (contextEpisodeId && (!activeEpisode || activeEpisode.id !== contextEpisodeId)) {
       console.log('📡 [HOST] Broadcast context has new episode, fetching:', contextEpisodeId);
       fetch(`/api/episodes/${contextEpisodeId}`)
@@ -43,11 +44,28 @@ export default function HostDashboard() {
         .then(episode => {
           console.log('✅ [HOST] Loaded episode from context:', episode.title);
           setActiveEpisode(episode);
-          setIsLive(episode.status === 'live');
+          setIsLive(episode.status === 'live' || contextIsLive);
         })
         .catch(err => console.error('❌ [HOST] Error fetching episode from context:', err));
     }
-  }, [broadcast.state.episodeId, activeEpisode]);
+    
+    // RECOVERY: If we lost our episode but context says we're live, recover it
+    if (!activeEpisode && contextEpisodeId && contextIsLive) {
+      console.warn('🔄 [HOST] RECOVERY: Lost episode during live show, restoring from context...');
+      fetch(`/api/episodes/${contextEpisodeId}`)
+        .then(res => res.json())
+        .then(episode => {
+          console.log('✅ [HOST] RECOVERED episode:', episode.title);
+          setActiveEpisode(episode);
+          setIsLive(true);
+          alert('⚠️ Episode state recovered! The show is still live.');
+        })
+        .catch(err => {
+          console.error('❌ [HOST] RECOVERY FAILED:', err);
+          alert('⚠️ Warning: Lost connection to episode. Please refresh the page.');
+        });
+    }
+  }, [broadcast.state.episodeId, broadcast.state.isLive, activeEpisode]);
 
   useEffect(() => {
     if (activeEpisode) {
@@ -89,9 +107,15 @@ export default function HostDashboard() {
       
       socket.on('episode:end', (episode) => {
         console.log('📴 [HOST] Episode ended event:', episode);
-        setActiveEpisode(null);
-        setIsLive(false);
-        setApprovedCalls([]);
+        // DEFENSIVE: Only clear if this is actually OUR episode
+        if (episode.id === activeEpisode.id) {
+          console.log('   Clearing active episode (confirmed match)');
+          setActiveEpisode(null);
+          setIsLive(false);
+          setApprovedCalls([]);
+        } else {
+          console.warn('   ⚠️ Received episode:end for different episode, ignoring');
+        }
       });
       
       return () => {

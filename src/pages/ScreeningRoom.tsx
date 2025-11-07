@@ -113,6 +113,25 @@ export default function ScreeningRoom() {
     };
   }, []);
 
+  // RECOVERY: Check if we lost episode state but context still has it
+  useEffect(() => {
+    const contextEpisodeId = broadcast.state.episodeId;
+    
+    // If we lost our episode but context says there's one, recover it
+    if (!activeEpisode && contextEpisodeId) {
+      console.warn('🔄 [SCREENER] RECOVERY: Lost episode, restoring from context...');
+      fetch(`/api/episodes/${contextEpisodeId}`)
+        .then(res => res.json())
+        .then(episode => {
+          console.log('✅ [SCREENER] RECOVERED episode:', episode.title);
+          setActiveEpisode(episode);
+        })
+        .catch(err => {
+          console.error('❌ [SCREENER] RECOVERY FAILED:', err);
+        });
+    }
+  }, [broadcast.state.episodeId, activeEpisode]);
+
   useEffect(() => {
     if (!socket || !activeEpisode) return;
 
@@ -259,9 +278,15 @@ export default function ScreeningRoom() {
     
     socket.on('episode:end', (episode) => {
       console.log('📴 [SCREENER] Episode ended event:', episode);
-      setActiveEpisode(null);
-      setIncomingCalls([]);
-      setActiveCall(null);
+      // DEFENSIVE: Only clear if this is actually OUR episode
+      if (activeEpisode && episode.id === activeEpisode.id) {
+        console.log('   Clearing active episode (confirmed match)');
+        setActiveEpisode(null);
+        setIncomingCalls([]);
+        setActiveCall(null);
+      } else {
+        console.warn('   ⚠️ Received episode:end for different episode, ignoring');
+      }
     });
 
     // Auto-refresh every 2 seconds to catch missed events (more frequent!)
@@ -401,6 +426,20 @@ export default function ScreeningRoom() {
       
       const updatedEpisode = await openLinesRes.json();
       console.log('✅ Phone lines opened');
+
+      // Initialize Twilio device so host can manage calls from any page
+      console.log('📞 [OPEN-LINES] Initializing Twilio device...');
+      try {
+        if (!broadcast.twilioDevice) {
+          await broadcast.initializeTwilio(`session-${Date.now()}`);
+          console.log('✅ [OPEN-LINES] Twilio device ready - host can now manage calls');
+        } else {
+          console.log('✅ [OPEN-LINES] Twilio device already initialized');
+        }
+      } catch (twilioError) {
+        console.error('⚠️ [OPEN-LINES] Twilio init failed:', twilioError);
+        // Continue anyway - they can try again later
+      }
 
       // Update local state
       setActiveEpisode(updatedEpisode);

@@ -70,7 +70,10 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
 
   const putOnAir = async (callId: string) => {
     try {
-      console.log('📡 Putting participant on air:', callId);
+      console.log('📡 [PARTICIPANT-BOARD] Putting participant on air:', callId);
+      console.log('   Episode ID:', episodeId);
+      console.log('   Twilio device:', broadcast.twilioDevice ? 'Ready' : 'Not initialized');
+      console.log('   Active calls:', broadcast.activeCalls.size);
       
       const participant = [...participants.onAir, ...participants.onHold, ...participants.screening]
         .find(p => p.id === callId);
@@ -88,31 +91,44 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
           return call.twilioCall && call.twilioCall.status() !== 'closed';
         });
       
+      console.log('   Host needs connection?', hostNeedsConnection);
+      
       if (hostNeedsConnection) {
         if (!broadcast.twilioDevice) {
-          throw new Error('Twilio device not initialized. Please start a show first.');
+          const errorMsg = 'Twilio device not initialized. Please start a show first.';
+          console.error('❌ [PARTICIPANT-BOARD]', errorMsg);
+          alert(errorMsg);
+          return;
         }
-        console.log('🔌 Connecting host to Twilio conference to hear callers...');
+        console.log('🔌 [PARTICIPANT-BOARD] Connecting host to Twilio conference...');
         try {
           await broadcast.connectToCall(callId, callerName, episodeId, 'host');
           await new Promise(resolve => setTimeout(resolve, 1500));
-          console.log('✅ Host connected to conference');
+          console.log('✅ [PARTICIPANT-BOARD] Host connected to conference');
         } catch (error) {
-          console.warn('⚠️ Host connection attempt failed (may already be connected):', error);
-          // Continue anyway - host might already be connected
+          console.error('❌ [PARTICIPANT-BOARD] Host connection failed:', error);
+          alert(`Failed to connect to caller: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          return;
         }
       } else {
-        console.log(`✅ Host already connected to conference (${broadcast.activeCalls.size} active call(s))`);
+        console.log(`✅ [PARTICIPANT-BOARD] Host already connected (${broadcast.activeCalls.size} active call(s))`);
       }
       
+      console.log('📡 [PARTICIPANT-BOARD] Calling API to put on air...');
       const response = await fetch(`/api/participants/${callId}/on-air`, { method: 'PATCH' });
+      
       if (!response.ok) {
-        throw new Error('Failed to put participant on air');
+        const errorText = await response.text();
+        console.error('❌ [PARTICIPANT-BOARD] API call failed:', response.status, errorText);
+        alert(`Failed to put participant on air: ${errorText}`);
+        return;
       }
       
+      console.log('✅ [PARTICIPANT-BOARD] Successfully put on air');
       fetchParticipants();
     } catch (error) {
-      console.error('Error putting on air:', error);
+      console.error('❌ [PARTICIPANT-BOARD] Error in putOnAir:', error);
+      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 

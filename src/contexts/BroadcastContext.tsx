@@ -67,14 +67,32 @@ interface BroadcastContextType {
 const BroadcastContext = createContext<BroadcastContextType | null>(null);
 
 export function BroadcastProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<BroadcastState>({
-    isLive: false,
-    linesOpen: false,
-    episodeId: null,
-    showId: null,
-    showName: '',
-    startTime: null,
-    selectedShow: null
+  const [state, setState] = useState<BroadcastState>(() => {
+    // Try to restore state from sessionStorage on mount
+    try {
+      const savedState = sessionStorage.getItem('broadcastState');
+      if (savedState) {
+        const parsed = JSON.parse(savedState);
+        // Convert startTime back to Date if it exists
+        if (parsed.startTime) {
+          parsed.startTime = new Date(parsed.startTime);
+        }
+        console.log('🔄 [CONTEXT] Restored state from sessionStorage:', parsed);
+        return parsed;
+      }
+    } catch (e) {
+      console.warn('⚠️ [CONTEXT] Could not restore state from sessionStorage:', e);
+    }
+    
+    return {
+      isLive: false,
+      linesOpen: false,
+      episodeId: null,
+      showId: null,
+      showName: '',
+      startTime: null,
+      selectedShow: null
+    };
   });
 
   const [audioSources, setAudioSources] = useState<AudioSource[]>([]);
@@ -89,13 +107,21 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
   const [duration, setDuration] = useState('00:00:00');
   const durationTimerRef = useRef<NodeJS.Timeout | null>(null);
   
-  // Wrapper for setState with logging
+  // Wrapper for setState with logging and persistence
   const setStateWithLogging = (newState: BroadcastState) => {
     console.log('📝 [CONTEXT] State update:', { 
       from: { isLive: state.isLive, episodeId: state.episodeId },
       to: { isLive: newState.isLive, episodeId: newState.episodeId }
     });
     setState(newState);
+    
+    // Save to sessionStorage for recovery after accidental refreshes
+    try {
+      sessionStorage.setItem('broadcastState', JSON.stringify(newState));
+      console.log('💾 [CONTEXT] State saved to sessionStorage');
+    } catch (e) {
+      console.warn('⚠️ [CONTEXT] Could not save state to sessionStorage:', e);
+    }
   };
 
   /**
