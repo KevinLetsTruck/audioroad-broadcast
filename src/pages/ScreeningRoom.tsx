@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
 import { useBroadcast } from '../contexts/BroadcastContext';
 import ChatPanel from '../components/ChatPanel';
@@ -661,6 +662,14 @@ export default function ScreeningRoom() {
             </>
           )}
         </div>
+        
+        {/* Announcements Link */}
+        <Link
+          to="/announcements"
+          className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors flex items-center gap-2"
+        >
+          📢 Announcements
+        </Link>
       </div>
 
       {/* Main Layout: Content + Chat - 50/50 Split */}

@@ -12,6 +12,7 @@ import Recordings from './pages/Recordings'
 import ShowSettings from './pages/ShowSettings'
 import ContentDashboard from './pages/ContentDashboard'
 import Commercials from './pages/Commercials'
+import Announcements from './pages/Announcements'
 import Listen from './pages/Listen'
 import AutoDJ from './pages/AutoDJ'
 import StreamingPlatforms from './pages/StreamingPlatforms'
@@ -40,7 +41,9 @@ function AppContent() {
   const showSidebar = !isAuthPage && !isPublicPage && user && !isScreener
 
   // Auto-redirect screeners to screening room if they try to access other pages
-  if (user && isScreener && !isAuthPage && location.pathname !== '/screening-room') {
+  // Allow screeners to access announcements page
+  const screenerAllowedPaths = ['/screening-room', '/announcements'];
+  if (user && isScreener && !isAuthPage && !screenerAllowedPaths.includes(location.pathname)) {
     return <Navigate to="/screening-room" replace />;
   }
 
@@ -171,6 +174,13 @@ function AppContent() {
             <SignedIn>
               <RoleGate allowedRoles={['host', 'admin', 'producer']}>
                 <Commercials />
+              </RoleGate>
+            </SignedIn>
+          } />
+          <Route path="/announcements" element={
+            <SignedIn>
+              <RoleGate allowedRoles={['screener', 'admin']}>
+                <Announcements />
               </RoleGate>
             </SignedIn>
           } />

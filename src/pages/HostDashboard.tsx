@@ -12,13 +12,18 @@ export default function HostDashboard() {
   const [isLive, setIsLive] = useState(false);
   
   const [approvedCalls, setApprovedCalls] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'calls' | 'documents'>('calls');
+  const [activeTab, setActiveTab] = useState<'calls' | 'documents' | 'announcements'>('calls');
   const [allDocuments, setAllDocuments] = useState<any[]>([]);
+  const [todaysAnnouncements, setTodaysAnnouncements] = useState<any[]>([]);
+  const [autoPlayAnnouncements, setAutoPlayAnnouncements] = useState(() => 
+    localStorage.getItem('autoPlayAnnouncements') !== 'false'
+  );
   
 
   useEffect(() => {
     // Fetch active episode from database
     fetchActiveEpisode();
+    fetchTodaysAnnouncements();
     
     // Poll every 10 seconds for updates
     const interval = setInterval(fetchActiveEpisode, 10000);
@@ -132,6 +137,17 @@ export default function HostDashboard() {
       setAllDocuments(allDocs);
     } catch (error) {
       console.error('Error fetching documents:', error);
+    }
+  };
+
+  const fetchTodaysAnnouncements = async () => {
+    try {
+      const response = await fetch('/api/announcements/today');
+      const data = await response.json();
+      setTodaysAnnouncements(data.announcements || []);
+      console.log(`📢 [HOST] Loaded ${data.announcements?.length || 0} announcements for today`);
+    } catch (error) {
+      console.error('Error fetching announcements:', error);
     }
   };
 
@@ -328,7 +344,40 @@ export default function HostDashboard() {
         // Continue anyway - not critical to show starting
       }
       
-      // Step 7: Play show opener 
+      // Step 7: Play today's announcements (if enabled)
+      if (autoPlayAnnouncements && todaysAnnouncements.length > 0) {
+        console.log(`📢 [ANNOUNCEMENTS] Playing ${todaysAnnouncements.length} announcement(s)...`);
+        
+        for (const announcement of todaysAnnouncements) {
+          try {
+            console.log(`  ▶️ Playing: ${announcement.name}`);
+            
+            // Play through mixer (callers and stream hear it)
+            const mixerPlayPromise = mixerInstance.playAudioFile(announcement.fileUrl);
+            
+            // ALSO play locally for host to hear
+            const localAudio = new Audio(announcement.fileUrl);
+            localAudio.volume = 0.7;
+            const localPlayPromise = localAudio.play();
+            
+            // Wait for both to finish
+            await Promise.all([mixerPlayPromise, localPlayPromise]).catch(err => {
+              console.warn(`  ⚠️ Announcement playback warning:`, err);
+            });
+            
+            console.log(`  ✅ Announcement played: ${announcement.name}`);
+          } catch (announcementError) {
+            console.error(`  ❌ Failed to play announcement:`, announcementError);
+            // Continue with next announcement
+          }
+        }
+        
+        console.log('✅ [ANNOUNCEMENTS] All announcements played');
+      } else if (autoPlayAnnouncements && todaysAnnouncements.length === 0) {
+        console.log('ℹ️ [ANNOUNCEMENTS] Auto-play enabled but no announcements for today');
+      }
+      
+      // Step 8: Play show opener 
       if (show?.openerAudioUrl) {
         console.log('🎵 [OPENER] Playing show opener...');
         
@@ -363,14 +412,57 @@ export default function HostDashboard() {
     try {
       console.log('📴 [HOST] Ending episode from Host Dashboard');
       
+      // Step 1: Stop and download recording if it was recording
+      let recordingUrl = null;
+      if (broadcast.mixer) {
+        try {
+          console.log('🔴 [END] Stopping recording...');
+          const blob = await broadcast.mixer.stopRecording();
+          console.log(`✅ [END] Recording stopped (${blob.size} bytes)`);
+          
+          // Generate filename
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+          const filename = `audioroad-${activeEpisode.title.replace(/[^a-z0-9]/gi, '-')}-${timestamp}.webm`;
+          
+          // Download to user's computer
+          const downloadUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = filename;
+          a.click();
+          URL.revokeObjectURL(downloadUrl);
+          console.log('✅ [END] Recording downloaded to computer');
+          
+          recordingUrl = `local://${filename}`;
+        } catch (recordError) {
+          console.error('⚠️ [END] Error with recording:', recordError);
+          // Continue anyway - don't block episode ending
+        }
+      }
+      
+      // Step 2: Destroy mixer to clean up audio resources
+      console.log('📴 [END] Destroying mixer...');
+      await broadcast.destroyMixer();
+      console.log('✅ [END] Mixer cleaned up');
+      
+      // Step 3: End the episode in database
       const response = await fetch(`/api/episodes/${activeEpisode.id}/end`, {
-        method: 'PATCH'
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          recordingUrl
+        })
       });
-      const episode = await response.json();
-      setActiveEpisode(episode);
+      
+      if (!response.ok) {
+        throw new Error('Failed to end episode');
+      }
+      
+      await response.json();
+      setActiveEpisode(null);
       setIsLive(false);
       
-      // IMPORTANT: Update global broadcast state so Broadcast Control knows!
+      // Step 4: Update global broadcast state so Broadcast Control knows!
       broadcast.setState({
         isLive: false,
         linesOpen: false,
@@ -382,8 +474,14 @@ export default function HostDashboard() {
       });
       
       console.log('✅ [HOST] Episode ended and global state updated');
+      
+      if (recordingUrl) {
+        alert('✅ Show ended! Recording has been downloaded to your computer.');
+      }
+      
     } catch (error) {
       console.error('Error ending episode:', error);
+      alert(`Error ending episode: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -391,6 +489,7 @@ export default function HostDashboard() {
   const tabs: Tab[] = [
     { id: 'calls', label: 'Calls' },
     { id: 'documents', label: 'Documents' },
+    { id: 'announcements', label: `Announcements ${todaysAnnouncements.length > 0 ? `(${todaysAnnouncements.length})` : ''}` },
   ];
 
   return (
@@ -409,7 +508,7 @@ export default function HostDashboard() {
             <Tabs
               tabs={tabs}
               defaultTab={activeTab}
-              onChange={(id) => setActiveTab(id as 'calls' | 'documents')}
+              onChange={(id) => setActiveTab(id as 'calls' | 'documents' | 'announcements')}
               variant="pills"
             />
             {!isLive && activeEpisode && activeEpisode.conferenceActive && activeEpisode.status === 'scheduled' && (
@@ -441,6 +540,79 @@ export default function HostDashboard() {
                     title="No Active Episode"
                     description="Start an episode to manage calls"
                   />
+                </Card>
+              )}
+            </div>
+          ) : activeTab === 'announcements' ? (
+            /* Today's Announcements Tab */
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-title-sm text-dark dark:text-white">📢 Today's Announcements</h3>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={autoPlayAnnouncements}
+                      onChange={(e) => {
+                        setAutoPlayAnnouncements(e.target.checked);
+                        localStorage.setItem('autoPlayAnnouncements', e.target.checked.toString());
+                      }}
+                      className="w-4 h-4 rounded"
+                    />
+                    <span className="text-dark dark:text-white">Auto-play at show start</span>
+                  </label>
+                </div>
+              </div>
+              
+              {todaysAnnouncements.length === 0 ? (
+                <Card variant="default" padding="lg">
+                  <EmptyState
+                    title="No Announcements Yet"
+                    description="Your screener can create announcements for today's show"
+                  />
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {todaysAnnouncements.map((announcement) => (
+                    <Card key={announcement.id} variant="default" padding="md">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-dark dark:text-white mb-1">
+                            {announcement.name}
+                          </h4>
+                          <div className="flex items-center gap-3 text-xs text-body">
+                            <span>~{announcement.duration}s</span>
+                            <span className="capitalize">{announcement.category}</span>
+                            {announcement.tags?.includes('music-upbeat') && <span>⚡ Upbeat</span>}
+                            {announcement.tags?.includes('music-professional') && <span>💼 Professional</span>}
+                            {announcement.tags?.includes('music-smooth') && <span>✨ Smooth</span>}
+                            {announcement.tags?.includes('voice-only') && <span>🎙️ Voice Only</span>}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <audio 
+                        src={announcement.fileUrl} 
+                        controls 
+                        className="w-full"
+                        style={{ height: '36px' }}
+                      />
+                      
+                      {autoPlayAnnouncements && (
+                        <p className="text-xs text-success mt-2">
+                          ✅ Will auto-play at show start
+                        </p>
+                      )}
+                    </Card>
+                  ))}
+                </div>
+              )}
+              
+              {autoPlayAnnouncements && todaysAnnouncements.length > 0 && (
+                <Card variant="default" padding="md">
+                  <p className="text-sm text-dark dark:text-white">
+                    💡 These announcements will play automatically after you start the show, before your opener.
+                  </p>
                 </Card>
               )}
             </div>
