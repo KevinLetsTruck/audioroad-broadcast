@@ -392,6 +392,84 @@ router.post('/recording-status', verifyTwilioWebhook, async (req: Request, res: 
 });
 
 /**
+ * POST /api/twilio/participant-recording-status - Handle participant recording callback
+ */
+router.post('/participant-recording-status', verifyTwilioWebhook, async (req: Request, res: Response) => {
+  try {
+    const { RecordingSid, CallSid, RecordingStatus, RecordingUrl, RecordingDuration } = req.body;
+    
+    console.log(`🎙️ [RECORDING] Participant recording status: ${RecordingStatus} for ${CallSid}`);
+
+    if (RecordingStatus === 'completed') {
+      const call = await prisma.call.findFirst({ where: { twilioCallSid: CallSid } });
+
+      if (call) {
+        // Save recording and request transcription
+        await prisma.call.update({
+          where: { id: call.id },
+          data: { recordingUrl: RecordingUrl, recordingSid: RecordingSid }
+        });
+        
+        console.log(`📝 [TRANSCRIPTION] Requesting transcription for: ${RecordingSid}`);
+        
+        try {
+          const twilioClient = (await import('../services/twilioService.js')).default;
+          await twilioClient.recordings(RecordingSid).transcriptions.create();
+          console.log(`✅ [TRANSCRIPTION] Transcription requested`);
+        } catch (err) {
+          console.error(`❌ [TRANSCRIPTION] Error:`, err);
+        }
+      }
+    }
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('❌ [RECORDING] Error:', error);
+    res.sendStatus(500);
+  }
+});
+
+/**
+ * POST /api/twilio/transcription-callback - Handle transcription completion
+ */
+router.post('/transcription-callback', verifyTwilioWebhook, async (req: Request, res: Response) => {
+  try {
+    const { RecordingSid, TranscriptionText, TranscriptionStatus } = req.body;
+    
+    console.log(`📝 [TRANSCRIPTION] Status: ${TranscriptionStatus}, Length: ${TranscriptionText?.length || 0}`);
+
+    if (TranscriptionStatus === 'completed' && TranscriptionText) {
+      const call = await prisma.call.findFirst({ where: { recordingSid: RecordingSid } });
+
+      if (call) {
+        // Save transcript
+        await prisma.call.update({
+          where: { id: call.id },
+          data: { transcriptText: TranscriptionText }
+        });
+        
+        console.log(`💾 [TRANSCRIPTION] Transcript saved, starting AI analysis...`);
+        
+        // AUTO-ANALYZE
+        try {
+          const { analyzeCallTranscript, updateCallerSentiment } = await import('../services/callAnalysisService.js');
+          await analyzeCallTranscript(call.id, TranscriptionText);
+          await updateCallerSentiment(call.callerId);
+          console.log(`✅ [ANALYSIS] Complete`);
+        } catch (err) {
+          console.error(`❌ [ANALYSIS] Error:`, err);
+        }
+      }
+    }
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('❌ [TRANSCRIPTION] Error:', error);
+    res.sendStatus(500);
+  }
+});
+
+/**
  * POST /api/twilio/conference-status - Handle conference status callback
  * Protected by Twilio signature verification
  */

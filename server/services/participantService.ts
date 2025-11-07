@@ -87,10 +87,16 @@ export class ParticipantService {
               .participants(call.twilioCallSid)
               .update({
                 muted: false,
-                hold: false // Take off hold so they hear the conference (host/screener)
-              });
+                hold: false, // Take off hold so they hear the conference (host/screener)
+                // Enable recording with transcription for this participant
+                // This records ONLY this participant's audio (not the whole conference)
+                coach: call.twilioCallSid, // Record in coach mode (participant only)
+                record: 'record-from-start',
+                recordingStatusCallback: `${process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app'}/api/twilio/participant-recording-status`,
+                recordingStatusCallbackMethod: 'POST'
+              } as any); // 'as any' because TypeScript types don't include all recording options
             
-            console.log(`✅ [TWILIO] Successfully unmuted participant and removed hold - caller can now hear conference`);
+            console.log(`✅ [TWILIO] Successfully unmuted participant and started recording`);
           }
         } else {
           console.warn(`⚠️ [CONFERENCE] Conference ${conferenceSidToUse} doesn't exist yet`);
