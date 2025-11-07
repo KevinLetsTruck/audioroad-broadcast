@@ -354,11 +354,17 @@ export default function ScreeningRoom() {
       body: JSON.stringify({
         showId: show.id,
         title: `${show.name} - ${formattedDate}`,
+        date: now.toISOString(),  // Add date field
         scheduledStart: now.toISOString(),
         scheduledEnd: endTime.toISOString(),
         status: 'scheduled'
       })
     });
+
+    if (!createRes.ok) {
+      const errorData = await createRes.json();
+      throw new Error(errorData.error || 'Failed to create episode');
+    }
 
     const newEpisode = await createRes.json();
     console.log('✅ Created episode:', newEpisode.title);
