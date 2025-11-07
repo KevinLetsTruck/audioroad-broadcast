@@ -123,6 +123,7 @@ export default function HostDashboard() {
         socket.off('call:completed');
         socket.off('call:approved');
         socket.off('episode:lines-opened');
+        socket.off('episode:lines-closed');
         socket.off('episode:start');
         socket.off('episode:end');
         socket.close();

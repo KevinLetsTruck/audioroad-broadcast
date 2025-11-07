@@ -117,7 +117,7 @@ router.post('/', async (req: Request, res: Response) => {
  */
 router.patch('/:id', async (req: Request, res: Response) => {
   try {
-    const { title, description, notes, tags, status } = req.body;
+    const { title, description, notes, tags, status, conferenceActive } = req.body;
 
     const episode = await prisma.episode.update({
       where: { id: req.params.id },
@@ -126,9 +126,20 @@ router.patch('/:id', async (req: Request, res: Response) => {
         description,
         notes,
         tags,
-        status
-      }
+        status,
+        conferenceActive
+      },
+      include: { show: true }
     });
+
+    // Emit WebSocket event if conferenceActive changed
+    if (conferenceActive !== undefined) {
+      const io = req.app.get('io');
+      if (conferenceActive === false) {
+        console.log(`📴 [CLOSE-LINES] Phone lines closed for episode: ${episode.id}`);
+        io.to(`episode:${episode.id}`).emit('episode:lines-closed', episode);
+      }
+    }
 
     res.json(episode);
   } catch (error) {

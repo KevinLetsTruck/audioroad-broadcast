@@ -271,6 +271,15 @@ export default function ScreeningRoom() {
       setActiveEpisode(episode);
     });
     
+    socket.on('episode:lines-closed', (episode) => {
+      console.log('📴 [SCREENER] Lines closed event:', episode);
+      if (activeEpisode && episode.id === activeEpisode.id) {
+        setActiveEpisode(null);
+        setIncomingCalls([]);
+        setActiveCall(null);
+      }
+    });
+    
     socket.on('episode:start', (episode) => {
       console.log('🎙️ [SCREENER] Episode started event:', episode);
       setActiveEpisode(episode);
@@ -303,6 +312,7 @@ export default function ScreeningRoom() {
       socket.off('participant:state-changed');
       socket.off('call:screening');
       socket.off('episode:lines-opened');
+      socket.off('episode:lines-closed');
       socket.off('episode:start');
       socket.off('episode:end');
       clearInterval(refreshInterval);
