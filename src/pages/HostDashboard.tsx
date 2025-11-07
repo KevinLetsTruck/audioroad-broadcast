@@ -369,6 +369,12 @@ export default function HostDashboard() {
         // Continue anyway - not critical to show starting
       }
       
+      // IMPORTANT: Wait a moment for hold state to fully clear in Twilio
+      // Without this delay, callers won't hear announcements/opener
+      console.log('⏳ [START-BROADCAST] Waiting for hold state to clear...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('✅ [START-BROADCAST] Ready to play audio');
+      
       // Step 7: Play today's announcements (if enabled)
       if (autoPlayAnnouncements && todaysAnnouncements.length > 0) {
         console.log(`📢 [ANNOUNCEMENTS] Playing ${todaysAnnouncements.length} announcement(s)...`);
