@@ -261,16 +261,6 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
     }
   };
 
-  const getCallBadge = (participant: Participant) => {
-    // Check if we have history loaded
-    const call = participants.onHold.find(p => p.id === participant.id) ||
-                 participants.onAir.find(p => p.id === participant.id) ||
-                 participants.screening.find(p => p.id === participant.id);
-    
-    // This is a placeholder - we'll get the actual count from the history
-    return null; // Will be populated after fetching history
-  };
-
   const getRoleIcon = (role: string) => {
     switch (role) {
       case 'co-host': return '🎙️';
