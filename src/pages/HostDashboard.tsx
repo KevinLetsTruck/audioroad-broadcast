@@ -497,7 +497,31 @@ export default function HostDashboard() {
           URL.revokeObjectURL(downloadUrl);
           console.log('✅ [END] Recording downloaded to computer');
           
-          recordingUrl = `local://${filename}`;
+          // ALSO upload to S3 for cloud storage and playback
+          console.log('☁️ [END] Uploading recording to S3...');
+          try {
+            const formData = new FormData();
+            formData.append('recording', blob, filename);
+            formData.append('episodeId', activeEpisode.id);
+            formData.append('showSlug', activeEpisode.show?.slug || 'show');
+            
+            const uploadRes = await fetch('/api/recordings/upload', {
+              method: 'POST',
+              body: formData
+            });
+            
+            if (uploadRes.ok) {
+              const uploadData = await uploadRes.json();
+              recordingUrl = uploadData.url;
+              console.log('✅ [END] Recording uploaded to S3:', recordingUrl);
+            } else {
+              console.warn('⚠️ [END] S3 upload failed, saving local reference');
+              recordingUrl = `local://${filename}`;
+            }
+          } catch (uploadError) {
+            console.error('⚠️ [END] S3 upload error:', uploadError);
+            recordingUrl = `local://${filename}`;
+          }
         } catch (recordError) {
           console.error('⚠️ [END] Error with recording:', recordError);
           // Continue anyway - don't block episode ending
