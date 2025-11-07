@@ -10,7 +10,7 @@ export default function Announcements() {
   // Form state
   const [announcementText, setAnnouncementText] = useState('');
   const [category, setCategory] = useState<'product' | 'sale' | 'event' | 'guest' | 'other'>('product');
-  const [musicStyle, setMusicStyle] = useState<'upbeat' | 'professional' | 'smooth' | 'none'>('professional');
+  const [musicStyle, setMusicStyle] = useState<'upbeat' | 'professional' | 'smooth' | 'none'>('none');
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
   
   // Voice selection
@@ -281,39 +281,8 @@ export default function Announcements() {
                       )}
                     </div>
 
-                    {/* Music Style Selection */}
-                    <div className="mb-6">
-                      <label className="block text-sm font-medium mb-2">🎵 Music Style</label>
-                      <div className="grid grid-cols-4 gap-2">
-                        {(['upbeat', 'professional', 'smooth', 'none'] as const).map((style) => {
-                          const styleInfo = {
-                            upbeat: { icon: '⚡', label: 'Upbeat', desc: 'Energetic' },
-                            professional: { icon: '💼', label: 'Professional', desc: 'Clean' },
-                            smooth: { icon: '✨', label: 'Smooth', desc: 'Warm' },
-                            none: { icon: '🎙️', label: 'No Music', desc: 'Voice only' }
-                          }[style];
-                          
-                          return (
-                            <button
-                              key={style}
-                              onClick={() => setMusicStyle(style)}
-                              className={`p-3 rounded-lg border-2 transition-colors ${
-                                musicStyle === style
-                                  ? 'border-purple-500 bg-purple-900/30'
-                                  : 'border-gray-600 bg-gray-700 hover:border-gray-500'
-                              }`}
-                            >
-                              <div className="text-2xl mb-1">{styleInfo.icon}</div>
-                              <div className="text-xs font-semibold">{styleInfo.label}</div>
-                              <div className="text-xs text-gray-400">{styleInfo.desc}</div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-2">
-                        Adds 2-second intro and outro music stings to your announcement
-                      </p>
-                    </div>
+                    {/* Music Style Selection - HIDDEN (voice-only for now) */}
+                    <input type="hidden" value={musicStyle} />
 
                     {/* Generate Button */}
                     <button
