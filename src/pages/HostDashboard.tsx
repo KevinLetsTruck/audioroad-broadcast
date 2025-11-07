@@ -26,6 +26,24 @@ export default function HostDashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  // Also check broadcast context for episode updates (in case screener opened lines)
+  useEffect(() => {
+    const contextEpisodeId = broadcast.state.episodeId;
+    
+    // If context has an episode we don't know about, fetch it immediately
+    if (contextEpisodeId && (!activeEpisode || activeEpisode.id !== contextEpisodeId)) {
+      console.log('📡 [HOST] Broadcast context has new episode, fetching:', contextEpisodeId);
+      fetch(`/api/episodes/${contextEpisodeId}`)
+        .then(res => res.json())
+        .then(episode => {
+          console.log('✅ [HOST] Loaded episode from context:', episode.title);
+          setActiveEpisode(episode);
+          setIsLive(episode.status === 'live');
+        })
+        .catch(err => console.error('❌ [HOST] Error fetching episode from context:', err));
+    }
+  }, [broadcast.state.episodeId, activeEpisode]);
+
   useEffect(() => {
     if (activeEpisode) {
       fetchApprovedCalls();
