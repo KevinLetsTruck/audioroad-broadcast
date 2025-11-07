@@ -59,16 +59,30 @@ export default function ScreeningRoom() {
         })
         .catch(err => console.error('❌ Error fetching episode:', err));
     } else {
-      // Fallback: fetch active episode
+      // Fallback: fetch active episode (live OR lines open)
+      // First try live episodes
       fetch('/api/episodes?status=live')
         .then(res => res.json())
         .then(episodes => {
-          console.log('📺 Episodes response:', episodes);
+          console.log('📺 Episodes response (live):', episodes);
           if (episodes.length > 0) {
             setActiveEpisode(episodes[0]);
             console.log('✅ Active episode loaded:', episodes[0].title, 'ID:', episodes[0].id);
           } else {
-            console.log('⚠️ No live episodes found');
+            // If no live episodes, check for episodes with lines open (scheduled + conferenceActive)
+            console.log('⚠️ No live episodes, checking for episodes with lines open...');
+            fetch('/api/episodes?status=scheduled&conferenceActive=true')
+              .then(res => res.json())
+              .then(scheduledEpisodes => {
+                console.log('📺 Episodes response (lines open):', scheduledEpisodes);
+                if (scheduledEpisodes.length > 0) {
+                  setActiveEpisode(scheduledEpisodes[0]);
+                  console.log('✅ Episode with lines open loaded:', scheduledEpisodes[0].title, 'ID:', scheduledEpisodes[0].id);
+                } else {
+                  console.log('⚠️ No episodes with lines open found');
+                }
+              })
+              .catch(err => console.error('❌ Error fetching scheduled episodes:', err));
           }
         })
         .catch(err => console.error('❌ Error fetching episodes:', err));

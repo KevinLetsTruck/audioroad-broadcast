@@ -10,11 +10,12 @@ const prisma = new PrismaClient();
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const { showId, status } = req.query;
+    const { showId, status, conferenceActive } = req.query;
 
     const where: any = {};
     if (showId) where.showId = showId as string;
     if (status) where.status = status as string;
+    if (conferenceActive === 'true') where.conferenceActive = true;
 
     const episodes = await prisma.episode.findMany({
       where,
