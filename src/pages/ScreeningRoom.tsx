@@ -24,7 +24,6 @@ export default function ScreeningRoom() {
   });
   
   // State for opening phone lines
-  const [allShows, setAllShows] = useState<any[]>([]);
   const [selectedShow, setSelectedShow] = useState<any | null>(null);
   const [isOpeningLines, setIsOpeningLines] = useState(false);
   const [openLinesError, setOpenLinesError] = useState('');
@@ -294,16 +293,16 @@ export default function ScreeningRoom() {
     }
   };
 
-  // Fetch shows on mount
+  // Fetch shows on mount and auto-select first one
   useEffect(() => {
     const fetchShows = async () => {
       try {
         const response = await fetch('/api/shows');
         const shows = await response.json();
-        setAllShows(shows);
         // Auto-select first show if available
         if (shows.length > 0) {
           setSelectedShow(shows[0]);
+          console.log('✅ Auto-selected show:', shows[0].name);
         }
       } catch (error) {
         console.error('Error fetching shows:', error);
