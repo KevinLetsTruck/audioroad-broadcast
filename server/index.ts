@@ -84,10 +84,16 @@ const generalLimiter = rateLimit({
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 1000, // Increased from 100 for development
+  max: 10000, // Very high limit for active broadcasts with multiple users/tabs
   message: 'Too many API requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for critical real-time endpoints
+    return req.path.includes('/participants/') || 
+           req.path.includes('/episodes') ||
+           req.path.includes('/calls');
+  }
 });
 
 const twilioWebhookLimiter = rateLimit({
