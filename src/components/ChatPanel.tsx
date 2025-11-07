@@ -35,9 +35,20 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
 
     const newSocket = io();
     setSocket(newSocket);
-    newSocket.emit('join:episode', episodeId);
+    
+    // Wait for connection before joining room
+    newSocket.on('connect', () => {
+      console.log('💬 [CHAT] Socket connected, joining episode:', episodeId);
+      newSocket.emit('join:episode', episodeId);
+    });
+
+    // Listen for join confirmation
+    newSocket.on('joined:episode', (data) => {
+      console.log('✅ [CHAT] Successfully joined episode room:', data.episodeId);
+    });
 
     newSocket.on('chat:message', (message: ChatMessage) => {
+      console.log('💬 [CHAT] Received message:', message);
       setMessages(prev => [...prev, message]);
     });
 
@@ -144,21 +155,28 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
     if (!newMessage.trim()) return;
 
     try {
-      await fetch('/api/chat', {
+      console.log('💬 [CHAT] Sending message to episode:', episodeId);
+      const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           episodeId,
           senderId: 'current-user',
-          senderName: userRole === 'host' ? 'Host' : 'User',
+          senderName: userRole === 'host' ? 'Host' : 'Screener',
           senderRole: userRole,
           message: newMessage
         })
       });
 
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+
+      console.log('✅ [CHAT] Message sent successfully');
       setNewMessage('');
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('❌ [CHAT] Error sending message:', error);
+      alert('Failed to send message. Please try again.');
     }
   };
 
