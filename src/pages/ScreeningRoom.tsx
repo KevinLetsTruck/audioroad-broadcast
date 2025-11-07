@@ -255,6 +255,13 @@ export default function ScreeningRoom() {
       console.log('🎙️ [SCREENER] Episode started event:', episode);
       setActiveEpisode(episode);
     });
+    
+    socket.on('episode:end', (episode) => {
+      console.log('📴 [SCREENER] Episode ended event:', episode);
+      setActiveEpisode(null);
+      setIncomingCalls([]);
+      setActiveCall(null);
+    });
 
     // Auto-refresh every 2 seconds to catch missed events (more frequent!)
     const refreshInterval = setInterval(() => {
@@ -271,6 +278,7 @@ export default function ScreeningRoom() {
       socket.off('call:screening');
       socket.off('episode:lines-opened');
       socket.off('episode:start');
+      socket.off('episode:end');
       clearInterval(refreshInterval);
     };
   }, [socket, activeEpisode]);

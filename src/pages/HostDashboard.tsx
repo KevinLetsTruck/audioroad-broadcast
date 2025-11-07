@@ -82,11 +82,20 @@ export default function HostDashboard() {
         setIsLive(true);
       });
       
+      socket.on('episode:end', (episode) => {
+        console.log('📴 [HOST] Episode ended event:', episode);
+        setActiveEpisode(null);
+        setIsLive(false);
+        setApprovedCalls([]);
+      });
+      
       return () => {
         clearInterval(interval);
         socket.off('call:completed');
+        socket.off('call:approved');
         socket.off('episode:lines-opened');
         socket.off('episode:start');
+        socket.off('episode:end');
         socket.close();
       };
     }
