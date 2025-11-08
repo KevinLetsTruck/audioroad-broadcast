@@ -524,10 +524,11 @@ export default function ScreeningRoom() {
     // Set active call first (this will cause DocumentUploadWidget to re-render with new callerId)
     setActiveCall(call);
     
-    // IMMEDIATELY clear and populate with fresh data (no delay)
+    // IMMEDIATELY clear form for fresh data entry
+    // Keep truckerType default but clear name/location for each call
     setScreenerNotes({
-      name: call.caller?.name || '',
-      location: call.caller?.location || '',
+      name: '', // Always start fresh - screener must verify/update
+      location: '', // Always start fresh - screener must verify/update
       topic: call.topic || '',
       truckerType: call.caller?.truckerType || 'OTR',
       priority: 'normal',
