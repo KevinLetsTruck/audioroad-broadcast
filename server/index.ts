@@ -29,7 +29,6 @@ import commercialsRoutes from './routes/commercials.js';
 import contentRoutes from './routes/content.js';
 import voicesRoutes from './routes/voices.js';
 import announcementsRoutes from './routes/announcements.js';
-import callDetailsRoutes from './routes/call-details.js';
 import streamRoutes from './routes/stream.js';
 import playlistRoutes from './routes/playlist.js';
 import platformsRoutes from './routes/platforms.js';
@@ -156,7 +155,6 @@ app.use('/api/commercials', apiLimiter, commercialsRoutes); // Shopify product c
 app.use('/api/content', apiLimiter, contentRoutes); // Social media content generation
 app.use('/api/voices', apiLimiter, voicesRoutes); // ElevenLabs voices for commercial generation
 app.use('/api/announcements', apiLimiter, announcementsRoutes); // AI-generated screener announcements
-app.use('/api/call-details', apiLimiter, callDetailsRoutes); // Call transcription and analysis status
 app.use('/api/stream', streamRoutes); // HLS streaming endpoints (public, no auth needed for listeners)
 app.use('/api/mp3-stream', directMp3Routes); // Direct MP3 stream for phone callers (public)
 app.use('/api/audio-proxy', audioProxyRoutes); // Proxy for dedicated streaming server (solves DNS issue)
