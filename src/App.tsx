@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-route
 import { ClerkProvider, SignedIn, SignedOut, useUser, SignIn, SignUp } from '@clerk/clerk-react'
 import { BroadcastProvider } from './contexts/BroadcastContext'
 import RoleGate from './components/RoleGate'
+import ErrorBoundary from './components/ErrorBoundary'
+import NetworkStatusBanner from './hooks/useNetworkStatus'
 import Sidebar from './components/Sidebar'
 import BroadcastControl from './pages/BroadcastControl'
 import HostDashboard from './pages/HostDashboard'
@@ -49,6 +51,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex">
+      <NetworkStatusBanner />
       {/* Sidebar Navigation */}
       {showSidebar && (
         <Sidebar 
@@ -138,21 +141,27 @@ function AppContent() {
           <Route path="/" element={
             <SignedIn>
               <RoleGate allowedRoles={['host', 'admin', 'producer']}>
-                <BroadcastControl />
+                <ErrorBoundary>
+                  <BroadcastControl />
+                </ErrorBoundary>
               </RoleGate>
             </SignedIn>
           } />
           <Route path="/host-dashboard" element={
             <SignedIn>
               <RoleGate allowedRoles={['host', 'admin']}>
-                <HostDashboard />
+                <ErrorBoundary>
+                  <HostDashboard />
+                </ErrorBoundary>
               </RoleGate>
             </SignedIn>
           } />
           <Route path="/screening-room" element={
             <SignedIn>
               <RoleGate allowedRoles={['screener', 'admin']}>
-                <ScreeningRoom />
+                <ErrorBoundary>
+                  <ScreeningRoom />
+                </ErrorBoundary>
               </RoleGate>
             </SignedIn>
           } />

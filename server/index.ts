@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import { validateEnvironment } from './utils/validation.js';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -35,6 +36,7 @@ import platformsRoutes from './routes/platforms.js';
 import podcastRoutes from './routes/podcast.js';
 import directMp3Routes from './routes/directMp3.js';
 import audioProxyRoutes from './routes/audioProxy.js';
+import healthRoutes from './routes/health.js';
 // import broadcastRoutes from './routes/broadcast.js'; // Temporarily disabled until migration runs
 
 // Import services
@@ -166,15 +168,8 @@ app.use('/api/podcast', podcastRoutes); // Podcast RSS feeds (public)
 // NOTE: Route protection can be added gradually using requireAuth middleware
 // Example: app.use('/api/episodes', apiLimiter, requireAuth, episodeRoutes);
 
-// Health check endpoint
-app.get('/api/health', (req: Request, res: Response) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    service: 'AudioRoad Broadcast Platform',
-    version: '1.0.0'
-  });
-});
+// Health check endpoint (comprehensive)
+app.use('/api/health', healthRoutes);
 
 // Serve static files from the React app in production
 if (process.env.NODE_ENV === 'production') {
@@ -211,15 +206,11 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// Error handling middleware
-app.use((err: any, _req: Request, res: Response) => {
-  console.error('Error:', err);
-  res.status(err.status || 500).json({
-    error: process.env.NODE_ENV === 'production' 
-      ? 'Internal server error' 
-      : err.message
-  });
-});
+// 404 handler for undefined routes (must be before error handler)
+app.use(notFoundHandler);
+
+// Error handling middleware (must be last)
+app.use(errorHandler);
 
 // Start server
 const startServer = async () => {

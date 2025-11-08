@@ -6,6 +6,7 @@
 
 import twilio from 'twilio';
 import { PrismaClient } from '@prisma/client';
+import { retryTwilioCall } from '../utils/retry.js';
 
 const prisma = new PrismaClient();
 
@@ -82,19 +83,22 @@ export class ParticipantService {
             console.log(`✅ [CONFERENCE] Found participant: ${participant.callSid}`);
             
             // Unmute AND take off hold so caller can hear conference directly
-            await twilioClient
-              .conferences(conferenceSidToUse)
-              .participants(call.twilioCallSid)
-              .update({
-                muted: false,
-                hold: false, // Take off hold so they hear the conference (host/screener)
-                // Enable recording with transcription for this participant
-                // This records ONLY this participant's audio (not the whole conference)
-                coach: call.twilioCallSid, // Record in coach mode (participant only)
-                record: 'record-from-start',
-                recordingStatusCallback: `${process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app'}/api/twilio/participant-recording-status`,
-                recordingStatusCallbackMethod: 'POST'
-              } as any); // 'as any' because TypeScript types don't include all recording options
+            await retryTwilioCall(
+              () => twilioClient
+                .conferences(conferenceSidToUse)
+                .participants(call.twilioCallSid)
+                .update({
+                  muted: false,
+                  hold: false, // Take off hold so they hear the conference (host/screener)
+                  // Enable recording with transcription for this participant
+                  // This records ONLY this participant's audio (not the whole conference)
+                  coach: call.twilioCallSid, // Record in coach mode (participant only)
+                  record: 'record-from-start',
+                  recordingStatusCallback: `${process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app'}/api/twilio/participant-recording-status`,
+                  recordingStatusCallbackMethod: 'POST'
+                } as any),
+              'Put participant on air'
+            );
             
             console.log(`✅ [TWILIO] Successfully unmuted participant and started recording`);
           }
@@ -149,25 +153,29 @@ export class ParticipantService {
         const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
         
         // First ensure they're muted
-        await twilioClient
-          .conferences(conferenceSid)
-          .participants(call.twilioCallSid)
-          .update({
-            muted: true
-          });
+        await retryTwilioCall(
+          () => twilioClient
+            .conferences(conferenceSid)
+            .participants(call.twilioCallSid)
+            .update({ muted: true }),
+          'Mute participant for hold'
+        );
         
         // Wait briefly for mute to register
         await new Promise(resolve => setTimeout(resolve, 200));
         
         // Then apply hold with music
-        await twilioClient
-          .conferences(conferenceSid)
-          .participants(call.twilioCallSid)
-          .update({
-            hold: true,
-            holdUrl: `${appUrl}/api/twilio/wait-audio`,
-            holdMethod: 'POST'
-          } as any); // 'as any' to bypass TypeScript (holdUrl/holdMethod not in types)
+        await retryTwilioCall(
+          () => twilioClient
+            .conferences(conferenceSid)
+            .participants(call.twilioCallSid)
+            .update({
+              hold: true,
+              holdUrl: `${appUrl}/api/twilio/wait-audio`,
+              holdMethod: 'POST'
+            } as any),
+          'Put participant on hold'
+        );
         
         console.log(`✅ [TWILIO] Participant on hold with music`);
       } catch (twilioError: any) {
@@ -244,12 +252,13 @@ export class ParticipantService {
 
       try {
         // Mute in Twilio conference (silently)
-        await twilioClient
-          .conferences(conferenceSid)
-          .participants(call.twilioCallSid)
-          .update({
-            muted: true
-          });
+        await retryTwilioCall(
+          () => twilioClient
+            .conferences(conferenceSid)
+            .participants(call.twilioCallSid)
+            .update({ muted: true }),
+          'Mute participant'
+        );
         
         console.log(`✅ [TWILIO] Successfully muted participant`);
       } catch (twilioError: any) {
@@ -338,12 +347,13 @@ export class ParticipantService {
             console.log(`✅ [CONFERENCE] Found participant: ${participant.callSid}, currently ${participant.muted ? 'MUTED' : 'UNMUTED'}`);
             
             // Unmute the participant using their call SID (silently)
-            await twilioClient
-              .conferences(conferenceSidToUse)
-              .participants(call.twilioCallSid)
-              .update({
-                muted: false
-              });
+            await retryTwilioCall(
+              () => twilioClient
+                .conferences(conferenceSidToUse)
+                .participants(call.twilioCallSid)
+                .update({ muted: false }),
+              'Unmute participant'
+            );
             
             console.log(`✅ [TWILIO] Successfully unmuted participant in conference`);
           }

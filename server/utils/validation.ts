@@ -196,12 +196,34 @@ export function validateEnvironment() {
     'VITE_CLERK_PUBLISHABLE_KEY'
   ];
 
+  const optional = [
+    'ANTHROPIC_API_KEY',
+    'AWS_ACCESS_KEY_ID',
+    'AWS_SECRET_ACCESS_KEY',
+    'AWS_S3_BUCKET_NAME',
+    'AWS_REGION',
+    'APP_URL',
+    'STREAM_SERVER_URL',
+    'ELEVENLABS_API_KEY',
+    'ELEVENLABS_GREETING_VOICE',
+    'PORT',
+    'NODE_ENV'
+  ];
+
   const missing = required.filter(key => !process.env[key]);
 
   if (missing.length > 0) {
+    console.error(`❌ [SECURITY] Missing required environment variables: ${missing.join(', ')}`);
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
 
+  const missingOptional = optional.filter(key => !process.env[key]);
+  if (missingOptional.length > 0) {
+    console.warn(`⚠️ [CONFIG] Missing optional environment variables: ${missingOptional.join(', ')}`);
+    console.warn('   Some features may not work correctly.');
+  }
+
   console.log('✅ [SECURITY] All required environment variables present');
+  console.log(`📋 [CONFIG] ${optional.length - missingOptional.length}/${optional.length} optional variables configured`);
 }
 
