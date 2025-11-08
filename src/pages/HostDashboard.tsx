@@ -12,9 +12,10 @@ export default function HostDashboard() {
   const [isLive, setIsLive] = useState(false);
   
   const [approvedCalls, setApprovedCalls] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'calls' | 'documents' | 'announcements'>('calls');
+  const [activeTab, setActiveTab] = useState<'calls' | 'documents' | 'announcements' | 'history'>('calls');
   const [allDocuments, setAllDocuments] = useState<any[]>([]);
   const [todaysAnnouncements, setTodaysAnnouncements] = useState<any[]>([]);
+  const [completedCalls, setCompletedCalls] = useState<any[]>([]);
   const [autoPlayAnnouncements, setAutoPlayAnnouncements] = useState(() => 
     localStorage.getItem('autoPlayAnnouncements') !== 'false'
   );
@@ -30,6 +31,44 @@ export default function HostDashboard() {
     
     return () => clearInterval(interval);
   }, []);
+
+  // Fetch completed calls when history tab is active
+  useEffect(() => {
+    if (activeTab === 'history' && activeEpisode) {
+      fetchCompletedCalls();
+      // Refresh every 5 seconds to catch new transcriptions/analysis
+      const interval = setInterval(fetchCompletedCalls, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, activeEpisode]);
+
+  const fetchCompletedCalls = async () => {
+    if (!activeEpisode) return;
+    try {
+      const response = await fetch(`/api/calls?episodeId=${activeEpisode.id}&status=completed`);
+      const calls = await response.json();
+      
+      // Also get ended calls (status might be 'on-air' but endedAt is set)
+      const allCallsResponse = await fetch(`/api/calls?episodeId=${activeEpisode.id}`);
+      const allCalls = await allCallsResponse.json();
+      
+      // Filter for completed/ended calls
+      const completed = allCalls.filter((call: any) => 
+        call.status === 'completed' || call.endedAt !== null
+      );
+      
+      // Sort by most recent first
+      completed.sort((a: any, b: any) => {
+        const aTime = new Date(a.endedAt || a.onAirAt || a.incomingAt).getTime();
+        const bTime = new Date(b.endedAt || b.onAirAt || b.incomingAt).getTime();
+        return bTime - aTime;
+      });
+      
+      setCompletedCalls(completed);
+    } catch (error) {
+      console.error('Error fetching completed calls:', error);
+    }
+  };
 
   // Also check broadcast context for episode updates (in case screener opened lines)
   useEffect(() => {
@@ -576,6 +615,7 @@ export default function HostDashboard() {
 
   const tabs: Tab[] = [
     { id: 'calls', label: 'Calls' },
+    { id: 'history', label: 'Call History' },
     { id: 'documents', label: 'Documents' },
     { id: 'announcements', label: `Announcements ${todaysAnnouncements.length > 0 ? `(${todaysAnnouncements.length})` : ''}` },
   ];
@@ -596,7 +636,7 @@ export default function HostDashboard() {
             <Tabs
               tabs={tabs}
               defaultTab={activeTab}
-              onChange={(id) => setActiveTab(id as 'calls' | 'documents' | 'announcements')}
+              onChange={(id) => setActiveTab(id as 'calls' | 'documents' | 'announcements' | 'history')}
               variant="pills"
             />
             {!isLive && activeEpisode && activeEpisode.conferenceActive && activeEpisode.status === 'scheduled' && (
@@ -629,6 +669,152 @@ export default function HostDashboard() {
                     description="Start an episode to manage calls"
                   />
                 </Card>
+              )}
+            </div>
+          ) : activeTab === 'history' ? (
+            /* Call History Tab - Show completed calls with transcription/analysis */
+            <div className="space-y-4">
+              <h3 className="text-title-sm text-dark dark:text-white mb-4">📞 Call History</h3>
+              
+              {!activeEpisode ? (
+                <Card variant="default" padding="lg">
+                  <EmptyState
+                    title="No Active Episode"
+                    description="Select an episode to view call history"
+                  />
+                </Card>
+              ) : completedCalls.length === 0 ? (
+                <Card variant="default" padding="lg">
+                  <EmptyState
+                    title="No Completed Calls Yet"
+                    description="Completed calls will appear here with transcription and AI analysis"
+                  />
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {completedCalls.map((call: any) => {
+                    const hasRecording = !!call.recordingSid;
+                    const hasTranscript = !!call.transcriptText;
+                    const hasAnalysis = !!call.aiSummary;
+                    
+                    return (
+                      <Card key={call.id} variant="default" padding="md">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h4 className="font-semibold text-dark dark:text-white">
+                                {call.caller?.name || 'Unknown Caller'}
+                              </h4>
+                              {call.caller?.location && (
+                                <span className="text-xs text-gray-500">{call.caller.location}</span>
+                              )}
+                              {/* Status Indicators */}
+                              <div className="flex items-center gap-2 ml-2">
+                                {hasRecording ? (
+                                  <span className="text-xs text-green-400" title="Recording captured">🎙️</span>
+                                ) : (
+                                  <span className="text-xs text-gray-500" title="No recording">⏸️</span>
+                                )}
+                                {hasTranscript ? (
+                                  <span className="text-xs text-green-400" title="Transcribed">📝</span>
+                                ) : hasRecording ? (
+                                  <span className="text-xs text-yellow-400" title="Transcription in progress...">⏳</span>
+                                ) : null}
+                                {hasAnalysis ? (
+                                  <span className="text-xs text-blue-400" title="AI analyzed">🤖</span>
+                                ) : hasTranscript ? (
+                                  <span className="text-xs text-yellow-400" title="Analysis in progress...">⏳</span>
+                                ) : null}
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-4 text-xs text-gray-500 mb-2">
+                              {call.onAirAt && (
+                                <span>
+                                  On Air: {new Date(call.onAirAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                              {call.endedAt && (
+                                <span>
+                                  Ended: {new Date(call.endedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                              {call.airDuration && (
+                                <span className="text-green-400">
+                                  Duration: {Math.floor(call.airDuration / 60)}m {call.airDuration % 60}s
+                                </span>
+                              )}
+                            </div>
+                            
+                            {call.topic && (
+                              <div className="text-sm text-gray-400 mb-2">Topic: "{call.topic}"</div>
+                            )}
+                            
+                            {/* Transcript Preview */}
+                            {hasTranscript && (
+                              <div className="bg-gray-800 rounded p-3 mb-2">
+                                <div className="text-xs font-semibold text-gray-400 mb-1">📝 Transcript</div>
+                                <p className="text-xs text-gray-300 line-clamp-3">
+                                  {call.transcriptText.substring(0, 300)}
+                                  {call.transcriptText.length > 300 ? '...' : ''}
+                                </p>
+                              </div>
+                            )}
+                            
+                            {/* AI Analysis */}
+                            {hasAnalysis && (
+                              <div className="bg-blue-900/30 border border-blue-600 rounded p-3">
+                                <div className="text-xs font-semibold text-blue-300 mb-1">🤖 AI Analysis</div>
+                                <p className="text-xs text-gray-300 mb-2">{call.aiSummary}</p>
+                                <div className="flex items-center gap-4 text-xs text-gray-400">
+                                  {call.aiSentiment && (
+                                    <span>
+                                      Sentiment: <span className="capitalize text-white">{call.aiSentiment}</span>
+                                    </span>
+                                  )}
+                                  {call.contentRating !== null && call.contentRating !== undefined && (
+                                    <span>
+                                      Rating: <span className="text-white">{call.contentRating}/100</span>
+                                    </span>
+                                  )}
+                                  {call.aiTopics && Array.isArray(call.aiTopics) && call.aiTopics.length > 0 && (
+                                    <span>
+                                      Topics: <span className="text-white">{call.aiTopics.join(', ')}</span>
+                                    </span>
+                                  )}
+                                </div>
+                                {call.aiKeyPoints && Array.isArray(call.aiKeyPoints) && call.aiKeyPoints.length > 0 && (
+                                  <div className="mt-2">
+                                    <div className="text-xs font-semibold text-gray-400 mb-1">Key Points:</div>
+                                    <ul className="text-xs text-gray-300 list-disc list-inside space-y-1">
+                                      {call.aiKeyPoints.slice(0, 3).map((point: string, idx: number) => (
+                                        <li key={idx}>{point}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                            
+                            {/* Recording Link */}
+                            {call.recordingUrl && (
+                              <div className="mt-2">
+                                <a
+                                  href={call.recordingUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-400 hover:text-blue-300"
+                                >
+                                  🎧 Listen to Recording
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
               )}
             </div>
           ) : activeTab === 'announcements' ? (
