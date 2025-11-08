@@ -45,10 +45,7 @@ export default function HostDashboard() {
   const fetchCompletedCalls = async () => {
     if (!activeEpisode) return;
     try {
-      const response = await fetch(`/api/calls?episodeId=${activeEpisode.id}&status=completed`);
-      const calls = await response.json();
-      
-      // Also get ended calls (status might be 'on-air' but endedAt is set)
+      // Get all calls for the episode (we'll filter for completed/ended)
       const allCallsResponse = await fetch(`/api/calls?episodeId=${activeEpisode.id}`);
       const allCalls = await allCallsResponse.json();
       
