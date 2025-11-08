@@ -638,12 +638,12 @@ export default function HostDashboard() {
               className="[&>div>div]:mb-0"
             />
             {!isLive && activeEpisode && activeEpisode.conferenceActive && activeEpisode.status === 'scheduled' && (
-              <Button variant="success" size="sm" onClick={startBroadcast}>
+              <Button variant="success" size="sm" onClick={startBroadcast} className="py-2.5">
                 START SHOW
               </Button>
             )}
             {isLive && (
-              <Button variant="danger" size="sm" onClick={endEpisode}>
+              <Button variant="danger" size="sm" onClick={endEpisode} className="py-2.5">
                 END SHOW
               </Button>
             )}
