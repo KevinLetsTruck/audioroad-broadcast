@@ -39,7 +39,7 @@ export default function ChatPanel({ episodeId, userRole }: ChatPanelProps) {
     // Wait for connection before joining room
     newSocket.on('connect', () => {
       console.log('💬 [CHAT] Socket connected, joining episode:', episodeId);
-      newSocket.emit('join:episode', episodeId);
+    newSocket.emit('join:episode', episodeId);
     });
 
     // Listen for join confirmation
