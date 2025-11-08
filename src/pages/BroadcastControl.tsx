@@ -314,10 +314,6 @@ export default function BroadcastControl() {
       return;
     }
 
-    if (!confirm('Close phone lines? This will stop accepting new calls.')) {
-      return;
-    }
-
     try {
       console.log('📴 [CLOSE-LINES] Closing phone lines...');
       
@@ -345,8 +341,6 @@ export default function BroadcastControl() {
         startTime: null,
         selectedShow: status.selectedShow
       });
-
-      alert('✅ Phone lines closed. No new calls will be accepted.');
     } catch (error: any) {
       console.error('❌ Failed to close phone lines:', error);
       alert(`Failed to close phone lines: ${error.message}`);
