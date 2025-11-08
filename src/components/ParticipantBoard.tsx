@@ -313,6 +313,25 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
                             <div className="text-xs text-gray-500">{p.caller.location}</div>
                           )}
                           {p.topic && <div className="text-xs text-gray-400">{p.topic}</div>}
+                          
+                          {/* Transcription & Analysis Status */}
+                          <div className="flex items-center gap-2 mt-1">
+                            {(p as any).recordingSid ? (
+                              <span className="text-xs text-green-400" title="Recording captured">🎙️</span>
+                            ) : (
+                              <span className="text-xs text-gray-500" title="No recording yet">⏸️</span>
+                            )}
+                            {(p as any).transcriptText ? (
+                              <span className="text-xs text-green-400" title="Transcribed">📝</span>
+                            ) : (p as any).recordingSid ? (
+                              <span className="text-xs text-yellow-400" title="Transcription in progress...">⏳</span>
+                            ) : null}
+                            {(p as any).aiSummary ? (
+                              <span className="text-xs text-blue-400" title="AI analyzed">🤖</span>
+                            ) : (p as any).transcriptText ? (
+                              <span className="text-xs text-yellow-400" title="Analysis in progress...">⏳</span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -361,6 +380,31 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
                   {/* Expandable Caller History */}
                   {isExpanded && history && (
                     <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
+                      {/* Current Call Transcription & Analysis */}
+                      {(p as any).transcriptText || (p as any).aiSummary ? (
+                        <div className="bg-purple-900/30 border border-purple-600 rounded p-2 mb-2">
+                          <div className="text-xs font-semibold text-purple-300 mb-1">📞 This Call</div>
+                          {(p as any).transcriptText && (
+                            <div className="mb-2">
+                              <div className="text-xs font-semibold text-gray-400 mb-1">📝 Transcript</div>
+                              <p className="text-xs text-gray-300 line-clamp-3">{(p as any).transcriptText.substring(0, 200)}...</p>
+                            </div>
+                          )}
+                          {(p as any).aiSummary && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-400 mb-1">🤖 AI Analysis</div>
+                              <p className="text-xs text-gray-300 mb-1">{(p as any).aiSummary}</p>
+                              {(p as any).aiSentiment && (
+                                <div className="text-xs text-gray-400">
+                                  Sentiment: <span className="capitalize">{(p as any).aiSentiment}</span>
+                                  {(p as any).contentRating && ` • Rating: ${(p as any).contentRating}/100`}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                      
                       {/* AI Summary */}
                       {history.aiSummary && (
                         <div className="bg-blue-900/30 border border-blue-600 rounded p-2">
@@ -450,6 +494,25 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
                             <div className="text-xs text-gray-500">{p.caller.location}</div>
                           )}
                           {p.topic && <div className="text-xs text-gray-400">{p.topic}</div>}
+                          
+                          {/* Transcription & Analysis Status */}
+                          <div className="flex items-center gap-2 mt-1">
+                            {(p as any).recordingSid ? (
+                              <span className="text-xs text-green-400" title="Recording captured">🎙️</span>
+                            ) : (
+                              <span className="text-xs text-gray-500" title="No recording yet">⏸️</span>
+                            )}
+                            {(p as any).transcriptText ? (
+                              <span className="text-xs text-green-400" title="Transcribed">📝</span>
+                            ) : (p as any).recordingSid ? (
+                              <span className="text-xs text-yellow-400" title="Transcription in progress...">⏳</span>
+                            ) : null}
+                            {(p as any).aiSummary ? (
+                              <span className="text-xs text-blue-400" title="AI analyzed">🤖</span>
+                            ) : (p as any).transcriptText ? (
+                              <span className="text-xs text-yellow-400" title="Analysis in progress...">⏳</span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -487,6 +550,31 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
                   {/* Expandable Caller History */}
                   {isExpanded && history && (
                     <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
+                      {/* Current Call Transcription & Analysis */}
+                      {(p as any).transcriptText || (p as any).aiSummary ? (
+                        <div className="bg-purple-900/30 border border-purple-600 rounded p-2 mb-2">
+                          <div className="text-xs font-semibold text-purple-300 mb-1">📞 This Call</div>
+                          {(p as any).transcriptText && (
+                            <div className="mb-2">
+                              <div className="text-xs font-semibold text-gray-400 mb-1">📝 Transcript</div>
+                              <p className="text-xs text-gray-300 line-clamp-3">{(p as any).transcriptText.substring(0, 200)}...</p>
+                            </div>
+                          )}
+                          {(p as any).aiSummary && (
+                            <div>
+                              <div className="text-xs font-semibold text-gray-400 mb-1">🤖 AI Analysis</div>
+                              <p className="text-xs text-gray-300 mb-1">{(p as any).aiSummary}</p>
+                              {(p as any).aiSentiment && (
+                                <div className="text-xs text-gray-400">
+                                  Sentiment: <span className="capitalize">{(p as any).aiSentiment}</span>
+                                  {(p as any).contentRating && ` • Rating: ${(p as any).contentRating}/100`}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                      
                       {/* AI Summary */}
                       {history.aiSummary && (
                         <div className="bg-blue-900/30 border border-blue-600 rounded p-2">
