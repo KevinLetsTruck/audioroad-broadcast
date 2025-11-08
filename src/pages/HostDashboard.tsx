@@ -638,6 +638,7 @@ export default function HostDashboard() {
               defaultTab={activeTab}
               onChange={(id) => setActiveTab(id as 'calls' | 'documents' | 'announcements' | 'history')}
               variant="pills"
+              className="[&>div>div]:mb-0"
             />
             {!isLive && activeEpisode && activeEpisode.conferenceActive && activeEpisode.status === 'scheduled' && (
               <Button variant="success" size="sm" onClick={startBroadcast}>
