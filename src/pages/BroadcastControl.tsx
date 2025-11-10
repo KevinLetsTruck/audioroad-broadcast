@@ -317,6 +317,32 @@ export default function BroadcastControl() {
     try {
       console.log('📴 [CLOSE-LINES] Closing phone lines...');
       
+      // CRITICAL: Disconnect all Twilio calls and stop microphones FIRST
+      // This prevents screener mic staying connected to next session
+      console.log('🧹 [CLOSE-LINES] Disconnecting all Twilio calls...');
+      try {
+        // Disconnect all calls
+        if (broadcast.activeCalls.size > 0) {
+          await broadcast.disconnectCurrentCall();
+          console.log('✅ [CLOSE-LINES] Twilio calls disconnected');
+        }
+        
+        // Destroy mixer (stops all microphones)
+        if (broadcast.mixer) {
+          await broadcast.destroyMixer();
+          console.log('✅ [CLOSE-LINES] Mixer destroyed, microphones stopped');
+        }
+        
+        // Destroy Twilio device to fully disconnect
+        if (broadcast.twilioDevice) {
+          await broadcast.destroyTwilioDevice();
+          console.log('✅ [CLOSE-LINES] Twilio device destroyed');
+        }
+      } catch (cleanupError) {
+        console.error('⚠️ [CLOSE-LINES] Error during cleanup:', cleanupError);
+        // Continue anyway - still close lines in database
+      }
+      
       const response = await fetch(`/api/episodes/${status.episodeId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -335,12 +361,14 @@ export default function BroadcastControl() {
       broadcast.setState({
         isLive: false,
         linesOpen: false,
-        episodeId: status.episodeId, // Keep episode, just close lines
-        showId: status.showId,
-        showName: status.showName,
+        episodeId: null, // Clear episode to force fresh start
+        showId: null,
+        showName: '',
         startTime: null,
-        selectedShow: status.selectedShow
+        selectedShow: null
       });
+      
+      console.log('✅ [CLOSE-LINES] All audio connections terminated');
     } catch (error: any) {
       console.error('❌ Failed to close phone lines:', error);
       alert(`Failed to close phone lines: ${error.message}`);
