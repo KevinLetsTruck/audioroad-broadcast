@@ -137,6 +137,40 @@ router.patch('/:id', async (req: Request, res: Response) => {
       const io = req.app.get('io');
       if (conferenceActive === false) {
         console.log(`📴 [CLOSE-LINES] Phone lines closed for episode: ${episode.id}`);
+        
+        // CRITICAL: Clean up all active calls when closing lines
+        // This prevents stale calls from interfering with next session
+        try {
+          console.log('🧹 [CLOSE-LINES] Cleaning up active calls...');
+          const activeCalls = await prisma.call.findMany({
+            where: {
+              episodeId: episode.id,
+              status: { notIn: ['completed', 'rejected'] },
+              endedAt: null
+            }
+          });
+          
+          console.log(`   Found ${activeCalls.length} active calls to clean up`);
+          
+          // Mark all as completed
+          await prisma.call.updateMany({
+            where: {
+              episodeId: episode.id,
+              status: { notIn: ['completed', 'rejected'] },
+              endedAt: null
+            },
+            data: {
+              status: 'completed',
+              endedAt: new Date()
+            }
+          });
+          
+          console.log(`✅ [CLOSE-LINES] Cleaned up ${activeCalls.length} calls`);
+        } catch (cleanupError) {
+          console.error('⚠️ [CLOSE-LINES] Error cleaning up calls:', cleanupError);
+          // Continue anyway - not critical
+        }
+        
         io.to(`episode:${episode.id}`).emit('episode:lines-closed', episode);
       }
     }
