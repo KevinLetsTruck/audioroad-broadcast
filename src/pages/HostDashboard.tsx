@@ -336,31 +336,7 @@ export default function HostDashboard() {
         mixerInstance.startRecording();
       }
       
-      // Step 5: CRITICAL - Pause AutoDJ on dedicated streaming server BEFORE starting show
-      // This prevents background music from playing during the show
-      console.log('🛑 [START-BROADCAST] Pausing AutoDJ on streaming server...');
-      try {
-        const pauseResponse = await fetch('/api/stream/pause-autodj', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (pauseResponse.ok) {
-          const pauseData = await pauseResponse.json();
-          if (pauseData.success) {
-            console.log('✅ [START-BROADCAST] AutoDJ paused successfully');
-          } else {
-            console.warn('⚠️ [START-BROADCAST] AutoDJ pause returned:', pauseData);
-          }
-        } else {
-          console.warn(`⚠️ [START-BROADCAST] AutoDJ pause failed: ${pauseResponse.status}`);
-        }
-      } catch (autoDJError) {
-        console.warn('⚠️ [START-BROADCAST] Error pausing AutoDJ (non-critical):', autoDJError);
-        // Continue anyway - don't block show start
-      }
-      
-      // Step 5b: Start streaming (if enabled)
+      // Step 5: Start streaming (if enabled)
       const autoStream = localStorage.getItem('autoStream') !== 'false';
       const radioCoPassword = localStorage.getItem('radioCoPassword') || '';
       
@@ -502,6 +478,7 @@ export default function HostDashboard() {
       // Step 8: Play show opener 
       if (show?.openerAudioUrl) {
         console.log('🎵 [OPENER] Playing show opener...');
+        console.log('🔍 [DEBUG] Active audio sources before opener:', mixerInstance.getSources().map(s => ({ id: s.id, type: s.type, label: s.label })));
         
         // Play through mixer (for stream/recording)
         const mixerPlayPromise = mixerInstance.playAudioFile(show.openerAudioUrl);
@@ -533,6 +510,7 @@ export default function HostDashboard() {
         });
         
         console.log('✅ [OPENER] Opener played');
+        console.log('🔍 [DEBUG] Active audio sources after opener:', mixerInstance.getSources().map(s => ({ id: s.id, type: s.type, label: s.label })));
       }
       
       console.log('🎉 SHOW STARTED! You are LIVE!');
