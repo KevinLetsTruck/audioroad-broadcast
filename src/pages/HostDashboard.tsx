@@ -341,7 +341,7 @@ export default function HostDashboard() {
       console.log('🛑 [START-BROADCAST] Pausing AutoDJ on streaming server...');
       try {
         const streamSocket = io();
-        await new Promise<void>((resolve, reject) => {
+        await new Promise<void>((resolve) => {
           streamSocket.on('connect', () => {
             console.log('✅ [START-BROADCAST] Connected to streaming server');
             // Send live-start to pause AutoDJ (even if not streaming to Radio.co)
