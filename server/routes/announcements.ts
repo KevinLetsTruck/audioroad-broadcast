@@ -65,10 +65,13 @@ router.post('/generate', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Text and category required' });
     }
 
+    // FORCE voice-only - no music in announcements
+    const finalMusicStyle = 'none';
+
     console.log(`\n🎬 [ANNOUNCEMENTS] Starting announcement generation...`);
     console.log(`   Category: ${category}`);
     console.log(`   Voice ID: ${voiceId || 'default'}`);
-    console.log(`   Music Style: ${musicStyle || 'none'}`);
+    console.log(`   Music Style: ${finalMusicStyle} (forced - announcements are voice-only)`);
 
     // Step 1: Enhance script with AI
     console.log('📝 Step 1: Enhancing script with AI...');
@@ -91,8 +94,9 @@ router.post('/generate', async (req: Request, res: Response) => {
     // Step 3: Mix with music stings (if requested)
     let finalAudioPath = voiceFilePath;
     
-    if (musicStyle && musicStyle !== 'none') {
-      console.log(`🎚️ Step 3: Mixing with ${musicStyle} music...`);
+    // FORCE voice-only - no music mixing
+    if (false && finalMusicStyle && finalMusicStyle !== 'none') {
+      console.log(`🎚️ Step 3: Mixing with ${finalMusicStyle} music...`);
       const mixedPath = path.join(path.dirname(voiceFilePath), `mixed-${path.basename(voiceFilePath)}`);
       
       try {
@@ -137,7 +141,7 @@ router.post('/generate', async (req: Request, res: Response) => {
           'ai-generated',
           'screener-announcement',
           category,
-          musicStyle && musicStyle !== 'none' ? `music-${musicStyle}` : 'voice-only',
+          'voice-only', // Always voice-only
           new Date().toISOString().split('T')[0] // Date tag for "today's announcements"
         ],
         color: '#8b5cf6', // Purple for announcements

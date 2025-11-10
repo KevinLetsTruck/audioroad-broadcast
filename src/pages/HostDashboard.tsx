@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import ChatPanel from '../components/ChatPanel';
 import ParticipantBoard from '../components/ParticipantBoard';
@@ -19,6 +19,7 @@ export default function HostDashboard() {
   const [autoPlayAnnouncements, setAutoPlayAnnouncements] = useState(() => 
     localStorage.getItem('autoPlayAnnouncements') !== 'false'
   );
+  const activeAudioElementsRef = useRef<HTMLAudioElement[]>([]); // Track audio elements to stop them if needed
   
 
   useEffect(() => {
@@ -437,7 +438,13 @@ export default function HostDashboard() {
             // Play locally for host
             const localAudio = new Audio(announcement.fileUrl);
             localAudio.volume = 0.7;
+            activeAudioElementsRef.current.push(localAudio); // Track for potential stopping
             const localPlayPromise = localAudio.play();
+            
+            // Clean up when done
+            localAudio.onended = () => {
+              activeAudioElementsRef.current = activeAudioElementsRef.current.filter(a => a !== localAudio);
+            };
             
             // CRITICAL: Play directly to Twilio conference so CALLERS hear it
             // Mixer output doesn't go to Twilio - only host mic does
@@ -478,7 +485,13 @@ export default function HostDashboard() {
         // Play locally for host
         const localAudio = new Audio(show.openerAudioUrl);
         localAudio.volume = 0.7;
+        activeAudioElementsRef.current.push(localAudio); // Track for potential stopping
         const localPlayPromise = localAudio.play();
+        
+        // Clean up when done
+        localAudio.onended = () => {
+          activeAudioElementsRef.current = activeAudioElementsRef.current.filter(a => a !== localAudio);
+        };
         
         // CRITICAL: Play directly to Twilio conference so CALLERS hear it
         const twilioPlayPromise = fetch(`/api/twilio/play-in-conference`, {
@@ -499,6 +512,18 @@ export default function HostDashboard() {
       }
       
       console.log('🎉 SHOW STARTED! You are LIVE!');
+      
+      // Cleanup: Stop any lingering audio elements (in case of errors)
+      setTimeout(() => {
+        activeAudioElementsRef.current.forEach(audio => {
+          if (!audio.paused) {
+            console.log('🛑 [START-BROADCAST] Stopping lingering audio element');
+            audio.pause();
+            audio.currentTime = 0;
+          }
+        });
+        activeAudioElementsRef.current = [];
+      }, 60000); // After 60 seconds, clean up any stuck audio
       
     } catch (error) {
       console.error('❌ [START-BROADCAST] Error:', error);

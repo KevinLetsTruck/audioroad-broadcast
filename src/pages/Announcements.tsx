@@ -114,7 +114,7 @@ export default function Announcements() {
           text: announcementText,
           category,
           voiceId: selectedVoiceId,
-          musicStyle
+          musicStyle: 'none' // FORCE voice-only - no music in announcements
         })
       });
 
