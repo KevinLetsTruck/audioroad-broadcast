@@ -37,6 +37,10 @@ let localHLSServer: HLSStreamServer | null = null;
 let directMP3Stream: DirectMP3Stream | null = null;
 
 // Export for access from routes
+export function getStreamingServerSocket(): any {
+  return streamingServerSocket;
+}
+
 export function getDirectMP3Stream(): DirectMP3Stream | null {
   return directMP3Stream;
 }

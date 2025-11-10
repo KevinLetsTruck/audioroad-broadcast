@@ -76,6 +76,36 @@ router.get('/status', (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/stream/pause-autodj - Pause AutoDJ on streaming server
+ * Called when show starts to prevent background music
+ */
+router.post('/pause-autodj', async (req: Request, res: Response) => {
+  try {
+    const { getStreamingServerSocket } = await import('../services/streamSocketService.js');
+    const streamingSocket = getStreamingServerSocket();
+    
+    if (streamingSocket && streamingSocket.connected) {
+      streamingSocket.emit('live-start');
+      console.log('✅ [STREAM] AutoDJ pause signal sent to streaming server');
+      return res.json({ success: true });
+    } else {
+      console.warn('⚠️ [STREAM] Streaming server Socket.IO not connected');
+      return res.json({ 
+        success: false, 
+        error: 'Streaming server not connected',
+        message: 'AutoDJ may continue playing. Check streaming server connection.'
+      });
+    }
+  } catch (error: any) {
+    console.error('❌ [STREAM] Error pausing AutoDJ:', error);
+    res.status(500).json({ 
+      error: 'Failed to pause AutoDJ',
+      details: error.message 
+    });
+  }
+});
+
+/**
  * GET /api/stream/live.m3u8 - Get HLS playlist
  * Public endpoint for all listeners
  */
