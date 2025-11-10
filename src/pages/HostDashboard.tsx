@@ -336,7 +336,53 @@ export default function HostDashboard() {
         mixerInstance.startRecording();
       }
       
-      // Step 5: Start streaming
+      // Step 5: CRITICAL - Pause AutoDJ on dedicated streaming server BEFORE starting show
+      // This prevents background music from playing during the show
+      console.log('🛑 [START-BROADCAST] Pausing AutoDJ on streaming server...');
+      try {
+        const streamSocket = io();
+        await new Promise<void>((resolve, reject) => {
+          streamSocket.on('connect', () => {
+            console.log('✅ [START-BROADCAST] Connected to streaming server');
+            // Send live-start to pause AutoDJ (even if not streaming to Radio.co)
+            streamSocket.emit('stream:start', {
+              mode: 'hls', // Just pause AutoDJ, don't start Radio.co
+              serverUrl: '',
+              port: 0,
+              password: '',
+              bitrate: 0
+            }, (response: any) => {
+              if (response?.success !== false) {
+                console.log('✅ [START-BROADCAST] AutoDJ paused on streaming server');
+                streamSocket.disconnect();
+                resolve();
+              } else {
+                console.warn('⚠️ [START-BROADCAST] AutoDJ pause response:', response);
+                streamSocket.disconnect();
+                resolve(); // Don't fail show start if this fails
+              }
+            });
+            
+            // Timeout after 2 seconds
+            setTimeout(() => {
+              streamSocket.disconnect();
+              console.warn('⚠️ [START-BROADCAST] AutoDJ pause timeout - continuing anyway');
+              resolve();
+            }, 2000);
+          });
+          
+          streamSocket.on('connect_error', (err) => {
+            console.warn('⚠️ [START-BROADCAST] Could not connect to streaming server to pause AutoDJ:', err.message);
+            streamSocket.disconnect();
+            resolve(); // Don't fail show start if streaming server is unavailable
+          });
+        });
+      } catch (autoDJError) {
+        console.warn('⚠️ [START-BROADCAST] Error pausing AutoDJ (non-critical):', autoDJError);
+        // Continue anyway - don't block show start
+      }
+      
+      // Step 5b: Start streaming (if enabled)
       const autoStream = localStorage.getItem('autoStream') !== 'false';
       const radioCoPassword = localStorage.getItem('radioCoPassword') || '';
       
