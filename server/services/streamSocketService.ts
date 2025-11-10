@@ -47,6 +47,11 @@ export function getDirectMP3Stream(): DirectMP3Stream | null {
 
 // Connect to dedicated streaming server on startup
 function connectToStreamingServer() {
+  // DISABLED: No dedicated streaming server exists
+  // The AutoDJ pause signal is not needed
+  console.log('ℹ️ [STREAMING] Dedicated streaming server disabled (not in use)');
+  return;
+  
   const streamServerUrl = process.env.STREAM_SERVER_URL || 'https://audioroad-streaming-server-production.up.railway.app';
   
   console.log(`📡 [STREAMING] Connecting to dedicated streaming server: ${streamServerUrl}`);
