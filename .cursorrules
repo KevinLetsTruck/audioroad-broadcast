@@ -1,0 +1,637 @@
+# Project Architecture & Security Rules
+# These rules prevent the "security audit breaks everything" problem
+
+## 🎯 Core Philosophy
+
+Build security and authentication infrastructure FIRST, then features.
+Never retrofit authentication - it causes widespread breakage.
+
+---
+
+## 📋 Day 1 Checklist (Before Any Features)
+
+When starting a new project, complete these steps in order:
+
+### 1. Authentication Setup (Day 1, Hour 1)
+- [ ] Choose and configure auth provider (Clerk, Supabase Auth, Auth0)
+- [ ] Add auth provider keys to .env
+- [ ] Install auth SDK packages
+- [ ] Create auth middleware on backend
+- [ ] Set up auth provider on frontend
+
+### 2. API Infrastructure (Day 1, Hour 2)
+- [ ] Create `utils/api.ts` with authenticated fetch wrapper
+- [ ] Configure CORS with `credentials: true`
+- [ ] Add CSRF protection middleware
+- [ ] Create environment validation on startup
+
+### 3. Validation Layer (Day 1, Hour 3)
+- [ ] Install Zod
+- [ ] Create `server/schemas/` directory
+- [ ] Set up validation middleware
+- [ ] Create schema templates (create vs update patterns)
+
+### 4. Testing Setup (Day 1, Hour 4)
+- [ ] Create security testing checklist
+- [ ] Set up integration test framework
+- [ ] Write first auth test
+
+**Rule: DO NOT build features until these 4 steps are complete!**
+
+---
+
+## 🔐 Authentication Rules
+
+### Frontend Auth Patterns
+
+**NEVER use raw `fetch()` except in `utils/api.ts`!**
+
+```typescript
+// ❌ FORBIDDEN - This pattern caused days of debugging
+const response = await fetch('/api/endpoint', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(data)
+});
+
+// ✅ REQUIRED - Always use authenticated fetch wrapper
+import { api } from '@/utils/api';
+const response = await api.post('/api/endpoint', data);
+```
+
+### Required: Create Authenticated Fetch Helper
+
+File: `utils/api.ts` (create this FIRST!)
+
+```typescript
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+  
+  // Get auth token from your provider (Clerk, Supabase, etc.)
+  const token = await getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  // CSRF token for state-changing requests
+  const csrfToken = getCsrfToken();
+  if (csrfToken) {
+    headers['x-csrf-token'] = csrfToken;
+  }
+  
+  return headers;
+}
+
+export async function apiFetch(endpoint: string, options: RequestInit = {}) {
+  const headers = await getAuthHeaders();
+  
+  return fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      ...headers,
+      ...options.headers
+    },
+    credentials: 'include' // CRITICAL: Always include cookies
+  });
+}
+
+export const api = {
+  get: (url: string) => apiFetch(url, { method: 'GET' }),
+  post: (url: string, data: any) => apiFetch(url, { 
+    method: 'POST', 
+    body: JSON.stringify(data) 
+  }),
+  put: (url: string, data: any) => apiFetch(url, { 
+    method: 'PUT', 
+    body: JSON.stringify(data) 
+  }),
+  delete: (url: string) => apiFetch(url, { method: 'DELETE' })
+};
+```
+
+### Required: Centralized API Service
+
+File: `services/api.ts` (create after utils/api.ts)
+
+```typescript
+import { api } from '../utils/api';
+
+// Example for any resource (users, clients, posts, etc.)
+export const resourceService = {
+  getAll: async () => {
+    const res = await api.get('/api/resources');
+    return res.json();
+  },
+  
+  getById: async (id: string) => {
+    const res = await api.get(`/api/resources/${id}`);
+    return res.json();
+  },
+  
+  create: async (data: CreateResourceData) => {
+    const res = await api.post('/api/resources', data);
+    return res.json();
+  },
+  
+  update: async (id: string, data: UpdateResourceData) => {
+    const res = await api.put(`/api/resources/${id}`, data);
+    return res.json();
+  },
+  
+  delete: async (id: string) => {
+    const res = await api.delete(`/api/resources/${id}`);
+    return res.json();
+  }
+};
+```
+
+**Rule: All components import from services/api.ts, NEVER call api directly!**
+
+---
+
+## 🚫 API Endpoint Anti-Patterns (DON'T DO THIS!)
+
+### ❌ WRONG: Generic Update Endpoint
+
+```typescript
+// This caused data overwrites and Phase 2 → Phase 1 reversions!
+router.put('/api/clients/:id', async (req, res) => {
+  await db.client.update({
+    where: { id: req.params.id },
+    data: req.body // Overwrites EVERYTHING! Dangerous!
+  });
+});
+```
+
+**Why this breaks:**
+- Frontend sends full object → overwrites fields you didn't mean to change
+- No way to update just one field safely
+- Validation is complex (all fields optional?)
+- Data loss happens silently
+
+### ✅ RIGHT: Dedicated Endpoints
+
+```typescript
+// Update basic info only
+router.put('/api/clients/:id', validateBody(updateClientSchema), async (req, res) => {
+  const { name, email } = req.body; // Only allowed fields
+  await db.client.update({ where: { id }, data: { name, email } });
+});
+
+// Add note (separate endpoint!)
+router.post('/api/clients/:id/notes', validateBody(createNoteSchema), async (req, res) => {
+  const { content } = req.body;
+  await db.note.create({ data: { clientId: id, content } });
+});
+
+// Update note (separate endpoint!)
+router.put('/api/clients/:id/notes/:noteId', validateBody(updateNoteSchema), async (req, res) => {
+  const { content } = req.body;
+  await db.note.update({ where: { id: noteId }, data: { content } });
+});
+
+// Delete note (separate endpoint!)
+router.delete('/api/clients/:id/notes/:noteId', async (req, res) => {
+  await db.note.delete({ where: { id: noteId } });
+});
+```
+
+**Rule: One endpoint per action. Be specific, not generic!**
+
+---
+
+## 🔒 Backend Security Rules
+
+### Required: CORS Configuration
+
+File: `server/index.ts`
+
+```typescript
+import cors from 'cors';
+
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? [process.env.APP_URL || 'https://your-app.com']
+  : ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001'];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`⚠️ [SECURITY] Blocked CORS request from: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true // CRITICAL! Without this, cookies won't work
+}));
+```
+
+**Rule: NEVER forget `credentials: true` - this broke everything in previous apps!**
+
+### Required: Authentication Middleware
+
+File: `server/middleware/auth.ts`
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+
+// Use your auth provider's middleware (example with Clerk)
+import { ClerkExpressRequireAuth } from '@clerk/clerk-sdk-node';
+export const requireAuth = ClerkExpressRequireAuth();
+
+// Role-based protection
+export function requireRole(roles: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const userRole = req.auth?.sessionClaims?.metadata?.role;
+    if (!userRole || !roles.includes(userRole)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    next();
+  };
+}
+
+// Optional auth (for public + private data)
+export function optionalAuth(req: Request, res: Response, next: NextFunction) {
+  // Try to authenticate, but don't fail if no auth
+  // Implementation depends on your auth provider
+  next();
+}
+```
+
+**Rule: Protect routes by default. Make public endpoints explicitly public.**
+
+### Required: Input Validation
+
+File: `server/middleware/validation.ts`
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+import { z, ZodError } from 'zod';
+
+export function validateBody<T extends z.ZodTypeAny>(schema: T) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      req.body = schema.parse(req.body);
+      next();
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({
+          error: 'Validation failed',
+          details: error.issues.map(e => ({
+            path: e.path.join('.'),
+            message: e.message
+          }))
+        });
+      }
+      next(error);
+    }
+  };
+}
+```
+
+### Required: Validation Schemas
+
+File: `server/schemas/[resource].ts`
+
+```typescript
+import { z } from 'zod';
+
+// CRITICAL: Separate schemas for create vs update!
+
+// Create: All fields required
+export const createResourceSchema = z.object({
+  name: z.string().min(1).max(100),
+  email: z.string().email(),
+  role: z.enum(['admin', 'user'])
+}).strict(); // Reject extra fields
+
+// Update: All fields optional, but validate if present
+export const updateResourceSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  email: z.string().email().optional(),
+  role: z.enum(['admin', 'user']).optional()
+}).strict(); // Reject extra fields
+
+// Nested operations get their own schemas
+export const createNoteSchema = z.object({
+  content: z.string().min(1).max(5000)
+}).strict();
+
+export const updateNoteSchema = z.object({
+  content: z.string().min(1).max(5000)
+}).strict();
+```
+
+**Rule: NEVER mix create and update validation. They have different requirements!**
+
+### Required: Route Template
+
+File: `server/routes/[resource].ts`
+
+```typescript
+import express from 'express';
+import { requireAuth, requireRole } from '../middleware/auth';
+import { validateBody } from '../middleware/validation';
+import { createResourceSchema, updateResourceSchema } from '../schemas/resource';
+
+const router = express.Router();
+
+// PROTECT ALL ROUTES BY DEFAULT
+router.use(requireAuth);
+
+// Get all (with optional filtering)
+router.get('/', async (req, res) => {
+  const resources = await db.resource.findMany();
+  res.json(resources);
+});
+
+// Get one
+router.get('/:id', async (req, res) => {
+  const resource = await db.resource.findUnique({
+    where: { id: req.params.id }
+  });
+  if (!resource) {
+    return res.status(404).json({ error: 'Resource not found' });
+  }
+  res.json(resource);
+});
+
+// Create
+router.post('/',
+  validateBody(createResourceSchema),
+  async (req, res) => {
+    const resource = await db.resource.create({
+      data: req.body // Safe - already validated
+    });
+    res.status(201).json(resource);
+  }
+);
+
+// Update basic info
+router.put('/:id',
+  validateBody(updateResourceSchema),
+  async (req, res) => {
+    const resource = await db.resource.update({
+      where: { id: req.params.id },
+      data: req.body // Safe - only validated fields
+    });
+    res.json(resource);
+  }
+);
+
+// Delete
+router.delete('/:id',
+  requireRole(['admin']), // Only admins can delete
+  async (req, res) => {
+    await db.resource.delete({
+      where: { id: req.params.id }
+    });
+    res.status(204).send();
+  }
+);
+
+// Nested resource example: Add note to resource
+router.post('/:id/notes',
+  validateBody(createNoteSchema),
+  async (req, res) => {
+    const note = await db.note.create({
+      data: {
+        resourceId: req.params.id,
+        content: req.body.content
+      }
+    });
+    res.status(201).json(note);
+  }
+);
+
+export default router;
+```
+
+**Rule: Every route must have auth + validation middleware!**
+
+---
+
+## 🧪 Testing Requirements
+
+### Before Building Next Feature
+
+Test these 4 things:
+
+```typescript
+// 1. Authentication works
+describe('Auth', () => {
+  it('rejects unauthenticated requests', async () => {
+    const res = await fetch('/api/resources');
+    expect(res.status).toBe(401);
+  });
+  
+  it('accepts valid token', async () => {
+    const res = await api.get('/api/resources');
+    expect(res.status).toBe(200);
+  });
+});
+
+// 2. CORS works
+describe('CORS', () => {
+  it('allows requests from allowed origins', async () => {
+    const res = await fetch('/api/resources', {
+      headers: { 'Origin': 'http://localhost:5173' }
+    });
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+  });
+  
+  it('includes credentials', async () => {
+    const res = await api.get('/api/resources');
+    expect(res.headers.get('Access-Control-Allow-Credentials')).toBe('true');
+  });
+});
+
+// 3. Validation works
+describe('Validation', () => {
+  it('rejects invalid data', async () => {
+    const res = await api.post('/api/resources', { invalid: 'data' });
+    expect(res.status).toBe(400);
+  });
+  
+  it('accepts valid data', async () => {
+    const res = await api.post('/api/resources', validData);
+    expect(res.status).toBe(201);
+  });
+});
+
+// 4. No data overwrites
+describe('Data Integrity', () => {
+  it('updates only specified fields', async () => {
+    const original = await createTestResource();
+    await api.put(`/api/resources/${original.id}`, { name: 'New Name' });
+    
+    const updated = await api.get(`/api/resources/${original.id}`);
+    expect(updated.name).toBe('New Name');
+    expect(updated.email).toBe(original.email); // Unchanged!
+  });
+});
+```
+
+**Rule: If any of these 4 tests fail, fix them before continuing!**
+
+---
+
+## 🚨 Enforcement & Warnings
+
+### When to Warn the User
+
+1. **Using raw `fetch()` outside utils/api.ts**
+   - Warning: "Use api.get/post/put/delete instead of raw fetch()"
+   - Remind about authentication headers
+
+2. **Creating generic update endpoint**
+   - Warning: "Create dedicated endpoints for each action instead of generic PUT /resource/:id"
+   - Explain data overwrite risk
+
+3. **Missing authentication middleware**
+   - Warning: "Add requireAuth middleware to protect this route"
+   - Security risk
+
+4. **Missing validation middleware**
+   - Warning: "Add validateBody(schema) middleware to this route"
+   - Data integrity risk
+
+5. **CORS missing credentials: true**
+   - Warning: "Add credentials: true to CORS config or cookies won't work"
+   - Critical error
+
+6. **Sending full object to update endpoint**
+   - Warning: "Only send fields you want to update, not the entire object"
+   - Risk of data overwrites
+
+---
+
+## 📚 Reference: Past Mistakes to Avoid
+
+These patterns caused weeks of debugging in previous apps:
+
+### Mistake 1: Added Auth Later
+- Built 43 files with raw `fetch()`
+- Added Clerk authentication
+- **Result:** All 43 files broke, had to add auth headers manually
+
+### Mistake 2: Generic Update Endpoint
+- Used `PUT /clients/:id` for everything
+- Added "Thursday call note"
+- **Result:** Entire client object sent, overwrote Phase 2 → Phase 1
+
+### Mistake 3: No CSRF on Day 1
+- Built app without CSRF protection
+- Added csurf package later
+- **Result:** 26+ features broke, had to add CSRF tokens everywhere
+
+### Mistake 4: CORS Without Credentials
+- Configured CORS but forgot `credentials: true`
+- **Result:** Cookies not sent, all auth failed mysteriously
+
+### Mistake 5: Single Validation Schema
+- Used same schema for create and update
+- **Result:** Either too strict (update fails) or too loose (create allows invalid data)
+
+**Rule: Learn from these mistakes. Build it right from day 1!**
+
+---
+
+## ✅ Success Criteria
+
+Your app is properly architected if:
+
+- [ ] `utils/api.ts` exists and is the ONLY file with raw `fetch()`
+- [ ] `services/api.ts` exists with all API methods
+- [ ] All API routes have `requireAuth` middleware
+- [ ] All POST/PUT/PATCH routes have validation middleware
+- [ ] CORS includes `credentials: true`
+- [ ] Each action has its own dedicated endpoint
+- [ ] Create and update have separate validation schemas
+- [ ] Auth provider configured on day 1
+- [ ] Security tests pass before first feature deployment
+
+---
+
+## 🎓 For New Developers
+
+If you're new to coding (the user is), here's what you need to know:
+
+1. **Authentication = Login System**
+   - Like the lock on your front door
+   - Set it up FIRST, before building the house
+
+2. **API = How Frontend Talks to Backend**
+   - Like a waiter taking orders to the kitchen
+   - Use the same waiter (api helper) every time, don't yell directly
+
+3. **Validation = Checking Data is Correct**
+   - Like a bouncer checking IDs
+   - Check EVERYTHING before letting it in
+
+4. **CORS = Permission to Talk**
+   - Like international calling permissions
+   - Must say "yes, we accept calls from this number"
+
+5. **CSRF = Protecting Against Fake Requests**
+   - Like requiring a secret handshake
+   - Proves the request is really from your app
+
+**Remember:** Security first, features second. Always.
+
+---
+
+## 📖 Quick Reference Commands
+
+```bash
+# Start new project
+npm create vite@latest my-app
+cd my-app
+
+# Install auth (choose one)
+npm install @clerk/clerk-react @clerk/backend
+# OR
+npm install @supabase/supabase-js
+
+# Install security packages
+npm install cors cookie-parser csurf helmet
+npm install zod
+npm install -D @types/cors @types/cookie-parser @types/csurf
+
+# Create required files (in order!)
+touch utils/api.ts
+touch server/middleware/auth.ts
+touch server/middleware/validation.ts
+touch server/schemas/.gitkeep
+touch services/api.ts
+
+# Set up environment
+cp .env.example .env
+# Add: AUTH_KEY, API_URL, CORS_ORIGINS, etc.
+
+# Test before building features
+npm test
+```
+
+---
+
+## 🎯 Final Reminder
+
+**The #1 Rule That Prevents All These Issues:**
+
+> Build authentication and security infrastructure on Day 1.
+> Never add it later. It's not a feature, it's the foundation.
+
+If you follow this rule, you'll never experience the "security audit breaks everything" problem again.
+
+---
+
+**These rules are based on real debugging sessions in audioroad-broadcast and fntp-ai-assessment-tool where retrofitting auth caused 26+ features to break and required weeks of fixes.**
+
