@@ -505,17 +505,30 @@ router.post('/conference-status', verifyTwilioWebhook, async (req: Request, res:
     if (StatusCallbackEvent === 'conference-end' && ConferenceSid) {
       console.log('📴 [CONFERENCE] Conference ended:', ConferenceSid);
       
+      // DON'T automatically close phone lines when conference ends!
+      // The conference can end temporarily when all participants leave (e.g., during screening)
+      // Phone lines should only close when host explicitly closes them via UI
+      // 
+      // REMOVED: Setting conferenceActive = false here
+      // This was causing "No active episode" errors for subsequent callers
+      
+      console.log('ℹ️ [CONFERENCE] Phone lines remain OPEN - conference will restart when next participant joins');
+      
+      // Optional: Clear the conference SID so a new one is created on next join
+      // This prevents trying to use a dead conference
       try {
         const episode = await prisma.episode.findFirst({
           where: { twilioConferenceSid: ConferenceSid }
         });
         
-        if (episode) {
+        if (episode && episode.status === 'scheduled') {
+          // Only clear SID for scheduled episodes (lines open but show not started)
+          // Keep it for live episodes so we can track the conference
           await prisma.episode.update({
             where: { id: episode.id },
-            data: { conferenceActive: false }
+            data: { twilioConferenceSid: null } // Will be recreated on next join
           });
-          console.log('✅ [CONFERENCE] Episode marked conference inactive');
+          console.log('✅ [CONFERENCE] Conference SID cleared - will recreate on next join');
         }
       } catch (error) {
         console.error('❌ [CONFERENCE] Failed to update episode:', error);
@@ -1362,6 +1375,46 @@ router.get('/audio-chunk', async (req: Request, res: Response) => {
     if (!res.headersSent) {
       res.status(500).send('Error generating audio chunk');
     }
+  }
+});
+
+/**
+ * POST /api/twilio/voicemail-complete - Callback when voicemail recording completes
+ * Twilio calls this after a voicemail is recorded
+ */
+router.post('/voicemail-complete', verifyTwilioWebhook, async (req: Request, res: Response) => {
+  try {
+    console.log('📧 [VOICEMAIL] Voicemail recording complete');
+    console.log('   RecordingSid:', req.body.RecordingSid);
+    console.log('   CallSid:', req.body.CallSid);
+    
+    // TODO: Store voicemail recording URL in database if needed
+    // For now, just acknowledge receipt
+    
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('❌ [VOICEMAIL] Error handling voicemail complete:', error);
+    res.sendStatus(500);
+  }
+});
+
+/**
+ * POST /api/twilio/voicemail-transcription - Callback when voicemail transcription completes
+ * Twilio calls this after transcribing a voicemail
+ */
+router.post('/voicemail-transcription', verifyTwilioWebhook, async (req: Request, res: Response) => {
+  try {
+    console.log('📝 [VOICEMAIL] Voicemail transcription complete');
+    console.log('   TranscriptionText:', req.body.TranscriptionText?.substring(0, 100));
+    console.log('   CallSid:', req.body.CallSid);
+    
+    // TODO: Store transcription in database if needed
+    // For now, just acknowledge receipt
+    
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('❌ [VOICEMAIL] Error handling voicemail transcription:', error);
+    res.sendStatus(500);
   }
 });
 
