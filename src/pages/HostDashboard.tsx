@@ -306,6 +306,21 @@ export default function HostDashboard() {
     try {
       console.log('🎙️ [START-BROADCAST] Starting show broadcast...');
       
+      // CRITICAL: Ensure Twilio device is initialized BEFORE starting
+      if (!broadcast.twilioDevice) {
+        console.log('⚠️ [START-BROADCAST] Twilio device not initialized, initializing now...');
+        try {
+          await broadcast.initializeTwilio(`host-${Date.now()}`);
+          console.log('✅ [START-BROADCAST] Twilio device initialized');
+          // Wait a moment for device to fully register
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (deviceError) {
+          console.error('❌ [START-BROADCAST] Failed to initialize Twilio device:', deviceError);
+          alert('Failed to initialize phone system. Please refresh the page and try again.');
+          return;
+        }
+      }
+      
       // CRITICAL: Disconnect any existing calls first (e.g., if you were on Screening Room)
       if (broadcast.activeCalls.size > 0) {
         console.log('📞 [START-BROADCAST] Disconnecting existing calls before starting show...');
