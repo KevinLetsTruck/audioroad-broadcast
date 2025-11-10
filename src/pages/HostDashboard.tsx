@@ -417,11 +417,12 @@ export default function HostDashboard() {
         // Continue anyway - not critical to show starting
       }
       
-      // IMPORTANT: Wait a moment for hold state to fully clear in Twilio
-      // Without this delay, callers won't hear announcements/opener
-      console.log('⏳ [START-BROADCAST] Waiting for hold state to clear...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      console.log('✅ [START-BROADCAST] Ready to play audio');
+      // IMPORTANT: Wait for hold music to FULLY STOP in Twilio
+      // Twilio's hold music takes time to stop - if we play opener too soon, both play at once!
+      console.log('⏳ [START-BROADCAST] Waiting for hold music to stop...');
+      console.log('   This prevents music+opener overlap');
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Increased to 3 seconds
+      console.log('✅ [START-BROADCAST] Hold music stopped, ready to play audio');
       
       // Step 7: Play today's announcements (if enabled)
       // NOTE: Announcements play through mixer (for stream) AND Twilio conference (for callers)
