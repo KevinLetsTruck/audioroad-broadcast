@@ -481,6 +481,20 @@ export default function HostDashboard() {
         const sourcesBefore = mixerInstance.getSources();
         console.log('🔍 [DEBUG] Active audio sources before opener:', JSON.stringify(sourcesBefore.map(s => ({ id: s.id, type: s.type, label: s.label, volume: s.volume, muted: s.muted })), null, 2));
         
+        // CRITICAL: Check if mic is capturing system audio (macOS issue)
+        const hostMicSource = sourcesBefore.find(s => s.id === 'host-mic');
+        if (hostMicSource && hostMicSource.stream) {
+          const tracks = hostMicSource.stream.getAudioTracks();
+          tracks.forEach(track => {
+            console.log(`🔍 [DEBUG] Mic track settings:`, {
+              label: track.label,
+              enabled: track.enabled,
+              muted: track.muted,
+              settings: track.getSettings()
+            });
+          });
+        }
+        
         // Play through mixer (for stream/recording)
         const mixerPlayPromise = mixerInstance.playAudioFile(show.openerAudioUrl);
         
