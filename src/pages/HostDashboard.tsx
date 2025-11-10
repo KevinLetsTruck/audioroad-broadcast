@@ -478,7 +478,8 @@ export default function HostDashboard() {
       // Step 8: Play show opener 
       if (show?.openerAudioUrl) {
         console.log('🎵 [OPENER] Playing show opener...');
-        console.log('🔍 [DEBUG] Active audio sources before opener:', mixerInstance.getSources().map(s => ({ id: s.id, type: s.type, label: s.label })));
+        const sourcesBefore = mixerInstance.getSources();
+        console.log('🔍 [DEBUG] Active audio sources before opener:', JSON.stringify(sourcesBefore.map(s => ({ id: s.id, type: s.type, label: s.label, volume: s.volume, muted: s.muted })), null, 2));
         
         // Play through mixer (for stream/recording)
         const mixerPlayPromise = mixerInstance.playAudioFile(show.openerAudioUrl);
@@ -510,7 +511,14 @@ export default function HostDashboard() {
         });
         
         console.log('✅ [OPENER] Opener played');
-        console.log('🔍 [DEBUG] Active audio sources after opener:', mixerInstance.getSources().map(s => ({ id: s.id, type: s.type, label: s.label })));
+        const sourcesAfter = mixerInstance.getSources();
+        console.log('🔍 [DEBUG] Active audio sources after opener:', JSON.stringify(sourcesAfter.map(s => ({ id: s.id, type: s.type, label: s.label, volume: s.volume, muted: s.muted })), null, 2));
+        
+        // Check for any unexpected audio sources
+        const unexpectedSources = sourcesAfter.filter(s => s.id !== 'host-mic' && s.type !== 'file');
+        if (unexpectedSources.length > 0) {
+          console.warn('⚠️ [DEBUG] Found unexpected audio sources:', unexpectedSources);
+        }
       }
       
       console.log('🎉 SHOW STARTED! You are LIVE!');
