@@ -76,8 +76,9 @@ function connectToStreamingServer() {
 }
 
 export function initializeStreamSocketHandlers(io: SocketIOServer): void {
-  // Connect to dedicated streaming server on initialization
-  connectToStreamingServer();
+  // Streaming server connection disabled - no external streaming server exists
+  // connectToStreamingServer();
+  console.log('ℹ️ [STREAM] External streaming server disabled - using local streaming only');
   
   io.on('connection', (socket) => {
     console.log(`🔌 Client connected for streaming: ${socket.id}`);
@@ -91,12 +92,15 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         console.log(`🎙️ [STREAM] Starting live broadcast - forwarding to dedicated streaming server...`);
 
         // Notify dedicated streaming server that live show is starting
+        // DISABLED - no external streaming server exists
+        /*
         if (streamingServerSocket && streamingServerSocket.connected) {
           streamingServerSocket.emit('live-start');
           console.log('✅ [STREAM] Dedicated streaming server notified - Auto DJ will pause');
         } else {
           console.warn('⚠️ [STREAM] Cannot notify streaming server (not connected)');
         }
+        */
         
         // Mark as live broadcasting (tracked by dedicated streaming server now)
 
@@ -242,6 +246,8 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         }
         
         // Forward to dedicated streaming server (handles Auto DJ and external platforms)
+        // DISABLED - no external streaming server exists
+        /*
         if (streamingServerSocket && streamingServerSocket.connected) {
           streamingServerSocket.emit('live-audio', float32Data);
         } else {
@@ -251,6 +257,7 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
             console.error('   Will attempt reconnection automatically...');
           }
         }
+        */
         
         // Audio sent to: Radio.co (optional) + Local HLS (phone) + Streaming server (24/7)
       } catch (error) {
@@ -321,10 +328,13 @@ export function initializeStreamSocketHandlers(io: SocketIOServer): void {
         // DON'T stop local streams - they're for phone callers during shows only
         
         // Tell dedicated streaming server to resume Auto DJ (ONLY ONCE)
+        // DISABLED - no external streaming server exists
+        /*
         if (streamingServerSocket && streamingServerSocket.connected) {
           streamingServerSocket.emit('live-stop');
           console.log('✅ Notified streaming server - Auto DJ will resume (dedicated server stays live)');
         }
+        */
       } else {
         console.log(`ℹ️  [STREAM] Broadcaster disconnected (${activeRadioStreams.size} still active)`);
       }
