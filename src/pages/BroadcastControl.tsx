@@ -317,11 +317,11 @@ export default function BroadcastControl() {
     try {
       console.log('📴 [CLOSE-LINES] Closing phone lines...');
       
-      // CRITICAL: Disconnect all Twilio calls and stop microphones FIRST
-      // This prevents screener mic staying connected to next session
-      console.log('🧹 [CLOSE-LINES] Disconnecting all Twilio calls...');
+      // CRITICAL: Disconnect active calls and stop mixer
+      // But KEEP Twilio device so lines can be reopened without page refresh
+      console.log('🧹 [CLOSE-LINES] Disconnecting active calls...');
       try {
-        // Disconnect all calls
+        // Disconnect all active calls
         if (broadcast.activeCalls.size > 0) {
           await broadcast.disconnectCurrentCall();
           console.log('✅ [CLOSE-LINES] Twilio calls disconnected');
@@ -333,11 +333,9 @@ export default function BroadcastControl() {
           console.log('✅ [CLOSE-LINES] Mixer destroyed, microphones stopped');
         }
         
-        // Destroy Twilio device to fully disconnect
-        if (broadcast.twilioDevice) {
-          await broadcast.destroyTwilioDevice();
-          console.log('✅ [CLOSE-LINES] Twilio device destroyed');
-        }
+        // NOTE: We keep the Twilio device alive so lines can be reopened
+        // without requiring page refresh. Device will be reused.
+        console.log('ℹ️ [CLOSE-LINES] Twilio device kept alive for reuse');
       } catch (cleanupError) {
         console.error('⚠️ [CLOSE-LINES] Error during cleanup:', cleanupError);
         // Continue anyway - still close lines in database
