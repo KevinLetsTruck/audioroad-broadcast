@@ -273,9 +273,9 @@ export async function moveParticipantToLiveConference(
           startConferenceOnEnter: false, // Don't start - host already in conference
           endConferenceOnExit: false,
           muted: true, // Join muted
-          hold: false, // NOT on hold - hear live conference audio!
-          beep: false
-        });
+          hold: false // NOT on hold - hear live conference audio!
+          // No beep parameter - silent join
+        } as any);
       
       console.log(`✅ [CONFERENCE] Added to live conference (can hear show)`);
     } catch (addError: any) {
