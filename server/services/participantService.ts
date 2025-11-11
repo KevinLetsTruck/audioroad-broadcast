@@ -215,12 +215,16 @@ export class ParticipantService {
         throw new Error('Call or conference not found');
       }
 
-      // CRITICAL: Use LIVE conference
-      const { getLiveConferenceName } = await import('../utils/conferenceNames.js');
-      const liveConference = getLiveConferenceName(call.episodeId);
+      // CRITICAL: Use actual LIVE conference SID (not friendly name!)
+      // REST API requires SIDs, not names
+      const liveConferenceSid = call.episode?.liveConferenceSid;
+      
+      if (!liveConferenceSid) {
+        throw new Error(`Episode ${call.episodeId} has no LIVE conference SID`);
+      }
       
       console.log(`⏸️ [PARTICIPANT] Putting on hold: ${callId}`);
-      console.log(`   Using: ${liveConference} (LIVE)`);
+      console.log(`   LIVE Conference SID: ${liveConferenceSid}`);
 
       try {
         const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
@@ -228,7 +232,7 @@ export class ParticipantService {
         // Mute and apply hold in LIVE conference
         await retryTwilioCall(
           () => twilioClient
-            .conferences(liveConference)
+            .conferences(liveConferenceSid)
             .participants(call.twilioCallSid)
             .update({ muted: true }),
           'Mute participant'
@@ -238,7 +242,7 @@ export class ParticipantService {
         
         await retryTwilioCall(
           () => twilioClient
-            .conferences(liveConference)
+            .conferences(liveConferenceSid)
             .participants(call.twilioCallSid)
             .update({
               hold: true,
@@ -251,7 +255,7 @@ export class ParticipantService {
         console.log(`✅ [TWILIO] On hold in LIVE`);
       } catch (twilioError: any) {
         console.error(`❌ [TWILIO] Failed:`, twilioError.message);
-        console.error(`   Conf: ${liveConference}, Call: ${call.twilioCallSid}`);
+        console.error(`   Conf SID: ${liveConferenceSid}, Call: ${call.twilioCallSid}`);
       }
 
       // Update database
