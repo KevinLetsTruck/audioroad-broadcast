@@ -63,15 +63,16 @@ router.post('/voice', async (req: Request, res: Response) => {
     console.log('  - callId:', callId);
     console.log('  - episodeId:', episodeId);
 
-    // If this is a screener or host connecting, route to conference join
+    // If this is a screener or host connecting, route to appropriate conference
     if ((role === 'screener' || role === 'host') && (callId || episodeId)) {
       let conferenceName = '';
       let episode = null;
+      let targetEpisodeId = '';
       
       // HOST uses episodeId directly (callId is just "host-{episodeId}", not a real Call record)
       if (role === 'host' && episodeId) {
-        conferenceName = `episode-${episodeId}`;
         episode = await prisma.episode.findUnique({ where: { id: episodeId } });
+        targetEpisodeId = episodeId;
       }
       // SCREENER uses actual Call record
       else if (callId) {
@@ -84,28 +85,35 @@ router.post('/voice', async (req: Request, res: Response) => {
           return res.status(404).send('Call not found');
         }
         
-        conferenceName = `episode-${call.episodeId}`;
         episode = call.episode;
+        targetEpisodeId = call.episodeId;
       } else if (episodeId) {
-        conferenceName = `episode-${episodeId}`;
         episode = await prisma.episode.findUnique({ where: { id: episodeId } });
+        targetEpisodeId = episodeId;
       }
 
-      // CRITICAL: Both screener AND host start conference (prevents "Decline" if conference died)
-      // Twilio will reuse existing conference if it's still active
-      const startConference = true;
+      // CRITICAL: Route to correct conference based on role
+      const { getScreeningConferenceName, getLiveConferenceName } = await import('../utils/conferenceNames.js');
       
-      console.log(`🎙️ ${role} joining conference:`, conferenceName);
-      console.log(`   startConferenceOnEnter: ${startConference} (${role} always starts/restarts)`);
+      if (role === 'screener') {
+        // Screener joins SCREENING conference to privately screen callers
+        conferenceName = getScreeningConferenceName(targetEpisodeId);
+        console.log(`🎙️ screener joining conference:`, conferenceName);
+        console.log(`   startConferenceOnEnter: true (screener always starts/restarts)`);
+      } else {
+        // Host joins LIVE conference (the actual show)
+        conferenceName = getLiveConferenceName(targetEpisodeId);
+        console.log(`🎙️ host joining conference:`, conferenceName);
+        console.log(`   startConferenceOnEnter: true (host always starts/restarts)`);
+      }
 
-      // 🎧 Host joins UNMUTED so callers can hear them
-      // Host mic goes to Twilio (for callers) AND mixer (for broadcast stream)
-      // No feedback because host hears callers through Twilio, not themselves
+      // Host joins UNMUTED so callers can hear them
+      // Screener joins UNMUTED so they can talk during screening
       const twiml = generateTwiML('conference', { 
         conferenceName,
-        startConferenceOnEnter: startConference,
-        endConferenceOnExit: false,  // DON'T end conference - keep alive for whole episode!
-        muted: false  // Host unmuted so callers can hear them
+        startConferenceOnEnter: true,
+        endConferenceOnExit: false,  // DON'T end conference
+        muted: false  // Both unmuted
       });
 
       return res.type('text/xml').send(twiml);
