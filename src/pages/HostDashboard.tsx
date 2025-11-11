@@ -489,7 +489,7 @@ export default function HostDashboard() {
         
         // CRITICAL: Check if mic is capturing system audio (macOS issue)
         const hostMicSource = sourcesBefore.find(s => s.id === 'host-mic');
-        if (hostMicSource?.stream) {
+        if (hostMicSource && hostMicSource.stream) {
           const tracks = hostMicSource.stream.getAudioTracks();
           tracks.forEach(track => {
             console.log(`🔍 [DEBUG] Mic track settings:`, {
