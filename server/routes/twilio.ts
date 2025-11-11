@@ -502,16 +502,33 @@ router.post('/conference-status', verifyTwilioWebhook, async (req: Request, res:
 
     // When conference starts, store the SID in episode
     if (StatusCallbackEvent === 'conference-start' && ConferenceSid && FriendlyName) {
-      const episodeId = FriendlyName.replace('episode-', '');
-      console.log('🎙️ [CONFERENCE] Conference started for episode:', episodeId);
+      // Extract episode ID from conference name (strip screening- or live- prefix)
+      const episodeId = FriendlyName.replace('screening-', '').replace('live-', '').replace('episode-', '');
+      const isScreening = FriendlyName.startsWith('screening-');
+      const isLive = FriendlyName.startsWith('live-');
+      
+      console.log(`🎙️ [CONFERENCE] ${isScreening ? 'SCREENING' : 'LIVE'} conference started for episode: ${episodeId}`);
+      console.log(`   Conference SID: ${ConferenceSid}`);
       
       try {
+        const updateData: any = {
+          conferenceActive: true
+        };
+        
+        // Store SID in correct field
+        if (isScreening) {
+          updateData.screeningConferenceSid = ConferenceSid;
+          console.log('   Storing as screeningConferenceSid');
+        } else if (isLive) {
+          updateData.liveConferenceSid = ConferenceSid;
+          console.log('   Storing as liveConferenceSid');
+        } else {
+          updateData.twilioConferenceSid = ConferenceSid;
+        }
+        
         await prisma.episode.update({
           where: { id: episodeId },
-          data: {
-            twilioConferenceSid: ConferenceSid,
-            conferenceActive: true
-          }
+          data: updateData
         });
         console.log('✅ [CONFERENCE] Episode updated with conference SID');
       } catch (error) {

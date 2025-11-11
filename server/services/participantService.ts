@@ -38,23 +38,25 @@ export class ParticipantService {
         throw new Error(`Call ${callId} has no Twilio CallSid`);
       }
 
-      // CRITICAL: Use LIVE conference
-      const { getLiveConferenceName } = await import('../utils/conferenceNames.js');
-      const liveConference = getLiveConferenceName(call.episodeId);
+      // CRITICAL: Use actual LIVE conference SID from database
+      const liveConferenceSid = call.episode?.liveConferenceSid;
+      
+      if (!liveConferenceSid) {
+        console.error(`❌ [PARTICIPANT] Episode ${call.episodeId} has no LIVE conference SID!`);
+        throw new Error(`Episode ${call.episodeId} has no live conference - host must start show first`);
+      }
       
       console.log(`📡 [PARTICIPANT] Putting on air: ${callId}`);
-      console.log(`   Target: ${liveConference} (LIVE)`);
+      console.log(`   LIVE Conference SID: ${liveConferenceSid}`);
       console.log(`   CallSid: ${call.twilioCallSid}`);
-
-      const conferenceSidToUse = liveConference;
 
       try {
         // First, check if conference exists and list participants
         const conference = await twilioClient
-          .conferences(conferenceSidToUse)
+          .conferences(liveConferenceSid)
           .fetch()
           .catch(() => {
-            console.log(`⚠️ [CONFERENCE] Conference not found: ${conferenceSidToUse}`);
+            console.log(`⚠️ [CONFERENCE] Conference not found: ${liveConferenceSid}`);
             return null;
           });
 
@@ -63,7 +65,7 @@ export class ParticipantService {
           
           // List all participants to find the right one
           const participants = await twilioClient
-            .conferences(conferenceSidToUse)
+            .conferences(liveConferenceSid)
             .participants
             .list();
           
@@ -84,7 +86,7 @@ export class ParticipantService {
             // Unmute AND take off hold so caller can hear conference directly
             await retryTwilioCall(
               () => twilioClient
-                .conferences(conferenceSidToUse)
+                .conferences(liveConferenceSid)
                 .participants(call.twilioCallSid)
                 .update({
                   muted: false,
@@ -102,7 +104,7 @@ export class ParticipantService {
             console.log(`✅ [TWILIO] Successfully unmuted participant and started recording`);
           }
         } else {
-          console.warn(`⚠️ [CONFERENCE] Conference ${conferenceSidToUse} doesn't exist yet`);
+          console.warn(`⚠️ [CONFERENCE] Conference ${liveConferenceSid} doesn't exist yet`);
           // Just update database state
         }
       } catch (twilioError: any) {
@@ -300,25 +302,31 @@ export class ParticipantService {
         throw new Error(`Call ${callId} has no Twilio CallSid`);
       }
 
-      // Determine which conference based on status
-      const { getScreeningConferenceName, getLiveConferenceName } = await import('../utils/conferenceNames.js');
+      // CRITICAL: Use actual conference SID from database, not friendly name
       const isScreening = call.status === 'screening';
-      const conferenceSidToUse = isScreening 
-        ? getScreeningConferenceName(call.episodeId)
-        : getLiveConferenceName(call.episodeId);
+      const conferenceSid = isScreening 
+        ? call.episode?.screeningConferenceSid
+        : call.episode?.liveConferenceSid;
+      
+      if (!conferenceSid) {
+        console.error(`❌ [PARTICIPANT] No ${isScreening ? 'SCREENING' : 'LIVE'} conference SID in database!`);
+        console.error(`   Episode ${call.episodeId} screeningConferenceSid: ${call.episode?.screeningConferenceSid}`);
+        console.error(`   Episode ${call.episodeId} liveConferenceSid: ${call.episode?.liveConferenceSid}`);
+        throw new Error(`Episode ${call.episodeId} has no ${isScreening ? 'screening' : 'live'} conference SID`);
+      }
       
       console.log(`🔊 [PARTICIPANT] Unmuting: ${callId}`);
       console.log(`   Status: ${call.status}`);
-      console.log(`   Conference: ${conferenceSidToUse} (${isScreening ? 'SCREENING' : 'LIVE'})`);
+      console.log(`   Conference SID: ${conferenceSid} (${isScreening ? 'SCREENING' : 'LIVE'})`);
       console.log(`   CallSid: ${call.twilioCallSid}`);
 
       try {
         // First, check if conference exists and list participants
         const conference = await twilioClient
-          .conferences(conferenceSidToUse)
+          .conferences(conferenceSid)
           .fetch()
           .catch(() => {
-            console.log(`⚠️ [CONFERENCE] Conference not found: ${conferenceSidToUse}`);
+            console.log(`⚠️ [CONFERENCE] Conference not found: ${conferenceSid}`);
             return null;
           });
 
@@ -327,7 +335,7 @@ export class ParticipantService {
           
           // List all participants to find the right one
           const participants = await twilioClient
-            .conferences(conferenceSidToUse)
+            .conferences(conferenceSid)
             .participants
             .list();
           
@@ -348,7 +356,7 @@ export class ParticipantService {
             // Unmute the participant using their call SID (silently)
             await retryTwilioCall(
               () => twilioClient
-                .conferences(conferenceSidToUse)
+                .conferences(conferenceSid)
                 .participants(call.twilioCallSid)
                 .update({ muted: false }),
               'Unmute participant'
@@ -357,7 +365,7 @@ export class ParticipantService {
             console.log(`✅ [TWILIO] Successfully unmuted participant in conference`);
           }
         } else {
-          console.warn(`⚠️ [CONFERENCE] Conference ${conferenceSidToUse} doesn't exist yet`);
+          console.warn(`⚠️ [CONFERENCE] Conference ${conferenceSid} doesn't exist yet`);
           // Just update database state
         }
       } catch (twilioError: any) {
