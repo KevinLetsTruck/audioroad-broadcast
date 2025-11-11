@@ -28,6 +28,30 @@ router.post('/play-in-conference', async (req: Request, res: Response) => {
 
     console.log(`🎵 [TWILIO-PLAY] Playing audio in conference for episode: ${episodeId}`);
     console.log(`   Audio URL: ${audioUrl}`);
+    
+    // CRITICAL: Verify audio file is accessible and in correct format
+    try {
+      const audioCheck = await fetch(audioUrl, { method: 'HEAD' });
+      const contentType = audioCheck.headers.get('content-type');
+      console.log(`   Audio file check: ${audioCheck.status} - Content-Type: ${contentType}`);
+      
+      if (contentType && !contentType.includes('audio/mpeg') && !contentType.includes('audio/mp3')) {
+        console.error(`❌ [TWILIO-PLAY] WRONG AUDIO FORMAT: ${contentType}`);
+        console.error(`   Twilio requires MP3 format (audio/mpeg)`);
+        console.error(`   Current file is: ${contentType}`);
+        console.error(`   This is why callers can't hear the audio!`);
+        return res.status(400).json({ 
+          error: 'Audio format not supported',
+          details: `File is ${contentType}, Twilio requires MP3 (audio/mpeg)`,
+          message: 'Please convert the audio file to MP3 format'
+        });
+      }
+      
+      console.log(`✅ [TWILIO-PLAY] Audio format valid for Twilio`);
+    } catch (checkError) {
+      console.warn(`⚠️ [TWILIO-PLAY] Could not verify audio file:`, checkError);
+      // Continue anyway - let Twilio try
+    }
 
     // Get episode to find conference SID
     const episode = await prisma.episode.findUnique({
