@@ -848,20 +848,34 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
       }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
     }
     
-    // Connect to conference with smart wait audio (live show or hold music)
-    // Uses LOCAL HLS server (started when broadcast begins)
+    // CRITICAL: If show is LIVE, don't use waitUrl - let callers hear conference audio directly
+    // If show NOT live yet, use waitUrl for hold music
+    const isShowLive = episode.status === 'live';
+    
+    console.log(`🎙️ [WELCOME-MESSAGE] Show status: ${episode.status} (live: ${isShowLive})`);
+    
     const dial = twiml.dial();
-    dial.conference({
-      startConferenceOnEnter: true, // IMPORTANT: Caller can keep conference alive when waiting for host
-      endConferenceOnExit: false, // Don't end when caller leaves
-      waitUrl: `${appUrl}/api/twilio/wait-audio`, // Radio.co stream (Auto DJ or Live)
-      waitMethod: 'POST',
+    const conferenceOptions: any = {
+      startConferenceOnEnter: true,
+      endConferenceOnExit: false,
       maxParticipants: 40,
-      muted: true, // Join MUTED for privacy - screener will unmute when picking up
+      muted: true, // Join MUTED for privacy - screener will unmute
       statusCallback: `${appUrl}/api/twilio/conference-status`,
       statusCallbackEvent: ['start', 'end', 'join', 'leave'],
       statusCallbackMethod: 'POST'
-    }, conferenceName);
+    };
+    
+    // ONLY use waitUrl if show is NOT live yet (pre-show callers need hold music)
+    // Once show is LIVE, callers hear conference audio directly (host mic, show content)
+    if (!isShowLive) {
+      conferenceOptions.waitUrl = `${appUrl}/api/twilio/wait-audio`;
+      conferenceOptions.waitMethod = 'POST';
+      console.log(`   Using waitUrl for hold music (show not live yet)`);
+    } else {
+      console.log(`   No waitUrl - callers will hear LIVE conference audio immediately`);
+    }
+    
+    dial.conference(conferenceOptions, conferenceName);
 
     const twimlString = twiml.toString();
     console.log('✅ [WELCOME-MESSAGE] TwiML generated:');
