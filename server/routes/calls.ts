@@ -287,15 +287,17 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
         const screeningConf = getScreeningConferenceName(call.episodeId);
         const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
         
-        await twilioClient
-          .conferences(screeningConf)
-          .participants(call.twilioCallSid)
-          .update({
-            muted: true,
-            hold: true,
-            holdUrl: `${appUrl}/api/twilio/wait-audio`,
-            holdMethod: 'POST'
-          } as any);
+        if (twilioClient) {
+          await twilioClient
+            .conferences(screeningConf)
+            .participants(call.twilioCallSid)
+            .update({
+              muted: true,
+              hold: true,
+              holdUrl: `${appUrl}/api/twilio/wait-audio`,
+              holdMethod: 'POST'
+            } as any);
+        }
         
         console.log(`✅ [APPROVE] On hold in SCREENING (will move to LIVE when show starts)`);
       } catch (holdError: any) {
