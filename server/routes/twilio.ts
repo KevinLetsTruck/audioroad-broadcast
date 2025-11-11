@@ -318,7 +318,10 @@ router.post('/incoming-call', verifyTwilioWebhook, async (req: Request, res: Res
     
     console.log(`✅ [INCOMING] Found episode: ${activeEpisode.title} (status=${activeEpisode.status}, conferenceActive=${activeEpisode.conferenceActive})`);
 
-    // Create call record first
+    // Create call record - starts in SCREENING conference
+    const { getScreeningConferenceName } = await import('../utils/conferenceNames.js');
+    const screeningConf = getScreeningConferenceName(activeEpisode.id);
+    
     const call = await prisma.call.create({
       data: {
         episodeId: activeEpisode.id,
@@ -327,9 +330,10 @@ router.post('/incoming-call', verifyTwilioWebhook, async (req: Request, res: Res
         status: 'queued',
         incomingAt: new Date(),
         queuedAt: new Date(),
-        twilioConferenceSid: `episode-${activeEpisode.id}`,
-        participantState: 'screening', // Will be picked up by screener
-        isMutedInConference: true // Starts muted
+        twilioConferenceSid: screeningConf,
+        currentConferenceType: 'screening',
+        participantState: 'screening',
+        isMutedInConference: true
       }
     });
 
