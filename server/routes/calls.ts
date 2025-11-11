@@ -262,39 +262,24 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       }
     });
 
-    // Put participant on hold with Radio.co stream (ONLY if not already on hold)
-    // Re-setting holdUrl causes audio to restart/rewind - avoid it!
-    if (call.twilioCallSid && call.episode?.twilioConferenceSid && twilioClient) {
+    // CRITICAL: Move participant from SCREENING to LIVE conference
+    // This is the key to two-conference architecture
+    if (call.twilioCallSid) {
       try {
-        const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
-        const conferenceSid = call.episode.twilioConferenceSid; // MUST use episode SID
+        console.log(`🔄 [APPROVE] Moving participant from SCREENING to LIVE conference`);
+        console.log(`   CallSid: ${call.twilioCallSid}`);
+        console.log(`   Episode: ${call.episodeId}`);
         
-        console.log(`📞 [APPROVE] Putting participant on hold with music`);
-        console.log(`   Conference SID: ${conferenceSid}`);
-        console.log(`   Participant: ${call.twilioCallSid}`);
+        const { moveParticipantToLiveConference } = await import('../services/conferenceService.js');
+        await moveParticipantToLiveConference(call.twilioCallSid, call.episodeId);
         
-        // Keep on hold with music until show starts (prevents silence when conference is empty)
-        // Host will take them off hold when starting the show
-        await twilioClient
-          .conferences(conferenceSid)
-          .participants(call.twilioCallSid)
-          .update({
-            muted: true,  // Mic off (can't talk)
-            hold: true,   // Hear hold music (not silence!)
-            holdUrl: `${appUrl}/api/twilio/wait-audio`,
-            holdMethod: 'POST'
-          } as any);
-        
-        console.log(`✅ [APPROVE] Participant on hold with music (queue position ${finalPosition})`);
-        console.log(`   Will be taken off hold when show starts`);
-      } catch (holdError: any) {
-        console.error('❌ [APPROVE] Failed to set hold status:', holdError);
-        console.error(`   Error: ${holdError.message}`);
-        console.error(`   Code: ${holdError.code}`);
-        // Continue anyway - database is updated
+        console.log(`✅ [APPROVE] Participant moved to LIVE conference (queue position ${finalPosition})`);
+        console.log(`   They can now hear host + show content while waiting`);
+      } catch (moveError: any) {
+        console.error('❌ [APPROVE] Failed to move to live conference:', moveError);
+        console.error(`   Error: ${moveError.message}`);
+        // Continue anyway - database is updated, they'll be moved manually if needed
       }
-    } else if (!call.episode?.twilioConferenceSid) {
-      console.warn(`⚠️ [APPROVE] Episode has no conference SID - cannot set hold status`);
     }
 
     const io = req.app.get('io');
