@@ -280,37 +280,28 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
         console.error('❌ [APPROVE] Failed to move:', moveError.message);
       }
     } else if (call.twilioCallSid && !isShowLive) {
-      // Show not live yet - put on hold in SCREENING conference with music
+      // Show not live yet - redirect to listen to hold music
+      // (When show starts, they'll be redirected to live stream)
       try {
-        console.log(`📞 [APPROVE] Show not live yet, keeping in SCREENING with hold music`);
+        console.log(`📞 [APPROVE] Show not live, caller will hear hold music`);
         
-        // CRITICAL: Use actual conference SID from episode, not friendly name
-        const screeningConferenceSid = call.episode?.screeningConferenceSid;
+        const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
         
-        if (!screeningConferenceSid) {
-          console.warn('⚠️ [APPROVE] No screening conference SID, cannot put on hold');
-          console.warn('   Caller will hear live conference audio when it starts');
-        } else {
-          const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+        if (twilioClient) {
+          // Redirect call to hold music endpoint
+          await twilioClient
+            .calls(call.twilioCallSid)
+            .update({
+              twiml: `<?xml version="1.0" encoding="UTF-8"?>
+                <Response>
+                  <Play loop="10">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+                </Response>`
+            });
           
-          if (twilioClient) {
-            console.log(`   Using screening conference SID: ${screeningConferenceSid}`);
-            await twilioClient
-              .conferences(screeningConferenceSid)
-              .participants(call.twilioCallSid)
-              .update({
-                muted: true,
-                hold: true,
-                holdUrl: `${appUrl}/api/twilio/wait-audio`,
-                holdMethod: 'POST'
-              } as any);
-            
-            console.log(`✅ [APPROVE] On hold in SCREENING with music`);
-          }
+          console.log(`✅ [APPROVE] Caller redirected to hold music`);
         }
-      } catch (holdError: any) {
-        console.error('❌ [APPROVE] Failed to put on hold:', holdError.message);
-        console.error('   Caller will wait silently or hear conference audio');
+      } catch (redirectError: any) {
+        console.error('❌ [APPROVE] Failed to redirect:', redirectError.message);
       }
     }
 

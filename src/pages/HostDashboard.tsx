@@ -398,32 +398,25 @@ export default function HostDashboard() {
         selectedShow: show
       });
       
-      // CRITICAL: Move approved callers from SCREENING to LIVE conference
-      // They've been screened and approved, now they can hear the show
-      console.log('🔄 [START-BROADCAST] Moving approved callers to LIVE conference...');
+      // CRITICAL: Redirect approved callers to live stream
+      // They hear show (one-way stream) while waiting to go on air
+      console.log('📻 [START-BROADCAST] Redirecting approved callers to live stream...');
       try {
-        const approvedResponse = await fetch(`/api/calls?episodeId=${activeEpisode.id}&status=approved`);
-        if (approvedResponse.ok) {
-          const approvedCallers = await approvedResponse.json();
-          console.log(`   Found ${approvedCallers.length} approved callers to move`);
-          
-          // Move each to LIVE conference
-          for (const caller of approvedCallers) {
-            try {
-              console.log(`   📞 Moving ${caller.caller?.name || caller.id} to LIVE...`);
-              const moveRes = await fetch(`/api/calls/${caller.id}/move-to-live`, { method: 'POST' });
-              if (moveRes.ok) {
-                console.log(`   ✅ Moved to LIVE (can hear show)`);
-              } else {
-                console.error(`   ❌ Failed to move`);
-              }
-            } catch (err) {
-              console.error(`   ⚠️ Error moving:`, err);
-            }
-          }
+        const redirectRes = await fetch('/api/calls/redirect-to-stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ episodeId: activeEpisode.id })
+        });
+        
+        if (redirectRes.ok) {
+          const result = await redirectRes.json();
+          console.log(`✅ [START-BROADCAST] Redirected ${result.redirected} callers to live stream`);
+          console.log('   They now hear: Host mic + show content + on-air callers');
+        } else {
+          console.error('❌ [START-BROADCAST] Failed to redirect callers to stream');
         }
       } catch (err) {
-        console.error('⚠️ Failed to move approved callers:', err);
+        console.error('⚠️ Failed to redirect approved callers:', err);
       }
       
       // IMPORTANT: Wait for hold music to FULLY STOP in Twilio

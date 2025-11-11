@@ -16,6 +16,8 @@ import authRoutes from './routes/auth.js';
 import clerkWebhooksRoutes from './routes/clerk-webhooks.js';
 import callRoutes from './routes/calls.js';
 import moveToLiveRoutes from './routes/moveToLive.js';
+import liveStreamRoutes from './routes/liveStream.js';
+import redirectToStreamRoutes from './routes/redirectToStream.js';
 import callerRoutes from './routes/callers.js';
 import episodeRoutes from './routes/episodes.js';
 import showRoutes from './routes/shows.js';
@@ -144,11 +146,13 @@ app.use('/api/auth', apiLimiter, authRoutes); // Custom auth routes (legacy, can
 app.use('/api/clerk', clerkWebhooksRoutes); // Clerk webhooks (no rate limit - Clerk handles this)
 app.use('/api/calls', apiLimiter, callRoutes);
 app.use('/api/calls', apiLimiter, moveToLiveRoutes);
+app.use('/api/calls', apiLimiter, redirectToStreamRoutes);
 app.use('/api/callers', apiLimiter, callerRoutes);
 app.use('/api/episodes', apiLimiter, episodeRoutes);
 app.use('/api/shows', apiLimiter, showRoutes);
 app.use('/api/twilio', twilioWebhookLimiter, twilioRoutes); // Twilio webhooks
 app.use('/api/twilio', apiLimiter, twilioPlaybackRoutes); // Twilio conference playback
+app.use('/api/live-stream', liveStreamRoutes); // Live audio stream for callers on hold
 app.use('/api/analysis', apiLimiter, analysisRoutes);
 app.use('/api/audio-assets', apiLimiter, audioAssetRoutes);
 app.use('/api/clips', apiLimiter, clipRoutes);

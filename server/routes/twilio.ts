@@ -1507,5 +1507,34 @@ router.post('/voicemail-transcription', verifyTwilioWebhook, async (req: Request
   }
 });
 
+/**
+ * POST /api/twilio/listen-to-show - TwiML that plays live show stream to caller
+ * Used for approved callers waiting on hold
+ */
+router.post('/listen-to-show', async (req: Request, res: Response) => {
+  try {
+    const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+    
+    console.log('📻 [LISTEN-TO-SHOW] Serving TwiML for live stream playback');
+    
+    // Play live stream to caller (they hear show while waiting)
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+        <Play loop="0">${appUrl}/api/live-stream</Play>
+      </Response>`;
+    
+    res.type('text/xml').send(twiml);
+    
+  } catch (error) {
+    console.error('❌ [LISTEN-TO-SHOW] Error:', error);
+    // Fallback to hold music
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+      <Response>
+        <Play loop="10">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+      </Response>`;
+    res.type('text/xml').send(twiml);
+  }
+});
+
 export default router;
 

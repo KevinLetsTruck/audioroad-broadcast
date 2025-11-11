@@ -31,7 +31,10 @@ router.get('/:episodeId', async (req: Request, res: Response) => {
 router.patch('/:callId/on-air', async (req: Request, res: Response) => {
   try {
     const { callId } = req.params;
-    await ParticipantService.putOnAir(callId);
+    
+    // Use simpler stream-based approach
+    const { putOnAirSimple } = await import('../services/putOnAirSimple.js');
+    await putOnAirSimple(callId);
     
     // Emit WebSocket event
     const io = req.app.get('io');
