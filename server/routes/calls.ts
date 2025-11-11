@@ -264,13 +264,14 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
 
     // Put participant on hold with Radio.co stream (ONLY if not already on hold)
     // Re-setting holdUrl causes audio to restart/rewind - avoid it!
-    if (call.twilioCallSid && call.twilioConferenceSid && twilioClient) {
+    if (call.twilioCallSid && call.episode?.twilioConferenceSid && twilioClient) {
       try {
         const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
-        const conferenceSid = call.episode?.twilioConferenceSid || call.twilioConferenceSid;
+        const conferenceSid = call.episode.twilioConferenceSid; // MUST use episode SID
         
-        // Check if already on hold to avoid restarting audio
-        const wasOnHold = existingCall.isOnHold;
+        console.log(`📞 [APPROVE] Putting participant on hold with music`);
+        console.log(`   Conference SID: ${conferenceSid}`);
+        console.log(`   Participant: ${call.twilioCallSid}`);
         
         // Keep on hold with music until show starts (prevents silence when conference is empty)
         // Host will take them off hold when starting the show
@@ -284,12 +285,16 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
             holdMethod: 'POST'
           } as any);
         
-        console.log(`✅ [APPROVE] Participant on hold (queue position ${finalPosition})`);
+        console.log(`✅ [APPROVE] Participant on hold with music (queue position ${finalPosition})`);
         console.log(`   Will be taken off hold when show starts`);
-      } catch (holdError) {
-        console.error('⚠️ [APPROVE] Failed to set hold status:', holdError);
+      } catch (holdError: any) {
+        console.error('❌ [APPROVE] Failed to set hold status:', holdError);
+        console.error(`   Error: ${holdError.message}`);
+        console.error(`   Code: ${holdError.code}`);
         // Continue anyway - database is updated
       }
+    } else if (!call.episode?.twilioConferenceSid) {
+      console.warn(`⚠️ [APPROVE] Episode has no conference SID - cannot set hold status`);
     }
 
     const io = req.app.get('io');
