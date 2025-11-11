@@ -80,21 +80,17 @@ router.post('/play-in-conference', async (req: Request, res: Response) => {
       return res.json({ success: true });
     }
 
-    // CRITICAL: Play to LIVE conference (where host and on-air callers are)
-    // NOT screening conference (that's private)
-    const { getLiveConferenceName } = await import('../utils/conferenceNames.js');
-    const liveConference = getLiveConferenceName(episodeId);
-    
-    console.log(`   Target conference: ${liveConference} (LIVE show)`);
+    const conferenceSid = episode.twilioConferenceSid;
+    console.log(`   Conference SID: ${conferenceSid}`);
 
     // CRITICAL: To play audio to ALL participants, we need to:
-    // 1. Get all participants in the LIVE conference
+    // 1. Get all participants in the conference
     // 2. Play audio to each participant individually using announceUrl
     
     try {
-      // List all participants in LIVE conference
+      // List all participants in conference
       const participants = await twilioClient
-        .conferences(liveConference)
+        .conferences(conferenceSid)
         .participants
         .list();
       
@@ -111,7 +107,7 @@ router.post('/play-in-conference', async (req: Request, res: Response) => {
         try {
           console.log(`   📢 Playing to participant: ${participant.callSid}`);
           await twilioClient
-            .conferences(liveConference)
+            .conferences(conferenceSid)
             .participants(participant.callSid)
             .update({
               announceUrl: audioUrl,
