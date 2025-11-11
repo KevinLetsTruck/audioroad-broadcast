@@ -80,17 +80,16 @@ router.post('/play-in-conference', async (req: Request, res: Response) => {
       return res.json({ success: true });
     }
 
-    const conferenceSid = episode.twilioConferenceSid;
-    console.log(`   Conference SID: ${conferenceSid}`);
-
-    // CRITICAL: To play audio to ALL participants, we need to:
-    // 1. Get all participants in the conference
-    // 2. Play audio to each participant individually using announceUrl
+    // CRITICAL: Play to LIVE conference only
+    const { getLiveConferenceName } = await import('../utils/conferenceNames.js');
+    const liveConference = getLiveConferenceName(episodeId);
     
+    console.log(`   Target: ${liveConference} (LIVE)`);
+
+    // Play to ALL participants in LIVE conference
     try {
-      // List all participants in conference
       const participants = await twilioClient
-        .conferences(conferenceSid)
+        .conferences(liveConference)
         .participants
         .list();
       
@@ -105,17 +104,17 @@ router.post('/play-in-conference', async (req: Request, res: Response) => {
       // This is how you play audio to everyone in a Twilio conference
       const playPromises = participants.map(async (participant) => {
         try {
-          console.log(`   📢 Playing to participant: ${participant.callSid}`);
+          console.log(`   📢 Playing to: ${participant.callSid}`);
           await twilioClient
-            .conferences(conferenceSid)
+            .conferences(liveConference)
             .participants(participant.callSid)
             .update({
               announceUrl: audioUrl,
               announceMethod: 'GET'
             } as any);
-          console.log(`   ✅ Audio playing to ${participant.callSid}`);
+          console.log(`   ✅ Playing to ${participant.callSid}`);
         } catch (err: any) {
-          console.error(`   ❌ Failed to play to ${participant.callSid}:`, err.message);
+          console.error(`   ❌ Failed: ${err.message}`);
         }
       });
       
