@@ -153,15 +153,35 @@ export async function removeFromConference(
   episodeId: string
 ) {
   if (!client) throw new Error('Twilio not configured');
-  const conferenceName = `episode-${episodeId}`;
-
+  
   try {
+    // CRITICAL: Must use actual conference SID from episode, not friendly name
+    const episode = await prisma.episode.findUnique({
+      where: { id: episodeId }
+    });
+    
+    if (!episode?.twilioConferenceSid) {
+      console.warn(`⚠️ [CONFERENCE] Episode ${episodeId} has no conference SID - participant may have already left`);
+      // Just update database
+      await prisma.call.update({
+        where: { twilioCallSid: callSid },
+        data: {
+          status: 'completed',
+          endedAt: new Date()
+        }
+      });
+      return;
+    }
+    
+    const conferenceSid = episode.twilioConferenceSid;
+    console.log(`📴 [CONFERENCE] Removing participant ${callSid} from conference ${conferenceSid}`);
+
     await client
-      .conferences(conferenceName)
+      .conferences(conferenceSid)
       .participants(callSid)
       .remove();
 
-    console.log(`Caller ${callSid} removed from conference`);
+    console.log(`✅ [CONFERENCE] Caller ${callSid} removed from conference`);
 
     await prisma.call.update({
       where: { twilioCallSid: callSid },
@@ -170,9 +190,22 @@ export async function removeFromConference(
         endedAt: new Date()
       }
     });
-  } catch (error) {
-    console.error('Error removing from conference:', error);
-    throw error;
+  } catch (error: any) {
+    console.error('❌ [CONFERENCE] Error removing from conference:', error);
+    console.error(`   Error code: ${error.code}, Status: ${error.status}`);
+    // Don't throw - participant may have already left
+    // Just update database
+    try {
+      await prisma.call.update({
+        where: { twilioCallSid: callSid },
+        data: {
+          status: 'completed',
+          endedAt: new Date()
+        }
+      });
+    } catch (dbError) {
+      console.error('❌ [CONFERENCE] Failed to update database:', dbError);
+    }
   }
 }
 
