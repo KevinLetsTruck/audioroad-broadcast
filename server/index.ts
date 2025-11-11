@@ -15,6 +15,7 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import authRoutes from './routes/auth.js';
 import clerkWebhooksRoutes from './routes/clerk-webhooks.js';
 import callRoutes from './routes/calls.js';
+import moveToLiveRoutes from './routes/moveToLive.js';
 import callerRoutes from './routes/callers.js';
 import episodeRoutes from './routes/episodes.js';
 import showRoutes from './routes/shows.js';
@@ -142,6 +143,7 @@ app.use(generalLimiter);
 app.use('/api/auth', apiLimiter, authRoutes); // Custom auth routes (legacy, can be removed later)
 app.use('/api/clerk', clerkWebhooksRoutes); // Clerk webhooks (no rate limit - Clerk handles this)
 app.use('/api/calls', apiLimiter, callRoutes);
+app.use('/api/calls', apiLimiter, moveToLiveRoutes);
 app.use('/api/callers', apiLimiter, callerRoutes);
 app.use('/api/episodes', apiLimiter, episodeRoutes);
 app.use('/api/shows', apiLimiter, showRoutes);
