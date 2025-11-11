@@ -78,16 +78,53 @@ router.post('/play-in-conference', async (req: Request, res: Response) => {
     const conferenceSid = episode.twilioConferenceSid;
     console.log(`   Conference SID: ${conferenceSid}`);
 
-    // Play audio to ALL participants
-    await twilioClient
-      .conferences(conferenceSid)
-      .update({
-        announceUrl: audioUrl,
-        announceMethod: 'GET'
-      } as any);
-
-    console.log(`✅ [TWILIO-PLAY] Audio playing in conference`);
-    res.json({ success: true });
+    // CRITICAL: To play audio to ALL participants, we need to:
+    // 1. Get all participants in the conference
+    // 2. Play audio to each participant individually using announceUrl
+    
+    try {
+      // List all participants in conference
+      const participants = await twilioClient
+        .conferences(conferenceSid)
+        .participants
+        .list();
+      
+      console.log(`   Found ${participants.length} participants in conference`);
+      
+      if (participants.length === 0) {
+        console.warn(`⚠️ [TWILIO-PLAY] No participants in conference - audio won't play`);
+        return res.json({ success: false, message: 'No participants in conference' });
+      }
+      
+      // Play audio to EACH participant individually
+      // This is how you play audio to everyone in a Twilio conference
+      const playPromises = participants.map(async (participant) => {
+        try {
+          console.log(`   📢 Playing to participant: ${participant.callSid}`);
+          await twilioClient
+            .conferences(conferenceSid)
+            .participants(participant.callSid)
+            .update({
+              announceUrl: audioUrl,
+              announceMethod: 'GET'
+            } as any);
+          console.log(`   ✅ Audio playing to ${participant.callSid}`);
+        } catch (err: any) {
+          console.error(`   ❌ Failed to play to ${participant.callSid}:`, err.message);
+        }
+      });
+      
+      await Promise.all(playPromises);
+      
+      console.log(`✅ [TWILIO-PLAY] Audio playing to ${participants.length} participant(s)`);
+      res.json({ success: true, participantCount: participants.length });
+    } catch (listError: any) {
+      console.error(`❌ [TWILIO-PLAY] Failed to list participants:`, listError.message);
+      return res.status(500).json({ 
+        error: 'Failed to list conference participants',
+        details: listError.message 
+      });
+    }
 
   } catch (error: any) {
     console.error('❌ [TWILIO-PLAY] Error:', error);
