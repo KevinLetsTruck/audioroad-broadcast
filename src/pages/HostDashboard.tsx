@@ -334,8 +334,10 @@ export default function HostDashboard() {
       const showResponse = await fetch(`/api/shows/${activeEpisode.showId}`);
       const show = showResponse.ok ? await showResponse.json() : null;
       
-      // Step 1: Connect host to conference (using session device)
-      console.log('🔄 [START-BROADCAST] Connecting host to conference...');
+      // Step 1: Connect host to LIVE conference (this creates it)
+      // CRITICAL: Host must join LIVE conference, not screening
+      console.log('🔄 [START-BROADCAST] Connecting host to LIVE conference...');
+      console.log('   This creates the live-{id} conference for approved callers');
       await broadcast.connectToCall(`host-${activeEpisode.id}`, 'Host', activeEpisode.id, 'host');
       
       // Step 2: Initialize mixer
