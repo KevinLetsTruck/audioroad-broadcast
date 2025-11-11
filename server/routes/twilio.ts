@@ -595,9 +595,18 @@ router.post('/conference-status', verifyTwilioWebhook, async (req: Request, res:
         });
 
         const io = req.app.get('io');
-        // Emit both events to ensure all pages get notified
-        io.to(`episode:${call.episodeId}`).emit('call:completed', { callId: call.id });
-        io.to(`episode:${call.episodeId}`).emit('call:hungup', { callId: call.id });
+        // Emit both events with full call data to ensure all pages get notified
+        const payload = { 
+          callId: call.id,
+          id: call.id,  // Some listeners check 'id' instead of 'callId'
+          twilioCallSid: call.twilioCallSid,
+          status: 'completed'
+        };
+        io.to(`episode:${call.episodeId}`).emit('call:completed', payload);
+        io.to(`episode:${call.episodeId}`).emit('call:hungup', payload);
+        // Also emit to global scope for any listeners not in episode room
+        io.emit('call:completed', payload);
+        io.emit('call:hungup', payload);
         
         console.log('✅ Call marked completed (caller hung up):', call.id);
       }
