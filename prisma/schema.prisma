@@ -84,9 +84,11 @@ model Episode {
   linesOpen       Boolean   @default(false) // Phone lines open for screener
   linesOpenedAt   DateTime? // When lines were opened
   
-  // Twilio Conference
-  twilioConferenceSid String?  // Active conference SID for this episode
-  conferenceActive    Boolean  @default(false) // Is conference currently active
+  // Twilio Conferences (Two-Conference System)
+  twilioConferenceSid     String?  // Legacy/fallback conference SID
+  screeningConferenceSid  String?  // SCREENING conference SID (screener + caller being screened)
+  liveConferenceSid       String?  // LIVE conference SID (host + on-air + approved callers)
+  conferenceActive        Boolean  @default(false) // Is conference currently active
   
   // Recordings
   recordingUrl    String?   // Full show recording (S3 URL)
@@ -169,8 +171,9 @@ model Call {
   caller          Caller    @relation(fields: [callerId], references: [id])
   
   // Twilio data
-  twilioCallSid   String    @unique
-  twilioConferenceSid String?
+  twilioCallSid           String    @unique
+  twilioConferenceSid     String?   // Conference friendly name
+  currentConferenceType   String?   // 'screening' or 'live'
   
   // Call status flow
   status          String    // 'incoming', 'queued', 'screening', 'approved', 'on-air', 'completed', 'rejected', 'missed'
