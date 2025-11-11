@@ -813,8 +813,15 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
       conferenceName = `episode-${episode.id}`;
     }
 
-    console.log('📞 [WELCOME-MESSAGE] Generating TwiML for conference:', conferenceName);
+    // CRITICAL: Route to SCREENING conference (not LIVE)
+    // Callers start in screening conference where screener can privately screen them
+    // After approval, they'll be moved to LIVE conference
+    const { getScreeningConferenceName } = await import('../utils/conferenceNames.js');
+    const screeningConference = getScreeningConferenceName(episode.id);
+    
+    console.log('📞 [WELCOME-MESSAGE] Routing caller to SCREENING conference:', screeningConference);
     console.log('   Show name:', showName);
+    console.log('   (Caller will be moved to LIVE conference after approval)');
     
     const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
     
@@ -857,34 +864,20 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
       }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
     }
     
-    // CRITICAL: If show is LIVE, don't use waitUrl - let callers hear conference audio directly
-    // If show NOT live yet, use waitUrl for hold music
-    const isShowLive = episode.status === 'live';
-    
-    console.log(`🎙️ [WELCOME-MESSAGE] Show status: ${episode.status} (live: ${isShowLive})`);
-    
+    // Route caller to SCREENING conference
+    // Always use waitUrl in screening (callers wait for screener)
     const dial = twiml.dial();
-    const conferenceOptions: any = {
-      startConferenceOnEnter: true,
-      endConferenceOnExit: false,
+    dial.conference({
+      startConferenceOnEnter: true, // Caller can start conference
+      endConferenceOnExit: false, // Don't end when caller leaves
       maxParticipants: 40,
-      muted: true, // Join MUTED for privacy - screener will unmute
+      muted: true, // Join MUTED - screener will unmute
+      waitUrl: `${appUrl}/api/twilio/wait-audio`, // Hold music while waiting for screener
+      waitMethod: 'POST',
       statusCallback: `${appUrl}/api/twilio/conference-status`,
       statusCallbackEvent: ['start', 'end', 'join', 'leave'],
       statusCallbackMethod: 'POST'
-    };
-    
-    // ONLY use waitUrl if show is NOT live yet (pre-show callers need hold music)
-    // Once show is LIVE, callers hear conference audio directly (host mic, show content)
-    if (!isShowLive) {
-      conferenceOptions.waitUrl = `${appUrl}/api/twilio/wait-audio`;
-      conferenceOptions.waitMethod = 'POST';
-      console.log(`   Using waitUrl for hold music (show not live yet)`);
-    } else {
-      console.log(`   No waitUrl - callers will hear LIVE conference audio immediately`);
-    }
-    
-    dial.conference(conferenceOptions, conferenceName);
+    }, screeningConference);
 
     const twimlString = twiml.toString();
     console.log('✅ [WELCOME-MESSAGE] TwiML generated:');
