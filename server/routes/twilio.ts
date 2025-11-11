@@ -633,13 +633,17 @@ router.post('/wait-music', (req: Request, res: Response) => {
 router.post('/wait-audio', async (req: Request, res: Response) => {
   try {
     console.log('🎵 [WAIT-AUDIO] Serving hold music');
+    console.log('   Request from CallSid:', req.body.CallSid);
+    console.log('   Conference:', req.body.ConferenceSid || req.body.FriendlyName);
     
-    // Simple, reliable hold music - no restarts, no chunking complexity
+    // CRITICAL: loop="10" plays 10 times (not infinite, but long enough)
+    // loop="0" means play infinite times in Twilio
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play loop="0">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+        <Play loop="10">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
       </Response>`;
     
+    console.log('✅ [WAIT-AUDIO] TwiML returned with loop=10');
     res.type('text/xml').send(twiml);
     
   } catch (error) {
@@ -647,7 +651,7 @@ router.post('/wait-audio', async (req: Request, res: Response) => {
     // Same fallback
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>
-        <Play loop="0">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
+        <Play loop="10">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
       </Response>`;
     res.type('text/xml').send(twiml);
   }
