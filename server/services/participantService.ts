@@ -19,11 +19,11 @@ export class ParticipantService {
   /**
    * Put participant ON AIR (unmute in conference)
    */
-  static async putOnAir(callId: string): Promise<void> {
+  static   async putOnAir(callId: string): Promise<void> {
     try {
-      const call = await prisma.call.findUnique({
+      let call = await prisma.call.findUnique({
         where: { id: callId },
-        include: { episode: true }
+        include: { episode: true, caller: true }
       });
 
       if (!call) {
@@ -86,20 +86,26 @@ export class ParticipantService {
           await moveParticipantToLiveConference(call.twilioCallSid, call.episodeId);
           
           // Re-fetch call to get updated conference SID (moveParticipantToLiveConference updates it)
-          call = await prisma.call.findUnique({
+          const updatedCall = await prisma.call.findUnique({
             where: { id: callId },
             include: {
               caller: true,
               episode: true
             }
-          }) as any;
+          });
           
-          if (!call) {
+          if (!updatedCall) {
             throw new Error(`Call ${callId} not found after move`);
           }
           
+          // Update local reference
+          call = updatedCall;
+          
           // Update liveConferenceSid to use the new SID from call record
-          liveConferenceSid = call.twilioConferenceSid!;
+          if (!call.twilioConferenceSid) {
+            throw new Error(`Call ${callId} has no conference SID after move to LIVE`);
+          }
+          liveConferenceSid = call.twilioConferenceSid;
           
           console.log(`✅ [PARTICIPANT] Moved to LIVE, using SID: ${liveConferenceSid}`);
         } catch (moveError: any) {
@@ -108,6 +114,11 @@ export class ParticipantService {
         }
       }
 
+      // Verify call is still valid (might have been reassigned after move)
+      if (!call || !call.twilioCallSid) {
+        throw new Error(`Call ${callId} invalid state after move`);
+      }
+      
       try {
         // First, check if conference exists and list participants
         const conference = await twilioClient
@@ -133,10 +144,10 @@ export class ParticipantService {
           });
           
           // Find participant by CallSid
-          const participant = participants.find((p: any) => p.callSid === call.twilioCallSid);
+          const participant = participants.find((p: any) => p.callSid === call?.twilioCallSid);
           
           if (!participant) {
-            console.warn(`⚠️ Participant ${call.twilioCallSid} not in conference yet`);
+            console.warn(`⚠️ Participant ${call?.twilioCallSid} not in conference yet`);
             // Just update database - they'll be unmuted when they join
           } else {
             console.log(`✅ [CONFERENCE] Found participant: ${participant.callSid}`);
@@ -145,13 +156,13 @@ export class ParticipantService {
             await retryTwilioCall(
               () => twilioClient
                 .conferences(liveConferenceSid)
-                .participants(call.twilioCallSid)
+                .participants(call!.twilioCallSid)
                 .update({
                   muted: false,
                   hold: false, // Take off hold so they hear the conference (host/screener)
                   // Enable recording with transcription for this participant
                   // This records ONLY this participant's audio (not the whole conference)
-                  coach: call.twilioCallSid, // Record in coach mode (participant only)
+                  coach: call!.twilioCallSid, // Record in coach mode (participant only)
                   record: 'record-from-start',
                   recordingStatusCallback: `${process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app'}/api/twilio/participant-recording-status`,
                   recordingStatusCallbackMethod: 'POST'
@@ -171,14 +182,15 @@ export class ParticipantService {
         // Don't throw - just log and continue with database update
       }
 
-      // Update database
+      // Update database (call is guaranteed non-null here due to check above)
+      const onAirAt = call?.onAirAt || new Date();
       await prisma.call.update({
         where: { id: callId },
         data: {
           participantState: 'on-air',
           isMutedInConference: false,
           isOnHold: false,
-          onAirAt: call.onAirAt || new Date() // Set if not already set
+          onAirAt: onAirAt
         }
       });
 
