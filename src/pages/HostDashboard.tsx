@@ -427,8 +427,9 @@ export default function HostDashboard() {
       console.log('✅ [START-BROADCAST] Hold music stopped, ready to play audio');
       
       // Step 7: Play today's announcements (if enabled)
-      // NOTE: Announcements play through mixer (for stream) AND Twilio conference (for callers)
-      if (autoPlayAnnouncements && todaysAnnouncements.length > 0) {
+      // DISABLED: Focusing on call flow stability first
+      // Will re-enable after stream system is stable
+      if (false && autoPlayAnnouncements && todaysAnnouncements.length > 0) {
         console.log(`📢 [ANNOUNCEMENTS] Playing ${todaysAnnouncements.length} announcement(s)...`);
         
         for (const announcement of todaysAnnouncements) {
@@ -478,8 +479,10 @@ export default function HostDashboard() {
         console.log('ℹ️ [ANNOUNCEMENTS] Auto-play enabled but no announcements for today');
       }
       
-      // Step 8: Play show opener 
-      if (show?.openerAudioUrl) {
+      // Step 8: Play show opener
+      // DISABLED: Focusing on call flow stability first
+      // Opener will be re-enabled after stream-based system is fully working
+      if (false && show?.openerAudioUrl) {
         console.log('🎵 [OPENER] Playing show opener...');
         const sourcesBefore = mixerInstance.getSources();
         console.log('🔍 [DEBUG] Active audio sources before opener:', JSON.stringify(sourcesBefore.map(s => ({ id: s.id, type: s.type, label: s.label, volume: s.volume, muted: s.muted })), null, 2));
