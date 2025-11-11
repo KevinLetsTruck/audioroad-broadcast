@@ -31,8 +31,9 @@ router.get('/', (req: Request, res: Response) => {
     
     console.log('✅ [LIVE-STREAM] Streaming live audio to caller');
     
-    // Pipe the stream to response
-    stream.getStream().pipe(res);
+    // Get a client stream and pipe to response
+    const clientStream = stream.getClientStream();
+    clientStream.pipe(res);
     
     // Handle disconnect
     req.on('close', () => {
