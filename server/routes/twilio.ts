@@ -74,7 +74,7 @@ router.post('/voice', async (req: Request, res: Response) => {
         episode = await prisma.episode.findUnique({ where: { id: episodeId } });
         targetEpisodeId = episodeId;
       }
-      // SCREENER uses actual Call record
+      // SCREENER uses actual Call record to get episode
       else if (callId) {
         const call = await prisma.call.findUnique({
           where: { id: callId },
@@ -87,25 +87,31 @@ router.post('/voice', async (req: Request, res: Response) => {
         
         episode = call.episode;
         targetEpisodeId = call.episodeId;
+        
+        // CRITICAL: Screener must join the SAME conference as the caller
+        // Use the conference from the call record
+        if (call.twilioConferenceSid) {
+          conferenceName = call.twilioConferenceSid;
+          console.log(`🎙️ screener joining caller's conference:`, conferenceName);
+          console.log(`   (From call record - ensures same conference as caller)`);
+          
+          const twiml = generateTwiML('conference', { 
+            conferenceName,
+            startConferenceOnEnter: true,
+            endConferenceOnExit: false,
+            muted: false
+          });
+          return res.type('text/xml').send(twiml);
+        }
       } else if (episodeId) {
         episode = await prisma.episode.findUnique({ where: { id: episodeId } });
         targetEpisodeId = episodeId;
       }
 
-      // CRITICAL: Route to correct conference based on role
-      const { getScreeningConferenceName, getLiveConferenceName } = await import('../utils/conferenceNames.js');
-      
-      if (role === 'screener') {
-        // Screener joins SCREENING conference to privately screen callers
-        conferenceName = getScreeningConferenceName(targetEpisodeId);
-        console.log(`🎙️ screener joining conference:`, conferenceName);
-        console.log(`   startConferenceOnEnter: true (screener always starts/restarts)`);
-      } else {
-        // Host joins LIVE conference (the actual show)
-        conferenceName = getLiveConferenceName(targetEpisodeId);
-        console.log(`🎙️ host joining conference:`, conferenceName);
-        console.log(`   startConferenceOnEnter: true (host always starts/restarts)`);
-      }
+      // For HOST, route to LIVE conference
+      const { getLiveConferenceName } = await import('../utils/conferenceNames.js');
+      conferenceName = getLiveConferenceName(targetEpisodeId);
+      console.log(`🎙️ host joining LIVE conference:`, conferenceName);
 
       // Host joins UNMUTED so callers can hear them
       // Screener joins UNMUTED so they can talk during screening
