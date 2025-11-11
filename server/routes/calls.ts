@@ -283,25 +283,34 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       // Show not live yet - put on hold in SCREENING conference with music
       try {
         console.log(`📞 [APPROVE] Show not live yet, keeping in SCREENING with hold music`);
-        const { getScreeningConferenceName } = await import('../utils/conferenceNames.js');
-        const screeningConf = getScreeningConferenceName(call.episodeId);
-        const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
         
-        if (twilioClient) {
-          await twilioClient
-            .conferences(screeningConf)
-            .participants(call.twilioCallSid)
-            .update({
-              muted: true,
-              hold: true,
-              holdUrl: `${appUrl}/api/twilio/wait-audio`,
-              holdMethod: 'POST'
-            } as any);
+        // CRITICAL: Use actual conference SID from episode, not friendly name
+        const screeningConferenceSid = call.episode?.screeningConferenceSid;
+        
+        if (!screeningConferenceSid) {
+          console.warn('⚠️ [APPROVE] No screening conference SID, cannot put on hold');
+          console.warn('   Caller will hear live conference audio when it starts');
+        } else {
+          const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+          
+          if (twilioClient) {
+            console.log(`   Using screening conference SID: ${screeningConferenceSid}`);
+            await twilioClient
+              .conferences(screeningConferenceSid)
+              .participants(call.twilioCallSid)
+              .update({
+                muted: true,
+                hold: true,
+                holdUrl: `${appUrl}/api/twilio/wait-audio`,
+                holdMethod: 'POST'
+              } as any);
+            
+            console.log(`✅ [APPROVE] On hold in SCREENING with music`);
+          }
         }
-        
-        console.log(`✅ [APPROVE] On hold in SCREENING (will move to LIVE when show starts)`);
       } catch (holdError: any) {
         console.error('❌ [APPROVE] Failed to put on hold:', holdError.message);
+        console.error('   Caller will wait silently or hear conference audio');
       }
     }
 

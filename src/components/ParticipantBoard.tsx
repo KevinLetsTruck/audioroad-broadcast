@@ -112,11 +112,13 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
           alert(errorMsg);
           return;
         }
-        console.log('🔌 [PARTICIPANT-BOARD] Connecting host to Twilio conference...');
+        console.log('🔌 [PARTICIPANT-BOARD] Connecting host to LIVE conference...');
         try {
           await broadcast.connectToCall(callId, callerName, episodeId, 'host');
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          console.log('✅ [PARTICIPANT-BOARD] Host connected to conference');
+          console.log('⏳ [PARTICIPANT-BOARD] Waiting for LIVE conference to be fully created...');
+          console.log('   (This creates the live-{id} conference and stores its SID)');
+          await new Promise(resolve => setTimeout(resolve, 3000)); // Increased to 3 seconds for webhook to fire
+          console.log('✅ [PARTICIPANT-BOARD] LIVE conference ready');
         } catch (error) {
           console.error('❌ [PARTICIPANT-BOARD] Host connection failed:', error);
           alert(`Failed to connect to caller: ${error instanceof Error ? error.message : 'Unknown error'}`);

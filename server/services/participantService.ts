@@ -39,16 +39,60 @@ export class ParticipantService {
       }
 
       // CRITICAL: Use actual LIVE conference SID from database
-      const liveConferenceSid = call.episode?.liveConferenceSid;
+      // If not available, wait and retry (race condition: host just joined, webhook hasn't fired yet)
+      let liveConferenceSid = call.episode?.liveConferenceSid;
       
       if (!liveConferenceSid) {
-        console.error(`❌ [PARTICIPANT] Episode ${call.episodeId} has no LIVE conference SID!`);
-        throw new Error(`Episode ${call.episodeId} has no live conference - host must start show first`);
+        console.log(`⏳ [PARTICIPANT] No LIVE SID yet, waiting for conference-start webhook...`);
+        
+        // Wait up to 5 seconds for webhook to update database
+        for (let i = 0; i < 5; i++) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Re-fetch episode to get updated SID
+          const updatedEpisode = await prisma.episode.findUnique({
+            where: { id: call.episodeId }
+          });
+          
+          if (updatedEpisode?.liveConferenceSid) {
+            liveConferenceSid = updatedEpisode.liveConferenceSid;
+            console.log(`✅ [PARTICIPANT] Got LIVE SID after ${i + 1} seconds: ${liveConferenceSid}`);
+            break;
+          }
+          
+          console.log(`   Still waiting... (${i + 1}/5)`);
+        }
+        
+        if (!liveConferenceSid) {
+          console.error(`❌ [PARTICIPANT] Episode ${call.episodeId} has no LIVE conference SID after 5 seconds!`);
+          throw new Error(`Episode ${call.episodeId} has no live conference - host must start show first`);
+        }
       }
       
       console.log(`📡 [PARTICIPANT] Putting on air: ${callId}`);
       console.log(`   LIVE Conference SID: ${liveConferenceSid}`);
       console.log(`   CallSid: ${call.twilioCallSid}`);
+      console.log(`   Current conference: ${call.currentConferenceType || 'unknown'}`);
+      
+      // If caller is still in SCREENING, move them to LIVE first
+      if (call.currentConferenceType === 'screening') {
+        console.log(`🔄 [PARTICIPANT] Moving from SCREENING to LIVE first...`);
+        try {
+          const { moveParticipantToLiveConference } = await import('../services/conferenceService.js');
+          await moveParticipantToLiveConference(call.twilioCallSid, call.episodeId);
+          
+          // Update database
+          await prisma.call.update({
+            where: { id: callId },
+            data: { currentConferenceType: 'live' }
+          });
+          
+          console.log(`✅ [PARTICIPANT] Moved to LIVE conference`);
+        } catch (moveError: any) {
+          console.error(`❌ [PARTICIPANT] Failed to move to LIVE:`, moveError.message);
+          // Continue anyway - they might already be there
+        }
+      }
 
       try {
         // First, check if conference exists and list participants
