@@ -398,24 +398,33 @@ export default function HostDashboard() {
         selectedShow: show
       });
       
-      // REMOVED: Don't take callers off hold when show starts!
-      // 
-      // CRITICAL PRIVACY ISSUE: If we take ALL approved callers off hold at show start,
-      // they can hear each other's screening conversations and private calls.
-      // 
-      // CORRECT BEHAVIOR: Keep callers on HOLD (hearing only hold music) until
-      // they're individually put on air via the "On Air" button.
-      // 
-      // This ensures:
-      // - Callers only hear hold music while waiting
-      // - No privacy leaks (can't hear other callers being screened)
-      // - Clean audio when they go live (no background conversations)
-      //
-      // When host clicks "On Air" button in ParticipantBoard, the putOnAir()
-      // function will take them off hold at that moment.
-      
-      console.log('📞 [START-BROADCAST] Callers will stay on hold until individually put on air');
-      console.log('   This prevents privacy leaks - callers on hold cannot hear screening conversations');
+      // CRITICAL: Move approved callers from SCREENING to LIVE conference
+      // They've been screened and approved, now they can hear the show
+      console.log('🔄 [START-BROADCAST] Moving approved callers to LIVE conference...');
+      try {
+        const approvedResponse = await fetch(`/api/calls?episodeId=${activeEpisode.id}&status=approved`);
+        if (approvedResponse.ok) {
+          const approvedCallers = await approvedResponse.json();
+          console.log(`   Found ${approvedCallers.length} approved callers to move`);
+          
+          // Move each to LIVE conference
+          for (const caller of approvedCallers) {
+            try {
+              console.log(`   📞 Moving ${caller.caller?.name || caller.id} to LIVE...`);
+              const moveRes = await fetch(`/api/calls/${caller.id}/move-to-live`, { method: 'POST' });
+              if (moveRes.ok) {
+                console.log(`   ✅ Moved to LIVE (can hear show)`);
+              } else {
+                console.error(`   ❌ Failed to move`);
+              }
+            } catch (err) {
+              console.error(`   ⚠️ Error moving:`, err);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('⚠️ Failed to move approved callers:', err);
+      }
       
       // IMPORTANT: Wait for hold music to FULLY STOP in Twilio
       // Twilio's hold music takes time to stop - if we play opener too soon, both play at once!
