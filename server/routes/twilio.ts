@@ -653,32 +653,39 @@ router.post('/conference-status', verifyTwilioWebhook, async (req: Request, res:
       });
 
       if (call && call.status !== 'completed') {
-        // Caller hung up (any state except already completed)
-        console.log(`📴 Marking call as completed: ${call.id} (was ${call.status})`);
-        
-        await prisma.call.update({
-          where: { id: call.id },
-          data: {
-            status: 'completed',
-            endedAt: new Date()
-          }
-        });
+        // CRITICAL: Don't mark APPROVED calls as completed when they leave screening conference
+        // They're supposed to leave - they've been redirected to hold music/stream
+        if (call.status === 'approved') {
+          console.log(`ℹ️ Approved caller left conference (redirected to hold): ${call.id}`);
+          // Don't mark as completed - they're still active, just listening to hold music/stream
+        } else {
+          // Caller hung up (queued or screening status)
+          console.log(`📴 Marking call as completed: ${call.id} (was ${call.status})`);
+          
+          await prisma.call.update({
+            where: { id: call.id },
+            data: {
+              status: 'completed',
+              endedAt: new Date()
+            }
+          });
 
-        const io = req.app.get('io');
-        // Emit both events with full call data to ensure all pages get notified
-        const payload = { 
-          callId: call.id,
-          id: call.id,  // Some listeners check 'id' instead of 'callId'
-          twilioCallSid: call.twilioCallSid,
-          status: 'completed'
-        };
-        io.to(`episode:${call.episodeId}`).emit('call:completed', payload);
-        io.to(`episode:${call.episodeId}`).emit('call:hungup', payload);
-        // Also emit to global scope for any listeners not in episode room
-        io.emit('call:completed', payload);
-        io.emit('call:hungup', payload);
-        
-        console.log('✅ Call marked completed (caller hung up):', call.id);
+          const io = req.app.get('io');
+          // Emit both events with full call data to ensure all pages get notified
+          const payload = { 
+            callId: call.id,
+            id: call.id,  // Some listeners check 'id' instead of 'callId'
+            twilioCallSid: call.twilioCallSid,
+            status: 'completed'
+          };
+          io.to(`episode:${call.episodeId}`).emit('call:completed', payload);
+          io.to(`episode:${call.episodeId}`).emit('call:hungup', payload);
+          // Also emit to global scope for any listeners not in episode room
+          io.emit('call:completed', payload);
+          io.emit('call:hungup', payload);
+          
+          console.log('✅ Call marked completed (caller hung up):', call.id);
+        }
       }
     }
 
