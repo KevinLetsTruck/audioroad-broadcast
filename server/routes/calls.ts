@@ -260,23 +260,46 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
       }
     });
 
-    // CRITICAL: Move from SCREENING to LIVE conference
-    if (call.twilioCallSid) {
+    // CRITICAL: Only move to LIVE if show is live
+    // If show not live yet, keep in SCREENING with hold music
+    const isShowLive = call.episode?.status === 'live';
+    
+    if (call.twilioCallSid && isShowLive) {
       try {
-        console.log(`🔄 [APPROVE] Moving to LIVE conference`);
+        console.log(`🔄 [APPROVE] Show is LIVE, moving to LIVE conference`);
         const { moveParticipantToLiveConference } = await import('../services/conferenceService.js');
         await moveParticipantToLiveConference(call.twilioCallSid, call.episodeId);
         
-        // Update database to track conference type
         await prisma.call.update({
           where: { id: call.id },
           data: { currentConferenceType: 'live' }
         });
         
-        console.log(`✅ [APPROVE] Moved to LIVE, can hear show (position ${finalPosition})`);
+        console.log(`✅ [APPROVE] In LIVE, can hear show`);
       } catch (moveError: any) {
-        console.error('❌ [APPROVE] Failed to move to live:', moveError.message);
-        // Continue anyway - they'll be manually moved if needed
+        console.error('❌ [APPROVE] Failed to move:', moveError.message);
+      }
+    } else if (call.twilioCallSid && !isShowLive) {
+      // Show not live yet - put on hold in SCREENING conference with music
+      try {
+        console.log(`📞 [APPROVE] Show not live yet, keeping in SCREENING with hold music`);
+        const { getScreeningConferenceName } = await import('../utils/conferenceNames.js');
+        const screeningConf = getScreeningConferenceName(call.episodeId);
+        const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
+        
+        await twilioClient
+          .conferences(screeningConf)
+          .participants(call.twilioCallSid)
+          .update({
+            muted: true,
+            hold: true,
+            holdUrl: `${appUrl}/api/twilio/wait-audio`,
+            holdMethod: 'POST'
+          } as any);
+        
+        console.log(`✅ [APPROVE] On hold in SCREENING (will move to LIVE when show starts)`);
+      } catch (holdError: any) {
+        console.error('❌ [APPROVE] Failed to put on hold:', holdError.message);
       }
     }
 
