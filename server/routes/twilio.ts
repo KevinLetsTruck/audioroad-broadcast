@@ -515,7 +515,26 @@ router.post('/conference-status', verifyTwilioWebhook, async (req: Request, res:
       }
       
       try {
-        // Fetch current episode state to check if we already have this SID
+        // CRITICAL: If this is participant-join, also update the CALL record with this conference SID
+        // This ensures each call knows which SPECIFIC conference instance it's in
+        if (StatusCallbackEvent === 'participant-join' && CallSid) {
+          const call = await prisma.call.findFirst({
+            where: { twilioCallSid: CallSid }
+          });
+          
+          if (call) {
+            await prisma.call.update({
+              where: { id: call.id },
+              data: { 
+                twilioConferenceSid: ConferenceSid, // Store ACTUAL SID on call record
+                currentConferenceType: isScreening ? 'screening' : 'live'
+              }
+            });
+            console.log(`✅ [CONFERENCE] Call ${call.id} updated with ${isScreening ? 'SCREENING' : 'LIVE'} SID: ${ConferenceSid}`);
+          }
+        }
+        
+        // Also update episode (for new conferences only)
         const currentEpisode = await prisma.episode.findUnique({
           where: { id: episodeId },
           select: { screeningConferenceSid: true, liveConferenceSid: true }
@@ -525,15 +544,17 @@ router.post('/conference-status', verifyTwilioWebhook, async (req: Request, res:
           conferenceActive: true
         };
         
-        // Store SID in correct field (only if not already set)
-        if (isScreening && !currentEpisode?.screeningConferenceSid) {
-          updateData.screeningConferenceSid = ConferenceSid;
-          console.log(`   Storing SCREENING SID: ${ConferenceSid}`);
-        } else if (isLive && !currentEpisode?.liveConferenceSid) {
-          updateData.liveConferenceSid = ConferenceSid;
-          console.log(`   Storing LIVE SID: ${ConferenceSid}`);
-        } else if (!isScreening && !isLive && !currentEpisode?.screeningConferenceSid) {
-          updateData.twilioConferenceSid = ConferenceSid;
+        // Store SID in correct field (only if not already set OR if it's a new SID)
+        if (isScreening) {
+          if (!currentEpisode?.screeningConferenceSid || currentEpisode.screeningConferenceSid !== ConferenceSid) {
+            updateData.screeningConferenceSid = ConferenceSid;
+            console.log(`   Storing SCREENING SID on episode: ${ConferenceSid}`);
+          }
+        } else if (isLive) {
+          if (!currentEpisode?.liveConferenceSid || currentEpisode.liveConferenceSid !== ConferenceSid) {
+            updateData.liveConferenceSid = ConferenceSid;
+            console.log(`   Storing LIVE SID on episode: ${ConferenceSid}`);
+          }
         }
         
         // Only update if we have new data

@@ -211,7 +211,7 @@ export async function removeFromConference(
 
 /**
  * Move participant from SCREENING to LIVE conference
- * Called when screener approves a call
+ * Called when screener approves a call OR when host puts caller on air
  */
 export async function moveParticipantToLiveConference(
   callSid: string,
@@ -219,23 +219,41 @@ export async function moveParticipantToLiveConference(
 ): Promise<void> {
   if (!client) throw new Error('Twilio not configured');
   
-  const { getScreeningConferenceName, getLiveConferenceName } = await import('../utils/conferenceNames.js');
-  const screeningConf = getScreeningConferenceName(episodeId);
-  const liveConf = getLiveConferenceName(episodeId);
-  
   console.log(`🔄 [MOVE] Moving ${callSid} from SCREENING to LIVE`);
   
-  try {
-    // Remove from screening
-    await client.conferences(screeningConf).participants(callSid).remove();
-    console.log(`✅ [MOVE] Removed from screening`);
-  } catch (e: any) {
-    console.warn(`⚠️ [MOVE] Could not remove from screening:`, e.message);
+  // Get the call to find which screening conference they're in
+  const call = await prisma.call.findFirst({
+    where: { twilioCallSid: callSid },
+    include: { episode: true }
+  });
+  
+  if (!call) {
+    throw new Error(`Call with Twilio SID ${callSid} not found`);
+  }
+  
+  // Remove from their current screening conference (using ACTUAL SID from call record)
+  if (call.twilioConferenceSid && call.currentConferenceType === 'screening') {
+    try {
+      console.log(`   Removing from SCREENING: ${call.twilioConferenceSid}`);
+      await client.conferences(call.twilioConferenceSid).participants(callSid).remove();
+      console.log(`✅ [MOVE] Removed from screening`);
+    } catch (e: any) {
+      console.warn(`⚠️ [MOVE] Could not remove from screening:`, e.message);
+      // Continue - they may have already left
+    }
+  }
+  
+  // Get LIVE conference SID from episode
+  const liveConferenceSid = call.episode?.liveConferenceSid;
+  
+  if (!liveConferenceSid) {
+    throw new Error(`Episode ${episodeId} has no LIVE conference - host must connect first`);
   }
   
   // Add to live conference (muted, hold: false = hear show)
   try {
-    await client.conferences(liveConf).participants.create({
+    console.log(`   Adding to LIVE: ${liveConferenceSid}`);
+    await client.conferences(liveConferenceSid).participants.create({
       from: process.env.TWILIO_PHONE_NUMBER!,
       to: callSid,
       earlyMedia: true,
@@ -244,9 +262,20 @@ export async function moveParticipantToLiveConference(
       muted: true,
       hold: false
     } as any);
-    console.log(`✅ [MOVE] Added to live (can hear show)`);
+    console.log(`✅ [MOVE] Added to LIVE conference`);
+    
+    // CRITICAL: Update call record with new conference SID
+    await prisma.call.update({
+      where: { id: call.id },
+      data: {
+        twilioConferenceSid: liveConferenceSid,
+        currentConferenceType: 'live'
+      }
+    });
+    console.log(`✅ [MOVE] Call record updated with LIVE conference SID`);
+    
   } catch (e: any) {
-    console.error(`❌ [MOVE] Failed to add to live:`, e.message);
+    console.error(`❌ [MOVE] Failed to add to LIVE:`, e.message);
     throw e;
   }
 }

@@ -85,13 +85,23 @@ export class ParticipantService {
           const { moveParticipantToLiveConference } = await import('../services/conferenceService.js');
           await moveParticipantToLiveConference(call.twilioCallSid, call.episodeId);
           
-          // Update database
-          await prisma.call.update({
+          // Re-fetch call to get updated conference SID (moveParticipantToLiveConference updates it)
+          call = await prisma.call.findUnique({
             where: { id: callId },
-            data: { currentConferenceType: 'live' }
-          });
+            include: {
+              caller: true,
+              episode: true
+            }
+          }) as any;
           
-          console.log(`✅ [PARTICIPANT] Moved to LIVE conference`);
+          if (!call) {
+            throw new Error(`Call ${callId} not found after move`);
+          }
+          
+          // Update liveConferenceSid to use the new SID from call record
+          liveConferenceSid = call.twilioConferenceSid!;
+          
+          console.log(`✅ [PARTICIPANT] Moved to LIVE, using SID: ${liveConferenceSid}`);
         } catch (moveError: any) {
           console.error(`❌ [PARTICIPANT] Failed to move to LIVE:`, moveError.message);
           // Continue anyway - they might already be there
@@ -350,17 +360,15 @@ export class ParticipantService {
         throw new Error(`Call ${callId} has no Twilio CallSid`);
       }
 
-      // CRITICAL: Use actual conference SID from database, not friendly name
+      // CRITICAL: Use the CALL's conference SID (stored when they joined)
+      // NOT the episode's SID (which may be from an old conference)
+      const conferenceSid = call.twilioConferenceSid;
       const isScreening = call.status === 'screening';
-      const conferenceSid = isScreening 
-        ? call.episode?.screeningConferenceSid
-        : call.episode?.liveConferenceSid;
       
       if (!conferenceSid) {
-        console.error(`❌ [PARTICIPANT] No ${isScreening ? 'SCREENING' : 'LIVE'} conference SID in database!`);
-        console.error(`   Episode ${call.episodeId} screeningConferenceSid: ${call.episode?.screeningConferenceSid}`);
-        console.error(`   Episode ${call.episodeId} liveConferenceSid: ${call.episode?.liveConferenceSid}`);
-        throw new Error(`Episode ${call.episodeId} has no ${isScreening ? 'screening' : 'live'} conference SID`);
+        console.error(`❌ [PARTICIPANT] Call ${callId} has no conference SID!`);
+        console.error(`   This means the call didn't join a conference properly`);
+        throw new Error(`Call ${callId} has no conference SID`);
       }
       
       console.log(`🔊 [PARTICIPANT] Unmuting: ${callId}`);
