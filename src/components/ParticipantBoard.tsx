@@ -115,9 +115,9 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
         console.log('🔌 [PARTICIPANT-BOARD] Connecting host to LIVE conference...');
         try {
           await broadcast.connectToCall(callId, callerName, episodeId, 'host');
-          console.log('⏳ [PARTICIPANT-BOARD] Waiting for LIVE conference to be fully created...');
-          console.log('   (This creates the live-{id} conference and stores its SID)');
-          await new Promise(resolve => setTimeout(resolve, 3000)); // Increased to 3 seconds for webhook to fire
+          console.log('⏳ [PARTICIPANT-BOARD] Waiting for LIVE conference SID...');
+          console.log('   (participant-join webhook will store the SID)');
+          await new Promise(resolve => setTimeout(resolve, 2000)); // 2 seconds should be enough now
           console.log('✅ [PARTICIPANT-BOARD] LIVE conference ready');
         } catch (error) {
           console.error('❌ [PARTICIPANT-BOARD] Host connection failed:', error);

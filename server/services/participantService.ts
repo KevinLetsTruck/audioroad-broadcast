@@ -43,11 +43,12 @@ export class ParticipantService {
       let liveConferenceSid = call.episode?.liveConferenceSid;
       
       if (!liveConferenceSid) {
-        console.log(`⏳ [PARTICIPANT] No LIVE SID yet, waiting for conference-start webhook...`);
+        console.log(`⏳ [PARTICIPANT] No LIVE SID yet, waiting for participant-join webhook...`);
         
-        // Wait up to 5 seconds for webhook to update database
-        for (let i = 0; i < 5; i++) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+        // Wait up to 3 seconds for webhook to update database
+        // Now using participant-join webhook which fires IMMEDIATELY
+        for (let i = 0; i < 6; i++) {
+          await new Promise(resolve => setTimeout(resolve, 500)); // Check every 500ms
           
           // Re-fetch episode to get updated SID
           const updatedEpisode = await prisma.episode.findUnique({
@@ -56,16 +57,19 @@ export class ParticipantService {
           
           if (updatedEpisode?.liveConferenceSid) {
             liveConferenceSid = updatedEpisode.liveConferenceSid;
-            console.log(`✅ [PARTICIPANT] Got LIVE SID after ${i + 1} seconds: ${liveConferenceSid}`);
+            console.log(`✅ [PARTICIPANT] Got LIVE SID after ${(i + 1) * 500}ms: ${liveConferenceSid}`);
             break;
           }
           
-          console.log(`   Still waiting... (${i + 1}/5)`);
+          if (i === 0 || i === 2 || i === 5) {
+            console.log(`   Waiting for LIVE conference SID... (${(i + 1) * 500}ms)`);
+          }
         }
         
         if (!liveConferenceSid) {
-          console.error(`❌ [PARTICIPANT] Episode ${call.episodeId} has no LIVE conference SID after 5 seconds!`);
-          throw new Error(`Episode ${call.episodeId} has no live conference - host must start show first`);
+          console.error(`❌ [PARTICIPANT] Episode ${call.episodeId} has no LIVE conference SID after 3 seconds!`);
+          console.error(`   Host may not have connected to conference yet`);
+          throw new Error(`Episode ${call.episodeId} has no live conference - host must connect first`);
         }
       }
       

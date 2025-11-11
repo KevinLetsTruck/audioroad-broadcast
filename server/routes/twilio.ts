@@ -500,37 +500,50 @@ router.post('/conference-status', verifyTwilioWebhook, async (req: Request, res:
     const { ConferenceSid, StatusCallbackEvent, CallSid, FriendlyName } = req.body;
     console.log('📞 [CONFERENCE] Event:', StatusCallbackEvent, 'Conference:', FriendlyName, 'SID:', ConferenceSid, 'CallSid:', CallSid);
 
-    // When conference starts, store the SID in episode
-    if (StatusCallbackEvent === 'conference-start' && ConferenceSid && FriendlyName) {
+    // CRITICAL: Store conference SID on BOTH conference-start AND participant-join
+    // participant-join fires FIRST and has the SID we need!
+    if ((StatusCallbackEvent === 'conference-start' || StatusCallbackEvent === 'participant-join') && ConferenceSid && FriendlyName) {
       // Extract episode ID from conference name (strip screening- or live- prefix)
       const episodeId = FriendlyName.replace('screening-', '').replace('live-', '').replace('episode-', '');
       const isScreening = FriendlyName.startsWith('screening-');
       const isLive = FriendlyName.startsWith('live-');
       
-      console.log(`🎙️ [CONFERENCE] ${isScreening ? 'SCREENING' : 'LIVE'} conference started for episode: ${episodeId}`);
-      console.log(`   Conference SID: ${ConferenceSid}`);
+      // Only log on conference-start to avoid spam
+      if (StatusCallbackEvent === 'conference-start') {
+        console.log(`🎙️ [CONFERENCE] ${isScreening ? 'SCREENING' : 'LIVE'} conference started for episode: ${episodeId}`);
+        console.log(`   Conference SID: ${ConferenceSid}`);
+      }
       
       try {
+        // Fetch current episode state to check if we already have this SID
+        const currentEpisode = await prisma.episode.findUnique({
+          where: { id: episodeId },
+          select: { screeningConferenceSid: true, liveConferenceSid: true }
+        });
+        
         const updateData: any = {
           conferenceActive: true
         };
         
-        // Store SID in correct field
-        if (isScreening) {
+        // Store SID in correct field (only if not already set)
+        if (isScreening && !currentEpisode?.screeningConferenceSid) {
           updateData.screeningConferenceSid = ConferenceSid;
-          console.log('   Storing as screeningConferenceSid');
-        } else if (isLive) {
+          console.log(`   Storing SCREENING SID: ${ConferenceSid}`);
+        } else if (isLive && !currentEpisode?.liveConferenceSid) {
           updateData.liveConferenceSid = ConferenceSid;
-          console.log('   Storing as liveConferenceSid');
-        } else {
+          console.log(`   Storing LIVE SID: ${ConferenceSid}`);
+        } else if (!isScreening && !isLive && !currentEpisode?.screeningConferenceSid) {
           updateData.twilioConferenceSid = ConferenceSid;
         }
         
-        await prisma.episode.update({
-          where: { id: episodeId },
-          data: updateData
-        });
-        console.log('✅ [CONFERENCE] Episode updated with conference SID');
+        // Only update if we have new data
+        if (Object.keys(updateData).length > 1) {
+          await prisma.episode.update({
+            where: { id: episodeId },
+            data: updateData
+          });
+          console.log('✅ [CONFERENCE] Episode updated with conference SID');
+        }
       } catch (error) {
         console.error('❌ [CONFERENCE] Failed to update episode:', error);
       }
