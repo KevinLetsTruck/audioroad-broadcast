@@ -89,20 +89,21 @@ router.post('/voice', async (req: Request, res: Response) => {
         targetEpisodeId = call.episodeId;
         
         // CRITICAL: Screener must join the SAME conference as the caller
-        // Use the conference from the call record
-        if (call.twilioConferenceSid) {
-          conferenceName = call.twilioConferenceSid;
-          console.log(`🎙️ screener joining caller's conference:`, conferenceName);
-          console.log(`   (From call record - ensures same conference as caller)`);
-          
-          const twiml = generateTwiML('conference', { 
-            conferenceName,
-            startConferenceOnEnter: true,
-            endConferenceOnExit: false,
-            muted: false
-          });
-          return res.type('text/xml').send(twiml);
-        }
+        // Use FRIENDLY NAME (screening-{episodeId}), NOT the conference SID!
+        // TwiML requires friendly names - using SID creates a new conference
+        const { getScreeningConferenceName } = await import('../utils/conferenceNames.js');
+        conferenceName = getScreeningConferenceName(call.episodeId);
+        console.log(`🎙️ screener joining SCREENING conference:`, conferenceName);
+        console.log(`   (Using friendly name to join caller's existing conference)`);
+        console.log(`   Caller's conference SID: ${call.twilioConferenceSid}`);
+        
+        const twiml = generateTwiML('conference', { 
+          conferenceName,
+          startConferenceOnEnter: true,
+          endConferenceOnExit: false,
+          muted: false
+        });
+        return res.type('text/xml').send(twiml);
       } else if (episodeId) {
         episode = await prisma.episode.findUnique({ where: { id: episodeId } });
         targetEpisodeId = episodeId;
