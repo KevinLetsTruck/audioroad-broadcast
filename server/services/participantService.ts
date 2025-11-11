@@ -144,8 +144,14 @@ export class ParticipantService {
         throw new Error('Call or conference not found');
       }
 
-      // Use episode's real conference SID (CF...)
-      const conferenceSid = call.episode?.twilioConferenceSid || call.twilioConferenceSid;
+      // CRITICAL: Must use episode's real conference SID (CF...), not friendly name
+      if (!call.episode?.twilioConferenceSid) {
+        console.error(`❌ [PARTICIPANT] Episode ${call.episodeId} has no conference SID!`);
+        console.error(`   Cannot put participant on hold without conference`);
+        throw new Error(`Episode ${call.episodeId} has no active conference`);
+      }
+      
+      const conferenceSid = call.episode.twilioConferenceSid;
       console.log(`⏸️ [PARTICIPANT] Putting on hold: ${callId}`);
       console.log(`   Using conference SID: ${conferenceSid}`);
 
@@ -180,6 +186,9 @@ export class ParticipantService {
         console.log(`✅ [TWILIO] Participant on hold with music`);
       } catch (twilioError: any) {
         console.error(`❌ [TWILIO] Failed to put on hold:`, twilioError.message);
+        console.error(`   Conference SID used: ${conferenceSid}`);
+        console.error(`   CallSid: ${call.twilioCallSid}`);
+        console.error(`   Error code: ${twilioError.code}`);
         // Don't throw - just log and update database anyway
       }
 
@@ -245,8 +254,13 @@ export class ParticipantService {
         throw new Error('Call or conference not found');
       }
 
-      // Use episode's real conference SID (CF...)
-      const conferenceSid = call.episode?.twilioConferenceSid || call.twilioConferenceSid;
+      // CRITICAL: Must use episode's real conference SID (CF...), not friendly name  
+      if (!call.episode?.twilioConferenceSid) {
+        console.error(`❌ [PARTICIPANT] Episode ${call.episodeId} has no conference SID!`);
+        throw new Error(`Episode ${call.episodeId} has no active conference`);
+      }
+      
+      const conferenceSid = call.episode.twilioConferenceSid;
       console.log(`🔇 [PARTICIPANT] Muting: ${callId}`);
       console.log(`   Using conference SID: ${conferenceSid}`);
 
