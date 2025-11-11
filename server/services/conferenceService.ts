@@ -210,6 +210,48 @@ export async function removeFromConference(
 }
 
 /**
+ * Move participant from SCREENING to LIVE conference
+ * Called when screener approves a call
+ */
+export async function moveParticipantToLiveConference(
+  callSid: string,
+  episodeId: string
+): Promise<void> {
+  if (!client) throw new Error('Twilio not configured');
+  
+  const { getScreeningConferenceName, getLiveConferenceName } = await import('../utils/conferenceNames.js');
+  const screeningConf = getScreeningConferenceName(episodeId);
+  const liveConf = getLiveConferenceName(episodeId);
+  
+  console.log(`🔄 [MOVE] Moving ${callSid} from SCREENING to LIVE`);
+  
+  try {
+    // Remove from screening
+    await client.conferences(screeningConf).participants(callSid).remove();
+    console.log(`✅ [MOVE] Removed from screening`);
+  } catch (e: any) {
+    console.warn(`⚠️ [MOVE] Could not remove from screening:`, e.message);
+  }
+  
+  // Add to live conference (muted, hold: false = hear show)
+  try {
+    await client.conferences(liveConf).participants.create({
+      from: process.env.TWILIO_PHONE_NUMBER!,
+      to: callSid,
+      earlyMedia: true,
+      startConferenceOnEnter: false,
+      endConferenceOnExit: false,
+      muted: true,
+      hold: false
+    } as any);
+    console.log(`✅ [MOVE] Added to live (can hear show)`);
+  } catch (e: any) {
+    console.error(`❌ [MOVE] Failed to add to live:`, e.message);
+    throw e;
+  }
+}
+
+/**
  * Add host to conference
  */
 export async function addHostToConference(
