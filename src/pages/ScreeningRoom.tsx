@@ -454,18 +454,34 @@ export default function ScreeningRoom() {
       const updatedEpisode = await openLinesRes.json();
       console.log('✅ Phone lines opened');
 
-      // Initialize Twilio device so host can manage calls from any page
-      console.log('📞 [OPEN-LINES] Initializing Twilio device...');
-      try {
-        if (!broadcast.twilioDevice) {
-          await broadcast.initializeTwilio(`session-${Date.now()}`);
-          console.log('✅ [OPEN-LINES] Twilio device ready - host can now manage calls');
-        } else {
-          console.log('✅ [OPEN-LINES] Twilio device already initialized');
+      // Initialize connection system (WebRTC or Twilio) based on mode
+      const useWebRTC = broadcast.useWebRTC;
+      console.log(`🔌 [OPEN-LINES] Connection mode: ${useWebRTC ? 'WebRTC (LiveKit)' : 'Twilio Device'}`);
+      
+      if (useWebRTC) {
+        // Initialize WebRTC/LiveKit
+        console.log('🔌 [OPEN-LINES] Initializing LiveKit WebRTC...');
+        try {
+          await broadcast.initializeWebRTC();
+          console.log('✅ [OPEN-LINES] LiveKit ready - screener can take calls via WebRTC');
+        } catch (webrtcError) {
+          console.error('⚠️ [OPEN-LINES] LiveKit init failed:', webrtcError);
+          // Continue anyway - they can try Twilio or try again later
         }
-      } catch (twilioError) {
-        console.error('⚠️ [OPEN-LINES] Twilio init failed:', twilioError);
-        // Continue anyway - they can try again later
+      } else {
+        // Initialize Twilio device (original flow)
+        console.log('📞 [OPEN-LINES] Initializing Twilio device...');
+        try {
+          if (!broadcast.twilioDevice) {
+            await broadcast.initializeTwilio(`session-${Date.now()}`);
+            console.log('✅ [OPEN-LINES] Twilio device ready - host can now manage calls');
+          } else {
+            console.log('✅ [OPEN-LINES] Twilio device already initialized');
+          }
+        } catch (twilioError) {
+          console.error('⚠️ [OPEN-LINES] Twilio init failed:', twilioError);
+          // Continue anyway - they can try again later
+        }
       }
 
       // Update local state
@@ -482,7 +498,7 @@ export default function ScreeningRoom() {
         selectedShow: selectedShow
       });
 
-      console.log('🎉 PHONE LINES OPEN! Ready to take calls.');
+      console.log(`🎉 PHONE LINES OPEN! Screener ready to take calls via ${useWebRTC ? 'WebRTC' : 'Twilio'}.`);
     } catch (error: any) {
       console.error('❌ Failed to open phone lines:', error);
       setOpenLinesError(error.message || 'Failed to open phone lines');
