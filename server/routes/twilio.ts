@@ -941,20 +941,39 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
       }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
     }
     
-    // Route caller to SCREENING conference
-    // Always use waitUrl in screening (callers wait for screener)
-    const dial = twiml.dial();
-    dial.conference({
-      startConferenceOnEnter: true, // Caller can start conference
-      endConferenceOnExit: false, // Don't end when caller leaves
-      maxParticipants: 40,
-      muted: true, // Join MUTED - screener will unmute
-      waitUrl: `${appUrl}/api/twilio/wait-audio`, // Hold music while waiting for screener
-      waitMethod: 'POST',
-      statusCallback: `${appUrl}/api/twilio/conference-status`,
-      statusCallbackEvent: ['start', 'end', 'join', 'leave'],
-      statusCallbackMethod: 'POST'
-    }, screeningConference);
+    // Check if LiveKit/WebRTC is enabled (route to Media Stream instead of conference)
+    const useWebRTC = !!(process.env.LIVEKIT_WS_URL && process.env.LIVEKIT_API_KEY);
+    
+    if (useWebRTC) {
+      // Route to Media Stream for WebRTC bridge
+      console.log('🔌 [WELCOME-MESSAGE] Routing to Media Stream (WebRTC bridge)');
+      
+      const start = twiml.start();
+      start.stream({
+        url: `wss://${req.get('host')}/api/twilio/media-stream/stream`,
+        track: 'inbound_track'
+      });
+      
+      // Keep call alive (caller will be in Media Stream)
+      twiml.pause({ length: 3600 }); // 1 hour
+      
+    } else {
+      // Route to SCREENING conference (original Twilio flow)
+      console.log('📞 [WELCOME-MESSAGE] Routing to Twilio conference (legacy)');
+      
+      const dial = twiml.dial();
+      dial.conference({
+        startConferenceOnEnter: true,
+        endConferenceOnExit: false,
+        maxParticipants: 40,
+        muted: true,
+        waitUrl: `${appUrl}/api/twilio/wait-audio`,
+        waitMethod: 'POST',
+        statusCallback: `${appUrl}/api/twilio/conference-status`,
+        statusCallbackEvent: ['start', 'end', 'join', 'leave'],
+        statusCallbackMethod: 'POST'
+      }, screeningConference);
+    }
 
     const twimlString = twiml.toString();
     console.log('✅ [WELCOME-MESSAGE] TwiML generated:');
