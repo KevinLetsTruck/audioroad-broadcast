@@ -541,20 +541,33 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
    * Join live room via WebRTC (for host)
    */
   const joinLiveRoomWebRTC = async (episodeId: string, displayName: string): Promise<void> => {
+    console.log(`🔌 [WEBRTC] Joining live room for episode: ${episodeId}`);
+    console.log(`🔍 [WEBRTC] Service state:`, { 
+      serviceExists: !!webrtcService, 
+      isConnected: webrtcService?.isConnected() 
+    });
+
+    // If service doesn't exist or isn't connected, initialize it first
     if (!webrtcService || !webrtcService.isConnected()) {
-      throw new Error('WebRTC service not initialized');
+      console.log('⚠️ [WEBRTC] Service not ready, initializing now...');
+      await initializeWebRTC();
+      // Wait a moment for initialization to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    console.log(`🔌 [WEBRTC] Joining live room for episode: ${episodeId}`);
+    if (!webrtcService) {
+      throw new Error('WebRTC service failed to initialize');
+    }
 
     try {
       // Get local microphone stream
       await webrtcService.setLocalAudioStream();
+      console.log('✅ [WEBRTC] Got local audio stream');
       
       // Join live room
       await webrtcService.joinLiveRoom(episodeId, displayName);
 
-      // Note: Host mic goes directly to Janus via WebRTC
+      // Note: Host mic goes directly to LiveKit via WebRTC
       // It doesn't need to go through the mixer here
       // The mixer is for the final broadcast output
 
@@ -574,20 +587,33 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     callId: string,
     displayName: string
   ): Promise<void> => {
+    console.log(`🔌 [WEBRTC] Joining screening room: episode=${episodeId}, call=${callId}`);
+    console.log(`🔍 [WEBRTC] Service state:`, { 
+      serviceExists: !!webrtcService, 
+      isConnected: webrtcService?.isConnected() 
+    });
+
+    // If service doesn't exist or isn't connected, initialize it first
     if (!webrtcService || !webrtcService.isConnected()) {
-      throw new Error('WebRTC service not initialized');
+      console.log('⚠️ [WEBRTC] Service not ready, initializing now...');
+      await initializeWebRTC();
+      // Wait a moment for initialization to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    console.log(`🔌 [WEBRTC] Joining screening room: episode=${episodeId}, call=${callId}`);
+    if (!webrtcService) {
+      throw new Error('WebRTC service failed to initialize');
+    }
 
     try {
       // Get local microphone stream
       await webrtcService.setLocalAudioStream();
+      console.log('✅ [WEBRTC] Got local audio stream');
       
       // Join screening room
       await webrtcService.joinScreeningRoom(episodeId, callId, displayName);
 
-      // Note: Screener mic goes directly to Janus via WebRTC
+      // Note: Screener mic goes directly to LiveKit via WebRTC
       // Remote stream (caller) will be played via 'remote-stream' event handler
 
       console.log('✅ [WEBRTC] Joined screening room');
