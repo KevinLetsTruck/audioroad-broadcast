@@ -37,7 +37,7 @@ export default function ScreeningRoom() {
   // Initialize session Twilio device ONLY if NOT using WebRTC
   // (WebRTC mode uses LiveKit instead of Twilio Device)
   useEffect(() => {
-    if (useWebRTC) {
+    if (broadcast.useWebRTC) {
       console.log('🔌 [WEBRTC-MODE] Skipping Twilio Device initialization (using LiveKit)');
       setLocalDeviceReady(true); // Mark as ready so UI works
       return;
@@ -55,7 +55,7 @@ export default function ScreeningRoom() {
           console.error('❌ [SCREENER] Failed to initialize:', err);
         });
     }
-  }, [broadcast.twilioDevice, useWebRTC, localDeviceReady]);
+  }, [broadcast.twilioDevice, broadcast.useWebRTC, localDeviceReady]);
 
   useEffect(() => {
     console.log('🚀 ScreeningRoom mounted - initializing...');
