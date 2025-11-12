@@ -7,9 +7,10 @@
  */
 
 import express, { Request, Response } from 'express';
-import { prisma } from '../services/database.js';
+import { PrismaClient } from '@prisma/client';
 
 const router = express.Router();
+const prisma = new PrismaClient();
 
 /**
  * Put caller on air (unmute in live room)

@@ -4,9 +4,10 @@
  */
 
 import express, { Request, Response } from 'express';
-import { prisma } from '../services/database.js';
+import { PrismaClient } from '@prisma/client';
 
 const router = express.Router();
+const prisma = new PrismaClient();
 
 /**
  * Pick up call (move to screening room)

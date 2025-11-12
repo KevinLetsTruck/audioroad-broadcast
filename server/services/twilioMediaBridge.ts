@@ -235,7 +235,14 @@ export class TwilioMediaBridge extends EventEmitter {
 
     try {
       // Convert PCM (16-bit signed) to muLaw (8-bit)
-      const muLawData = Buffer.from(MuLawEncoder(pcmAudioData));
+      // First convert Buffer to Int16Array for the encoder
+      const pcmInt16 = new Int16Array(
+        pcmAudioData.buffer,
+        pcmAudioData.byteOffset,
+        pcmAudioData.length / 2
+      );
+      const muLawArray = MuLawEncoder(pcmInt16);
+      const muLawData = Buffer.from(muLawArray);
       
       // Encode to base64 for Twilio
       const payload = muLawData.toString('base64');

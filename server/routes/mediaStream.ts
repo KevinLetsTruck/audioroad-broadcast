@@ -4,19 +4,22 @@
  */
 
 import express, { Request, Response } from 'express';
-import expressWs from 'express-ws';
-import { prisma } from '../services/database.js';
+import { PrismaClient } from '@prisma/client';
 
 const router = express.Router();
-
-// Enable WebSocket on this router
-expressWs(router as any);
+const prisma = new PrismaClient();
 
 /**
  * WebSocket endpoint for Twilio Media Streams
  * Twilio connects here for each phone call when using <Stream>
+ * 
+ * Note: WebSocket support is added by express-ws in server/index.ts
  */
-(router as any).ws('/stream', async (ws: any, req: Request) => {
+interface WebSocketRouter extends express.Router {
+  ws(path: string, handler: (ws: any, req: Request) => void): void;
+}
+
+(router as WebSocketRouter).ws('/stream', async (ws: any, req: Request) => {
   console.log('📞 [MEDIA-STREAM] New WebSocket connection from Twilio');
   
   let callSid: string | null = null;
