@@ -320,10 +320,12 @@ export class LiveKitRoomManager extends EventEmitter {
       };
 
       // Use LiveKit's sendData API to broadcast to all participants in room
+      const dataPacket = Buffer.from(JSON.stringify(payload));
       await this.client.sendData(
         roomName,
-        Buffer.from(JSON.stringify(payload)),
-        { destinationIdentities: [] } // Empty = broadcast to all
+        dataPacket,
+        1, // DataPacket_Kind.RELIABLE
+        [] // Empty destinationIdentities = broadcast to all
       );
 
     } catch (error: any) {

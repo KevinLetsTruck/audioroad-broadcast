@@ -103,7 +103,9 @@ if (livekitUrl && livekitApiKey && livekitApiSecret) {
       try {
         // Forward phone audio to LiveKit room
         // LiveKit will broadcast this to all participants in the room
-        await roomManager.forwardAudioToRoom(data.roomId, data.participantId, data.audioData);
+        if (roomManager) {
+          await roomManager.forwardAudioToRoom(data.roomId, data.participantId, data.audioData);
+        }
       } catch (error) {
         console.error('❌ [AUDIO-BRIDGE] Failed to forward phone audio to LiveKit:', error);
       }
