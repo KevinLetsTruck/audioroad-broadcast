@@ -229,7 +229,7 @@ export class TwilioMediaBridge extends EventEmitter {
 
   /**
    * Send outgoing audio to phone call
-   * Convert from PCM to muLaw for Twilio
+   * Convert from 48kHz PCM to 8kHz muLaw for Twilio
    */
   sendAudioToPhone(callSid: string, pcmAudioData: Buffer): void {
     const connection = this.activeStreams.get(callSid);
@@ -239,14 +239,27 @@ export class TwilioMediaBridge extends EventEmitter {
     }
 
     try {
-      // Convert PCM (16-bit signed) to muLaw (8-bit)
-      // First convert Buffer to Int16Array for the encoder
-      const pcmInt16 = new Int16Array(
+      // Convert Buffer to Int16Array (48kHz PCM from browser)
+      const pcmInt16_48k = new Int16Array(
         pcmAudioData.buffer,
         pcmAudioData.byteOffset,
         pcmAudioData.length / 2
       );
-      const muLawArray = MuLawEncoder(pcmInt16);
+      
+      // CRITICAL: Downsample from 48kHz to 8kHz (6:1 ratio)
+      // Twilio MUST receive 8kHz audio or it will sound garbled
+      const downsampleRatio = 6; // 48000 / 8000 = 6
+      const numSamples8k = Math.floor(pcmInt16_48k.length / downsampleRatio);
+      const pcmInt16_8k = new Int16Array(numSamples8k);
+      
+      for (let i = 0; i < numSamples8k; i++) {
+        // Simple decimation: take every 6th sample
+        // (Could use low-pass filter first for better quality, but this works)
+        pcmInt16_8k[i] = pcmInt16_48k[i * downsampleRatio];
+      }
+      
+      // Now encode 8kHz PCM to 8kHz muLaw
+      const muLawArray = MuLawEncoder(pcmInt16_8k);
       const muLawData = Buffer.from(muLawArray);
       
       // Encode to base64 for Twilio
@@ -260,6 +273,10 @@ export class TwilioMediaBridge extends EventEmitter {
           payload: payload
         }
       }));
+      
+      // Update stats
+      connection.stats.packetsSent++;
+      connection.stats.bytesSent += muLawData.length;
       
     } catch (error) {
       console.error('❌ [MEDIA-BRIDGE] Error sending audio:', error);
