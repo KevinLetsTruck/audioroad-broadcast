@@ -193,7 +193,7 @@ app.use('/api/episodes', apiLimiter, episodeRoutes);
 app.use('/api/shows', apiLimiter, showRoutes);
 app.use('/api/twilio', twilioWebhookLimiter, twilioRoutes); // Twilio webhooks
 app.use('/api/twilio', apiLimiter, twilioPlaybackRoutes); // Twilio conference playback
-app.use('/api/twilio/media-stream', mediaStreamRoutes); // Twilio Media Streams WebSocket (WebRTC bridge)
+// app.use('/api/twilio/media-stream', mediaStreamRoutes); // Twilio Media Streams WebSocket (TEMPORARILY DISABLED - needs express-ws setup)
 app.use('/api/live-stream', liveStreamRoutes); // Live audio stream for callers on hold
 app.use('/api/analysis', apiLimiter, analysisRoutes);
 app.use('/api/audio-assets', apiLimiter, audioAssetRoutes);
