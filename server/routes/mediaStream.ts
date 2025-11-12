@@ -42,9 +42,10 @@ interface WebSocketRouter extends express.Router {
           console.log(`   Stream SID: ${streamSid}`);
           console.log(`   Custom Parameters:`, msg.start.customParameters);
 
-          // Look up call in database
+          // Look up call in database (include caller for name/phone)
           const call = await prisma.call.findFirst({
-            where: { twilioCallSid: callSid }
+            where: { twilioCallSid: callSid },
+            include: { caller: true }
           });
 
           if (!call) {
@@ -66,18 +67,22 @@ interface WebSocketRouter extends express.Router {
           let roomId: string;
           let displayName: string;
 
+          // Get caller name/phone from the caller relation
+          const callerName = call.caller?.name || 'Unknown Caller';
+          const callerPhone = call.caller?.phoneNumber || 'Unknown';
+
           switch (call.status) {
             case 'queued':
             case 'ringing':
               // New caller goes to lobby
               roomId = 'lobby';
-              displayName = call.callerName || call.callerPhone;
+              displayName = callerName;
               break;
 
             case 'screening':
               // Being screened - join screening room
               roomId = `screening-${call.episodeId}-${call.id}`;
-              displayName = call.callerName || call.callerPhone;
+              displayName = callerName;
               break;
 
             case 'approved':
@@ -85,13 +90,13 @@ interface WebSocketRouter extends express.Router {
             case 'on-hold':
               // Join live room
               roomId = `live-${call.episodeId}`;
-              displayName = call.callerName || call.callerPhone;
+              displayName = callerName;
               break;
 
             default:
               console.warn(`⚠️ [MEDIA-STREAM] Unexpected call status: ${call.status}`);
               roomId = 'lobby';
-              displayName = call.callerName || call.callerPhone;
+              displayName = callerName;
           }
 
           // Start media stream bridge
