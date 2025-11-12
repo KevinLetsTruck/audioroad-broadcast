@@ -84,48 +84,49 @@ export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
     try {
       console.log('📡 [PARTICIPANT-BOARD] Putting participant on air:', callId);
       console.log('   Episode ID:', episodeId);
-      console.log('   Twilio device:', broadcast.twilioDevice ? 'Ready' : 'Not initialized');
-      console.log('   Active calls:', broadcast.activeCalls.size);
+      console.log('   Connection mode:', broadcast.useWebRTC ? 'WebRTC' : 'Twilio');
       
       const participant = [...participants.onAir, ...participants.onHold, ...participants.screening]
         .find(p => p.id === callId);
       const callerName = participant?.caller?.name || 'Caller';
       
-      // Ensure host is connected to Twilio conference to hear callers
-      // All callers for the same episode join the same conference (episode-${episodeId})
-      // The host only needs ONE connection per episode to hear all callers
-      // Check if host is already connected by checking Twilio device state
-      const hostNeedsConnection = !broadcast.twilioDevice || 
-        broadcast.activeCalls.size === 0 ||
-        !Array.from(broadcast.activeCalls.values()).some(call => {
-          // Check if there's an active call for this episode
-          // Since all calls for same episode use same conference, any call means host is connected
-          return call.twilioCall && call.twilioCall.status() !== 'closed';
-        });
-      
-      console.log('   Host needs connection?', hostNeedsConnection);
-      
-      if (hostNeedsConnection) {
-        if (!broadcast.twilioDevice) {
-          const errorMsg = 'Twilio device not initialized. Please start a show first.';
-          console.error('❌ [PARTICIPANT-BOARD]', errorMsg);
-          alert(errorMsg);
-          return;
-        }
-        console.log('🔌 [PARTICIPANT-BOARD] Connecting host to LIVE conference...');
-        try {
-          await broadcast.connectToCall(callId, callerName, episodeId, 'host');
-          console.log('⏳ [PARTICIPANT-BOARD] Waiting for LIVE conference SID...');
-          console.log('   (participant-join webhook will store the SID)');
-          await new Promise(resolve => setTimeout(resolve, 2000)); // 2 seconds should be enough now
-          console.log('✅ [PARTICIPANT-BOARD] LIVE conference ready');
-        } catch (error) {
-          console.error('❌ [PARTICIPANT-BOARD] Host connection failed:', error);
-          alert(`Failed to connect to caller: ${error instanceof Error ? error.message : 'Unknown error'}`);
-          return;
-        }
+      // In WebRTC mode, host is already connected to LiveKit live room
+      // In Twilio mode, host needs to join conference
+      if (broadcast.useWebRTC) {
+        console.log('✅ [PARTICIPANT-BOARD] Using WebRTC - host already in live room');
+        // No action needed - host is already in live-{episodeId} room
+        // Server will move caller to same room when we call the API below
       } else {
-        console.log(`✅ [PARTICIPANT-BOARD] Host already connected (${broadcast.activeCalls.size} active call(s))`);
+        // Twilio mode: Ensure host is connected to conference
+        const hostNeedsConnection = !broadcast.twilioDevice || 
+          broadcast.activeCalls.size === 0 ||
+          !Array.from(broadcast.activeCalls.values()).some(call => {
+            return call.twilioCall && call.twilioCall.status() !== 'closed';
+          });
+        
+        console.log('   Host needs connection?', hostNeedsConnection);
+        
+        if (hostNeedsConnection) {
+          if (!broadcast.twilioDevice) {
+            const errorMsg = 'Twilio device not initialized. Please start a show first.';
+            console.error('❌ [PARTICIPANT-BOARD]', errorMsg);
+            alert(errorMsg);
+            return;
+          }
+          console.log('🔌 [PARTICIPANT-BOARD] Connecting host to LIVE conference...');
+          try {
+            await broadcast.connectToCall(callId, callerName, episodeId, 'host');
+            console.log('⏳ [PARTICIPANT-BOARD] Waiting for LIVE conference SID...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            console.log('✅ [PARTICIPANT-BOARD] LIVE conference ready');
+          } catch (error) {
+            console.error('❌ [PARTICIPANT-BOARD] Host connection failed:', error);
+            alert(`Failed to connect to caller: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            return;
+          }
+        } else {
+          console.log(`✅ [PARTICIPANT-BOARD] Host already connected (${broadcast.activeCalls.size} active call(s))`);
+        }
       }
       
       console.log('📡 [PARTICIPANT-BOARD] Calling API to put on air...');
