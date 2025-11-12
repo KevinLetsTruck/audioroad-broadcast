@@ -355,102 +355,74 @@ export class LiveKitClient {
     try {
       // Initialize audio context if needed
       if (!this.audioContext) {
-        this.audioContext = new AudioContext({ sampleRate: 48000 }); // Standard rate
+        this.audioContext = new AudioContext({ sampleRate: 48000 });
         this.nextPlayTime = this.audioContext.currentTime;
         console.log('🔊 [AUDIO] AudioContext created, sample rate:', this.audioContext.sampleRate);
       }
 
-      // Resume AudioContext if suspended (browser security requires user gesture)
+      // Resume AudioContext if suspended
       if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
       }
 
-      // Log first playback only
+      // Log first playback
       if (!this.audioPlaybackStarted) {
         this.audioPlaybackStarted = true;
         console.log('🔊 [AUDIO] Starting phone audio playback...');
-        console.log(`   Received ${pcmBytes.length} bytes at ${sampleRate}Hz`);
+        console.log(`   PCM bytes: ${pcmBytes.length}, sample rate: ${sampleRate}Hz`);
       }
 
-      // Ensure even number of bytes for 16-bit PCM
-      if (pcmBytes.length % 2 !== 0) {
-        console.warn('⚠️ [AUDIO] Odd byte count, truncating');
-        pcmBytes = pcmBytes.slice(0, pcmBytes.length - 1);
-      }
-
-      // Convert PCM bytes to Int16 samples (handle byte order properly)
-      const numSamples = pcmBytes.length / 2;
-      const int16Array = new Int16Array(numSamples);
-      for (let i = 0; i < numSamples; i++) {
-        // Little-endian: low byte first, high byte second
-        const low = pcmBytes[i * 2];
-        const high = pcmBytes[i * 2 + 1];
-        int16Array[i] = (high << 8) | low;
-        // Handle sign extension for negative numbers
-        if (int16Array[i] > 32767) {
-          int16Array[i] -= 65536;
-        }
-      }
-
-      // MANUAL UPSAMPLING: 8kHz → 48kHz (6x)
-      // Simple linear interpolation for better quality than browser's automatic resampling
-      const upsampleFactor = 6; // 8kHz * 6 = 48kHz
-      const upsampledLength = int16Array.length * upsampleFactor;
-      const upsampledFloat = new Float32Array(upsampledLength);
-
-      for (let i = 0; i < int16Array.length - 1; i++) {
-        const sample1 = int16Array[i] / 32768.0;
-        const sample2 = int16Array[i + 1] / 32768.0;
-        
-        for (let j = 0; j < upsampleFactor; j++) {
-          const fraction = j / upsampleFactor;
-          const interpolated = sample1 + (sample2 - sample1) * fraction;
-          upsampledFloat[i * upsampleFactor + j] = interpolated;
-        }
-      }
+      // SIMPLE APPROACH: Just convert PCM bytes to Float32 and let browser handle resampling
+      // PCM is 16-bit signed little-endian
+      const numSamples = Math.floor(pcmBytes.length / 2);
+      const float32Array = new Float32Array(numSamples);
       
-      // Handle last sample
-      const lastSample = int16Array[int16Array.length - 1] / 32768.0;
-      for (let j = 0; j < upsampleFactor; j++) {
-        upsampledFloat[(int16Array.length - 1) * upsampleFactor + j] = lastSample;
+      for (let i = 0; i < numSamples; i++) {
+        // Read 16-bit little-endian signed integer
+        const byte1 = pcmBytes[i * 2];
+        const byte2 = pcmBytes[i * 2 + 1];
+        let value = byte1 | (byte2 << 8);
+        
+        // Convert to signed 16-bit
+        if (value >= 0x8000) {
+          value -= 0x10000;
+        }
+        
+        // Normalize to -1.0 to 1.0
+        float32Array[i] = value / 32768.0;
       }
 
-      // Create audio buffer at 48kHz (no browser resampling needed)
+      // Create audio buffer - let browser resample from 8kHz to 48kHz
       const audioBuffer = this.audioContext.createBuffer(
         1, // Mono
-        upsampledFloat.length,
-        48000 // Match AudioContext rate
+        numSamples,
+        sampleRate // Original rate (8000)
       );
-      audioBuffer.copyToChannel(upsampledFloat, 0);
+      audioBuffer.copyToChannel(float32Array, 0);
 
-      // Create playback chain with filtering
+      // Create audio source and play
       const source = this.audioContext.createBufferSource();
       source.buffer = audioBuffer;
       
-      // Low-pass filter to remove high-frequency noise
-      const filter = this.audioContext.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.value = 3400; // Phone audio bandwidth (300Hz-3400Hz)
-      filter.Q.value = 0.7;
-      
-      // Optional: Gain node for volume control
+      // Add gain to boost volume
       const gainNode = this.audioContext.createGain();
-      gainNode.gain.value = 1.5; // Boost volume slightly
+      gainNode.gain.value = 2.0; // Boost phone audio
       
-      source.connect(filter);
-      filter.connect(gainNode);
+      source.connect(gainNode);
       gainNode.connect(this.audioContext.destination);
 
-      // Play immediately or queue
+      // Schedule playback to prevent gaps
       const now = this.audioContext.currentTime;
       const playTime = Math.max(now, this.nextPlayTime);
       source.start(playTime);
       
       // Update next play time
-      this.nextPlayTime = playTime + audioBuffer.duration;
+      const duration = numSamples / sampleRate;
+      this.nextPlayTime = playTime + duration;
 
     } catch (error) {
       console.error('❌ [LIVEKIT-CLIENT] Failed to play phone audio:', error);
+      console.error('   Error details:', error);
     }
   }
 
