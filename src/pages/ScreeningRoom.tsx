@@ -30,7 +30,6 @@ export default function ScreeningRoom() {
   const [openLinesError, setOpenLinesError] = useState('');
 
   // Don't auto-initialize - let "Open Phone Lines" handle device setup based on mode
-  const [localDeviceReady, setLocalDeviceReady] = useState(true); // Always "ready" - devices init on demand
   const screenerReady = true; // Always ready - connection happens when clicking "Open Phone Lines"
   const screenerConnected = activeCall !== null;
 
