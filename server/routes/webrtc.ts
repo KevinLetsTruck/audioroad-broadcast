@@ -36,7 +36,7 @@ router.post('/token', async (req: Request, res: Response) => {
     await roomManager.ensureRoomExists(roomName);
 
     // Generate token
-    const token = roomManager.generateToken(roomName, participantId, participantName);
+    const token = await roomManager.generateToken(roomName, participantId, participantName);
 
     console.log(`✅ [WEBRTC] Token generated for ${participantId}`);
 
