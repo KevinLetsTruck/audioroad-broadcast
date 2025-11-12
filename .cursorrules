@@ -636,3 +636,4 @@ If you follow this rule, you'll never experience the "security audit breaks ever
 **These rules are based on real debugging sessions in audioroad-broadcast and fntp-ai-assessment-tool where retrofitting auth caused 26+ features to break and required weeks of fixes.**
 
 
+
