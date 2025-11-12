@@ -510,18 +510,19 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
         setWebrtcConnected(false);
       });
 
-      service.on('local-stream', (stream: MediaStream) => {
+      service.on('local-stream', () => {
         console.log('🎤 [WEBRTC] Local stream ready');
-        // Optionally add to mixer if needed
+        // Local stream is managed by WebRTC service
       });
 
       service.on('remote-stream', (stream: MediaStream) => {
         console.log('📥 [WEBRTC] Remote stream received');
-        // Add remote audio to mixer or audio element
-        if (mixer) {
-          mixer.addAudioStream(stream, 'webrtc-remote', 'WebRTC Participants');
-          refreshAudioSources();
-        }
+        // Play remote audio directly (participants in room)
+        // Note: This plays through default audio output, not the mixer
+        // The mixer is for the broadcast stream, this is for host monitoring
+        const audio = new Audio();
+        audio.srcObject = stream;
+        audio.play().catch(e => console.error('Failed to play remote stream:', e));
       });
 
       await service.initialize();
@@ -553,12 +554,9 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
       // Join live room
       await webrtcService.joinLiveRoom(episodeId, displayName);
 
-      // Add local stream to mixer
-      const localStream = webrtcService.getLocalStream();
-      if (localStream && mixer) {
-        mixer.addAudioStream(localStream, 'host-mic-webrtc', 'Host Microphone (WebRTC)');
-        refreshAudioSources();
-      }
+      // Note: Host mic goes directly to Janus via WebRTC
+      // It doesn't need to go through the mixer here
+      // The mixer is for the final broadcast output
 
       console.log('✅ [WEBRTC] Joined live room');
 
@@ -589,12 +587,8 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
       // Join screening room
       await webrtcService.joinScreeningRoom(episodeId, callId, displayName);
 
-      // Add local stream to mixer
-      const localStream = webrtcService.getLocalStream();
-      if (localStream && mixer) {
-        mixer.addAudioStream(localStream, 'screener-mic-webrtc', 'Screener Microphone (WebRTC)');
-        refreshAudioSources();
-      }
+      // Note: Screener mic goes directly to Janus via WebRTC
+      // Remote stream (caller) will be played via 'remote-stream' event handler
 
       console.log('✅ [WEBRTC] Joined screening room');
 
@@ -617,13 +611,8 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     try {
       await webrtcService.leaveRoom();
       
-      // Remove WebRTC streams from mixer
-      if (mixer) {
-        mixer.removeSource('host-mic-webrtc');
-        mixer.removeSource('screener-mic-webrtc');
-        mixer.removeSource('webrtc-remote');
-        refreshAudioSources();
-      }
+      // WebRTC streams are managed by the WebRTC service
+      // No mixer cleanup needed
 
       console.log('✅ [WEBRTC] Left room');
 
