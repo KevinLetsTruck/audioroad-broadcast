@@ -52,42 +52,43 @@ export async function putOnAirSimple(callId: string): Promise<void> {
       }
     }
 
-    // Get LIVE conference name
-    const liveConferenceName = `live-${call.episodeId}`;
-    const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
-    
-    console.log(`🔄 [ON-AIR] Redirecting to LIVE conference: ${liveConferenceName}`);
-    
-    // Redirect call to join LIVE conference (UNMUTED for on-air)
-    await twilioClient
-      .calls(call.twilioCallSid)
-      .update({
-        twiml: `<?xml version="1.0" encoding="UTF-8"?>
-          <Response>
-            <Dial>
-              <Conference 
-                startConferenceOnEnter="false" 
-                endConferenceOnExit="false"
-                muted="false"
-                beep="false"
-                record="record-from-start"
-                recordingStatusCallback="${appUrl}/api/twilio/participant-recording-status"
-                recordingStatusCallbackMethod="POST">
-                ${liveConferenceName}
-              </Conference>
-            </Dial>
-          </Response>`
+    // Check if caller is in screening - if so, move them to LIVE first
+    if (call.currentConferenceType === 'screening' || call.status === 'approved') {
+      console.log(`🔄 [ON-AIR] Moving caller from SCREENING to LIVE conference...`);
+      
+      const { moveParticipantToLiveConference } = await import('../services/conferenceService.js');
+      await moveParticipantToLiveConference(call.twilioCallSid, call.episodeId);
+      
+      console.log(`✅ [ON-AIR] Moved to LIVE conference`);
+      
+      // Update database with new conference info
+      await prisma.call.update({
+        where: { id: callId },
+        data: {
+          twilioConferenceSid: liveConferenceSid,
+          currentConferenceType: 'live'
+        }
       });
+    }
     
-    console.log(`✅ [ON-AIR] Redirected to LIVE conference (unmuted)`);
+    // Now unmute them in LIVE conference (whether they just moved or were already there)
+    console.log(`🔊 [ON-AIR] Unmuting in LIVE conference...`);
+    
+    await twilioClient
+      .conferences(liveConferenceSid)
+      .participants(call.twilioCallSid)
+      .update({
+        muted: false,
+        hold: false
+      } as any);
+    
+    console.log(`✅ [ON-AIR] Unmuted in LIVE`);
     
     // Update database
     await prisma.call.update({
       where: { id: callId },
       data: {
         participantState: 'on-air',
-        twilioConferenceSid: liveConferenceSid,
-        currentConferenceType: 'live',
         isMutedInConference: false,
         isOnHold: false,
         onAirAt: call.onAirAt || new Date()

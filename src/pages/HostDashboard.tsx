@@ -398,26 +398,9 @@ export default function HostDashboard() {
         selectedShow: show
       });
       
-      // CRITICAL: Redirect approved callers to live stream
-      // They hear show (one-way stream) while waiting to go on air
-      console.log('📻 [START-BROADCAST] Redirecting approved callers to live stream...');
-      try {
-        const redirectRes = await fetch('/api/calls/redirect-to-stream', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ episodeId: activeEpisode.id })
-        });
-        
-        if (redirectRes.ok) {
-          const result = await redirectRes.json();
-          console.log(`✅ [START-BROADCAST] Redirected ${result.redirected} callers to live stream`);
-          console.log('   They now hear: Host mic + show content + on-air callers');
-        } else {
-          console.error('❌ [START-BROADCAST] Failed to redirect callers to stream');
-        }
-      } catch (err) {
-        console.error('⚠️ Failed to redirect approved callers:', err);
-      }
+      // Approved callers will be moved to LIVE when put on air
+      // They stay in screening with hold music until then
+      console.log('ℹ️ [START-BROADCAST] Approved callers will be moved to LIVE when put on air');
       
       // IMPORTANT: Wait for hold music to FULLY STOP in Twilio
       // Twilio's hold music takes time to stop - if we play opener too soon, both play at once!

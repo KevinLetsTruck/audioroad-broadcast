@@ -280,29 +280,10 @@ router.patch('/:id/approve', async (req: Request, res: Response) => {
         console.error('❌ [APPROVE] Failed to move:', moveError.message);
       }
     } else if (call.twilioCallSid && !isShowLive) {
-      // Show not live yet - redirect to listen to hold music
-      // (When show starts, they'll be redirected to live stream)
-      try {
-        console.log(`📞 [APPROVE] Show not live, caller will hear hold music`);
-        
-        const appUrl = process.env.APP_URL || 'https://audioroad-broadcast-production.up.railway.app';
-        
-        if (twilioClient) {
-          // Redirect call to hold music endpoint
-          await twilioClient
-            .calls(call.twilioCallSid)
-            .update({
-              twiml: `<?xml version="1.0" encoding="UTF-8"?>
-                <Response>
-                  <Play loop="10">http://com.twilio.sounds.music.s3.amazonaws.com/MARKOVICHAMP-Borghestral.mp3</Play>
-                </Response>`
-            });
-          
-          console.log(`✅ [APPROVE] Caller redirected to hold music`);
-        }
-      } catch (redirectError: any) {
-        console.error('❌ [APPROVE] Failed to redirect:', redirectError.message);
-      }
+      // Show not live yet - caller stays in screening with hold music
+      // We'll move them to LIVE when show starts
+      console.log(`📞 [APPROVE] Show not live, caller will hear hold music in screening`);
+      // No action needed - they stay in screening conference with hold music
     }
 
     const io = req.app.get('io');
