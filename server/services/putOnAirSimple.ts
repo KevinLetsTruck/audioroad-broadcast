@@ -12,7 +12,7 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 
-export async function putOnAirSimple(callId: string): Promise<void> {
+export async function putOnAirSimple(callId: string, mediaBridge?: any): Promise<void> {
   try {
     const call = await prisma.call.findUnique({
       where: { id: callId },
@@ -26,6 +26,34 @@ export async function putOnAirSimple(callId: string): Promise<void> {
     console.log(`📡 [ON-AIR] Putting ${callId} on air`);
     console.log(`   CallSid: ${call.twilioCallSid}`);
     console.log(`   Current status: ${call.status}`);
+
+    // Check if using WebRTC (LiveKit)
+    const useWebRTC = !!process.env.LIVEKIT_WS_URL && !!mediaBridge;
+
+    if (useWebRTC) {
+      console.log(`🔌 [ON-AIR] Using WebRTC - moving Media Stream to live room`);
+      
+      const liveRoom = `live-${call.episodeId}`;
+      await mediaBridge.moveToRoom(call.twilioCallSid, liveRoom);
+      
+      console.log(`✅ [ON-AIR] Caller moved to live room: ${liveRoom}`);
+      
+      // Update database
+      await prisma.call.update({
+        where: { id: callId },
+        data: {
+          participantState: 'on-air',
+          status: 'on-air',
+          onAirAt: call.onAirAt || new Date()
+        }
+      });
+      
+      console.log(`✅ [ON-AIR] ${callId} is now ON AIR (WebRTC)`);
+      return;
+    }
+
+    // Otherwise use Twilio conference system (legacy)
+    console.log(`📞 [ON-AIR] Using Twilio conferences (legacy)`);
 
     // Get LIVE conference SID (with retry for race condition)
     let liveConferenceSid = call.episode?.liveConferenceSid;

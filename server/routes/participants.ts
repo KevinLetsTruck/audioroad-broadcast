@@ -32,9 +32,12 @@ router.patch('/:callId/on-air', async (req: Request, res: Response) => {
   try {
     const { callId } = req.params;
     
+    // Get Media Bridge if available (for WebRTC)
+    const mediaBridge = req.app.get('mediaBridge');
+    
     // Use simpler stream-based approach
     const { putOnAirSimple } = await import('../services/putOnAirSimple.js');
-    await putOnAirSimple(callId);
+    await putOnAirSimple(callId, mediaBridge);
     
     // Emit WebSocket event
     const io = req.app.get('io');

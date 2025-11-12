@@ -322,6 +322,7 @@ export class LiveKitClient {
       if (!this.audioContext) {
         this.audioContext = new AudioContext({ sampleRate: 48000 }); // Standard rate
         this.nextPlayTime = this.audioContext.currentTime;
+        console.log('🔊 [AUDIO] AudioContext created, sample rate:', this.audioContext.sampleRate);
       }
 
       // Convert PCM bytes to Float32 samples
@@ -331,18 +332,27 @@ export class LiveKitClient {
         float32Array[i] = int16Array[i] / 32768.0; // Convert to -1.0 to 1.0
       }
 
-      // Create audio buffer
+      // Create audio buffer at phone's sample rate (8kHz from Twilio)
+      // Browser will automatically resample to match AudioContext rate (48kHz)
       const audioBuffer = this.audioContext.createBuffer(
         1, // Mono
         float32Array.length,
-        sampleRate
+        sampleRate // Use phone's actual rate (8000)
       );
       audioBuffer.copyToChannel(float32Array, 0);
 
       // Schedule playback
       const source = this.audioContext.createBufferSource();
       source.buffer = audioBuffer;
-      source.connect(this.audioContext.destination);
+      
+      // Add low-pass filter to reduce noise/static
+      const filter = this.audioContext.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 3400; // Phone audio bandwidth
+      filter.Q.value = 1;
+      
+      source.connect(filter);
+      filter.connect(this.audioContext.destination);
 
       // Play immediately or queue
       const now = this.audioContext.currentTime;
