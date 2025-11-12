@@ -122,3 +122,4 @@ With the .cursorrules file active, Cursor should:
 
 
 
+

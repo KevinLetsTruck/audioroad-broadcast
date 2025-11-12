@@ -966,12 +966,28 @@ export default function ScreeningRoom() {
               </div>
             )}
             
+            {/* WebRTC Mode Toggle - BEFORE Opening Lines */}
+            <div className="mb-6 flex justify-center">
+              <label className="flex items-center gap-2 cursor-pointer text-sm bg-gray-700 px-4 py-2 rounded-lg">
+                <input
+                  type="checkbox"
+                  checked={broadcast.useWebRTC}
+                  onChange={(e) => broadcast.setUseWebRTC(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span>Use WebRTC</span>
+                {broadcast.webrtcConnected && (
+                  <span className="px-2 py-0.5 bg-green-600 text-white text-xs rounded ml-2">Connected</span>
+                )}
+              </label>
+            </div>
+            
             <button
               onClick={handleOpenLines}
               disabled={isOpeningLines || !selectedShow}
               className="px-8 py-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-bold text-lg transition-colors"
             >
-              {isOpeningLines ? '⏳ Opening Lines...' : '📞 OPEN PHONE LINES'}
+              {isOpeningLines ? '⏳ Opening Lines...' : `📞 OPEN PHONE LINES ${broadcast.useWebRTC ? '(WebRTC)' : '(Twilio)'}`}
             </button>
             
             {!selectedShow && (
