@@ -41,10 +41,37 @@ export class LiveKitClient {
     try {
       await this.room.connect(this.wsUrl, token);
       console.log('✅ [LIVEKIT-CLIENT] Connected to room:', this.room.name);
+      
+      // Proactively resume AudioContext (browser requires user gesture)
+      this.resumeAudioContext();
+      
       this.emit('connected', { roomName: this.room.name });
     } catch (error) {
       console.error('❌ [LIVEKIT-CLIENT] Connection failed:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Resume AudioContext (must be called after user gesture)
+   */
+  private async resumeAudioContext(): Promise<void> {
+    if (!this.audioContext) {
+      this.audioContext = new AudioContext({ sampleRate: 48000 });
+      this.nextPlayTime = this.audioContext.currentTime;
+      console.log('🔊 [AUDIO] AudioContext created, sample rate:', this.audioContext.sampleRate);
+    }
+
+    if (this.audioContext.state === 'suspended') {
+      console.log('🔊 [AUDIO] Resuming suspended AudioContext...');
+      try {
+        await this.audioContext.resume();
+        console.log('✅ [AUDIO] AudioContext resumed, state:', this.audioContext.state);
+      } catch (error) {
+        console.error('❌ [AUDIO] Failed to resume AudioContext:', error);
+      }
+    } else {
+      console.log('✅ [AUDIO] AudioContext already running, state:', this.audioContext.state);
     }
   }
 
@@ -323,6 +350,13 @@ export class LiveKitClient {
         this.audioContext = new AudioContext({ sampleRate: 48000 }); // Standard rate
         this.nextPlayTime = this.audioContext.currentTime;
         console.log('🔊 [AUDIO] AudioContext created, sample rate:', this.audioContext.sampleRate);
+      }
+
+      // Resume AudioContext if suspended (browser security requires user gesture)
+      if (this.audioContext.state === 'suspended') {
+        console.log('🔊 [AUDIO] Resuming suspended AudioContext...');
+        await this.audioContext.resume();
+        console.log('✅ [AUDIO] AudioContext resumed, state:', this.audioContext.state);
       }
 
       // Convert PCM bytes to Float32 samples
