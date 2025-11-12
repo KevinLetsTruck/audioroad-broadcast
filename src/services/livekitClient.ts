@@ -150,14 +150,21 @@ export class LiveKitClient {
 
         // Check if it's phone audio
         if (data.type === 'phone-audio') {
-          console.log('📞 [LIVEKIT-CLIENT] Received phone audio chunk');
+          // Only log every 100th packet to reduce noise
+          if (Math.random() < 0.01) {
+            console.log('📞 [LIVEKIT-CLIENT] Received phone audio chunk');
+          }
           
           // Decode base64 audio
           const audioBase64 = data.audio;
           const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
           
           // Create AudioBuffer and play
-          this.playPhoneAudio(audioBytes, data.sampleRate || 8000);
+          this.playPhoneAudio(audioBytes, data.sampleRate || 8000).catch(err => {
+            if (Math.random() < 0.01) { // Log only 1% of errors
+              console.error('❌ [LIVEKIT-CLIENT] Failed to play audio:', err);
+            }
+          });
         }
       } catch (error) {
         console.error('❌ [LIVEKIT-CLIENT] Failed to process data:', error);
@@ -342,6 +349,7 @@ export class LiveKitClient {
    */
   private audioContext: AudioContext | null = null;
   private nextPlayTime: number = 0;
+  private audioPlaybackStarted: boolean = false;
 
   private async playPhoneAudio(pcmBytes: Uint8Array, sampleRate: number): Promise<void> {
     try {
@@ -350,6 +358,7 @@ export class LiveKitClient {
         this.audioContext = new AudioContext({ sampleRate: 48000 }); // Standard rate
         this.nextPlayTime = this.audioContext.currentTime;
         console.log('🔊 [AUDIO] AudioContext created, sample rate:', this.audioContext.sampleRate);
+        console.log('🔊 [AUDIO] AudioContext state:', this.audioContext.state);
       }
 
       // Resume AudioContext if suspended (browser security requires user gesture)
@@ -357,6 +366,13 @@ export class LiveKitClient {
         console.log('🔊 [AUDIO] Resuming suspended AudioContext...');
         await this.audioContext.resume();
         console.log('✅ [AUDIO] AudioContext resumed, state:', this.audioContext.state);
+      }
+
+      // Log first playback only
+      if (!this.audioPlaybackStarted) {
+        this.audioPlaybackStarted = true;
+        console.log('🔊 [AUDIO] Starting phone audio playback...');
+        console.log(`   Received ${pcmBytes.length} bytes at ${sampleRate}Hz`);
       }
 
       // Convert PCM bytes to Float32 samples
