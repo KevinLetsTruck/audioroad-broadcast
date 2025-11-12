@@ -555,17 +555,20 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    if (!webrtcService) {
+    // Get the service directly from singleton (React state might not be updated yet)
+    const service = getWebRTCService({ livekitUrl: import.meta.env.VITE_LIVEKIT_WS_URL || 'wss://audioroad-broadcast-st6f3yzp.livekit.cloud' });
+    
+    if (!service || !service.isConnected()) {
       throw new Error('WebRTC service failed to initialize');
     }
 
     try {
       // Get local microphone stream
-      await webrtcService.setLocalAudioStream();
+      await service.setLocalAudioStream();
       console.log('✅ [WEBRTC] Got local audio stream');
       
       // Join live room
-      await webrtcService.joinLiveRoom(episodeId, displayName);
+      await service.joinLiveRoom(episodeId, displayName);
 
       // Note: Host mic goes directly to LiveKit via WebRTC
       // It doesn't need to go through the mixer here
@@ -601,17 +604,20 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    if (!webrtcService) {
+    // Get the service directly from singleton (React state might not be updated yet)
+    const service = getWebRTCService({ livekitUrl: import.meta.env.VITE_LIVEKIT_WS_URL || 'wss://audioroad-broadcast-st6f3yzp.livekit.cloud' });
+    
+    if (!service || !service.isConnected()) {
       throw new Error('WebRTC service failed to initialize');
     }
 
     try {
       // Get local microphone stream
-      await webrtcService.setLocalAudioStream();
+      await service.setLocalAudioStream();
       console.log('✅ [WEBRTC] Got local audio stream');
       
       // Join screening room
-      await webrtcService.joinScreeningRoom(episodeId, callId, displayName);
+      await service.joinScreeningRoom(episodeId, callId, displayName);
 
       // Note: Screener mic goes directly to LiveKit via WebRTC
       // Remote stream (caller) will be played via 'remote-stream' event handler
