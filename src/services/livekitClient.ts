@@ -15,7 +15,6 @@ export interface LiveKitConfig {
 export class LiveKitClient {
   private room: Room | null = null;
   private wsUrl: string;
-  private currentToken: string | null = null;
   private eventCallbacks: Map<string, Function> = new Map();
 
   constructor(wsUrl: string) {
@@ -27,8 +26,6 @@ export class LiveKitClient {
    */
   async connect(token: string): Promise<void> {
     console.log('📡 [LIVEKIT-CLIENT] Connecting to LiveKit...');
-
-    this.currentToken = token;
     this.room = new Room({
       adaptiveStream: true,
       dynacast: true,
@@ -150,9 +147,12 @@ export class LiveKitClient {
 
     console.log('🔇 [LIVEKIT-CLIENT] Unpublishing audio...');
 
-    const publication = this.room.localParticipant.getTrack(Track.Source.Microphone);
-    if (publication) {
-      await this.room.localParticipant.unpublishTrack(publication.track!);
+    // Get microphone track publication
+    const publications = Array.from(this.room.localParticipant.trackPublications.values());
+    const micPublication = publications.find(p => p.source === Track.Source.Microphone);
+    
+    if (micPublication && micPublication.track) {
+      await this.room.localParticipant.unpublishTrack(micPublication.track);
       console.log('✅ [LIVEKIT-CLIENT] Audio unpublished');
     }
   }
@@ -182,7 +182,6 @@ export class LiveKitClient {
 
     await this.room.disconnect();
     this.room = null;
-    this.currentToken = null;
 
     console.log('✅ [LIVEKIT-CLIENT] Disconnected');
     this.emit('disconnected');
