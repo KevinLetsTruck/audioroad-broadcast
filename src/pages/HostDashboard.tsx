@@ -10,6 +10,7 @@ export default function HostDashboard() {
   
   const [activeEpisode, setActiveEpisode] = useState<any>(null);
   const [isLive, setIsLive] = useState(false);
+  const [isConnectedToLiveRoom, setIsConnectedToLiveRoom] = useState(false);
   
   const [approvedCalls, setApprovedCalls] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'calls' | 'documents' | 'announcements' | 'history'>('calls');
@@ -300,6 +301,48 @@ export default function HostDashboard() {
     }
   };
 
+  /**
+   * Join Live Room (WebRTC only - no recording/streaming)
+   * For pre-show prep, talking with guests/approved callers
+   */
+  const joinLiveRoom = async () => {
+    if (!activeEpisode) return;
+    
+    try {
+      console.log('🔌 [JOIN-ROOM] Joining live room via WebRTC (pre-show)...');
+      
+      // Initialize WebRTC if not already done
+      if (!broadcast.webrtcService || !broadcast.webrtcService.isConnected()) {
+        await broadcast.initializeWebRTC();
+        console.log('✅ [JOIN-ROOM] LiveKit initialized');
+      }
+      
+      // Join live room
+      await broadcast.joinLiveRoomWebRTC(activeEpisode.id, 'Host');
+      
+      setIsConnectedToLiveRoom(true);
+      console.log('✅ [JOIN-ROOM] Connected to live room - can now talk with guests/approved callers');
+      
+    } catch (error) {
+      console.error('❌ [JOIN-ROOM] Failed:', error);
+      alert('Failed to join live room. Check browser console for details.');
+    }
+  };
+
+  /**
+   * Leave Live Room (WebRTC)
+   */
+  const leaveLiveRoom = async () => {
+    try {
+      console.log('📴 [LEAVE-ROOM] Leaving live room...');
+      await broadcast.leaveRoomWebRTC();
+      setIsConnectedToLiveRoom(false);
+      console.log('✅ [LEAVE-ROOM] Left live room');
+    } catch (error) {
+      console.error('❌ [LEAVE-ROOM] Failed:', error);
+    }
+  };
+
   const startBroadcast = async () => {
     if (!activeEpisode) return;
     
@@ -317,18 +360,25 @@ export default function HostDashboard() {
       // Step 1: Connect host audio (WebRTC or Twilio)
       if (useWebRTC) {
         // === WebRTC Flow (LiveKit) ===
-        console.log('🔌 [WEBRTC] Initializing LiveKit connection...');
         
-        try {
-          await broadcast.initializeWebRTC();
-          console.log('✅ [WEBRTC] Connected to LiveKit');
+        // If already connected to live room, skip joining
+        if (isConnectedToLiveRoom) {
+          console.log('ℹ️ [START-BROADCAST] Already connected to live room via WebRTC');
+        } else {
+          console.log('🔌 [WEBRTC] Initializing LiveKit connection...');
           
-          await broadcast.joinLiveRoomWebRTC(activeEpisode.id, 'Host');
-          console.log('✅ [WEBRTC] Joined live room');
-        } catch (webrtcError) {
-          console.error('❌ [WEBRTC] Failed:', webrtcError);
-          alert('Failed to connect via WebRTC. Check browser console for details.');
-          return;
+          try {
+            await broadcast.initializeWebRTC();
+            console.log('✅ [WEBRTC] Connected to LiveKit');
+            
+            await broadcast.joinLiveRoomWebRTC(activeEpisode.id, 'Host');
+            setIsConnectedToLiveRoom(true);
+            console.log('✅ [WEBRTC] Joined live room');
+          } catch (webrtcError) {
+            console.error('❌ [WEBRTC] Failed:', webrtcError);
+            alert('Failed to connect via WebRTC. Check browser console for details.');
+            return;
+          }
         }
       } else {
         // === Twilio Device Flow (Original) ===
@@ -657,6 +707,7 @@ export default function HostDashboard() {
       await response.json();
       setActiveEpisode(null);
       setIsLive(false);
+      setIsConnectedToLiveRoom(false);
       
       // Step 4: Update global broadcast state so Broadcast Control knows!
       broadcast.setState({
@@ -711,7 +762,7 @@ export default function HostDashboard() {
             />
             
             {/* WebRTC Mode Toggle */}
-            {!isLive && activeEpisode && (
+            {!isLive && activeEpisode && !isConnectedToLiveRoom && (
               <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
                 <label className="flex items-center gap-2 cursor-pointer text-sm">
                   <input
@@ -728,11 +779,28 @@ export default function HostDashboard() {
               </div>
             )}
             
-            {!isLive && activeEpisode && activeEpisode.conferenceActive && activeEpisode.status === 'scheduled' && (
-              <Button variant="success" size="sm" onClick={startBroadcast} className="!py-2.5 !gap-2 !justify-start !text-left">
-                START SHOW {broadcast.useWebRTC && '(WebRTC)'}
+            {/* Join Live Room (WebRTC Pre-Show) */}
+            {!isLive && !isConnectedToLiveRoom && activeEpisode && activeEpisode.conferenceActive && broadcast.useWebRTC && (
+              <Button variant="primary" size="sm" onClick={joinLiveRoom} className="!py-2.5 !gap-2">
+                🔌 JOIN LIVE ROOM
               </Button>
             )}
+            
+            {/* Leave Live Room */}
+            {!isLive && isConnectedToLiveRoom && (
+              <Button variant="secondary" size="sm" onClick={leaveLiveRoom} className="!py-2.5 !gap-2">
+                📴 LEAVE ROOM
+              </Button>
+            )}
+            
+            {/* Start Show */}
+            {!isLive && activeEpisode && activeEpisode.conferenceActive && activeEpisode.status === 'scheduled' && (
+              <Button variant="success" size="sm" onClick={startBroadcast} className="!py-2.5 !gap-2 !justify-start !text-left">
+                START SHOW {broadcast.useWebRTC && isConnectedToLiveRoom && '(Already Connected)'}
+              </Button>
+            )}
+            
+            {/* End Show */}
             {isLive && (
               <Button variant="danger" size="sm" onClick={endEpisode} className="!py-2.5 !gap-2 !justify-start !text-left">
                 END SHOW
