@@ -307,8 +307,22 @@ export class LiveKitRoomManager extends EventEmitter {
    * Uses data messages since LiveKit doesn't support server-side audio publishing
    * Browser clients will receive this data and play it locally
    */
+  private audioPacketsForwarded = 0;
+  
   async forwardAudioToRoom(roomName: string, participantId: string, audioData: Buffer): Promise<void> {
     try {
+      this.audioPacketsForwarded++;
+      
+      // Log first packet to verify data
+      if (this.audioPacketsForwarded === 1) {
+        console.log(`📡 [LIVEKIT] First audio packet to forward:`);
+        console.log(`   Room: ${roomName}`);
+        console.log(`   Audio Buffer size: ${audioData.length} bytes`);
+        console.log(`   First 20 bytes: [${Array.from(audioData.slice(0, 20)).join(', ')}]`);
+        const base64Sample = audioData.toString('base64').substring(0, 40);
+        console.log(`   Base64 (first 40 chars): ${base64Sample}`);
+      }
+      
       // Send audio data as room data message
       // Browser clients subscribed to this room will receive it
       const payload = {

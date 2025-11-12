@@ -175,20 +175,30 @@ export class TwilioMediaBridge extends EventEmitter {
       // Convert muLaw (8-bit) to PCM (16-bit signed)
       const pcmInt16Array = MuLawDecoder(muLawData); // Returns Int16Array
       
+      // Log BEFORE conversion to verify muLaw decoder works
+      if (connection.stats.packetsReceived === 1) {
+        console.log(`🔊 [MEDIA-BRIDGE] First packet - muLaw decoding:`);
+        console.log(`   muLaw input bytes: ${muLawData.length}`);
+        console.log(`   First 10 muLaw bytes: [${Array.from(muLawData.slice(0, 10)).join(', ')}]`);
+        console.log(`   PCM Int16 output samples: ${pcmInt16Array.length}`);
+        console.log(`   First 10 Int16 values: [${Array.from(pcmInt16Array.slice(0, 10)).join(', ')}]`);
+      }
+      
       // Convert Int16Array to Buffer (2 bytes per sample, little-endian)
       const pcmData = Buffer.allocUnsafe(pcmInt16Array.length * 2);
       for (let i = 0; i < pcmInt16Array.length; i++) {
         pcmData.writeInt16LE(pcmInt16Array[i], i * 2);
       }
       
-      // Log first packet to verify encoding
+      // Log AFTER conversion to verify Buffer encoding
       if (connection.stats.packetsReceived === 1) {
-        console.log(`🔊 [MEDIA-BRIDGE] First audio packet decoded:`);
-        console.log(`   muLaw bytes: ${muLawData.length}`);
-        console.log(`   PCM Int16 samples: ${pcmInt16Array.length}`);
-        console.log(`   PCM Buffer bytes: ${pcmData.length} (should be ${pcmInt16Array.length * 2})`);
-        console.log(`   First 5 Int16 values: [${Array.from(pcmInt16Array.slice(0, 5)).join(', ')}]`);
-        console.log(`   First 10 PCM bytes: [${Array.from(pcmData.slice(0, 10)).join(', ')}]`);
+        console.log(`🔊 [MEDIA-BRIDGE] First packet - PCM Buffer:`);
+        console.log(`   PCM Buffer bytes: ${pcmData.length} (expected: ${pcmInt16Array.length * 2})`);
+        console.log(`   First 20 PCM bytes: [${Array.from(pcmData.slice(0, 20)).join(', ')}]`);
+        
+        // Verify the buffer is actually written correctly
+        const testRead = pcmData.readInt16LE(0);
+        console.log(`   Test read first Int16: ${testRead} (should match ${pcmInt16Array[0]})`);
       }
       
       // Create RTP packet
