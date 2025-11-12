@@ -44,7 +44,7 @@ interface WebSocketRouter extends express.Router {
 
           // Look up call in database (include caller for name/phone)
           const call = await prisma.call.findFirst({
-            where: { twilioCallSid: callSid },
+            where: { twilioCallSid: callSid || undefined },
             include: { caller: true }
           });
 
@@ -67,9 +67,8 @@ interface WebSocketRouter extends express.Router {
           let roomId: string;
           let displayName: string;
 
-          // Get caller name/phone from the caller relation
-          const callerName = call.caller?.name || 'Unknown Caller';
-          const callerPhone = call.caller?.phoneNumber || 'Unknown';
+          // Get caller name from the caller relation
+          const callerName = call.caller.name || call.caller.phoneNumber || 'Unknown Caller';
 
           switch (call.status) {
             case 'queued':
