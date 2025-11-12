@@ -9,9 +9,13 @@
 
 import { EventEmitter } from 'events';
 import LiveKitRoomManager from './livekitRoomManager.js';
-import * as alawmulaw from 'alawmulaw';
+import { createRequire } from 'module';
 import RTPHandler, { RTP_PAYLOAD_TYPES } from './rtpHandler.js';
 import JitterBuffer from './jitterBuffer.js';
+
+// Use require for CommonJS module in ES module context
+const require = createRequire(import.meta.url);
+const alawmulaw = require('alawmulaw');
 
 const MuLawEncoder = alawmulaw.mulaw.encode;
 const MuLawDecoder = alawmulaw.mulaw.decode;

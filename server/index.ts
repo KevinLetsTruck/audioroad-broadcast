@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
+import expressWs from 'express-ws';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -51,7 +52,7 @@ import { initializeSocketHandlers } from './services/socketService.js';
 import { initializeStreamSocketHandlers, startHLSServerOnBoot } from './services/streamSocketService.js';
 import { audioCache } from './services/audioCache.js';
 import LiveKitRoomManager from './services/livekitRoomManager.js';
-// import TwilioMediaBridge from './services/twilioMediaBridge.js'; // TEMP DISABLED - phone bridge not needed yet
+import TwilioMediaBridge from './services/twilioMediaBridge.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,6 +62,9 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 
 // Create HTTP server
 const httpServer = createServer(app);
+
+// Enable WebSocket support for Media Streams
+expressWs(app, httpServer);
 
 // Initialize Socket.IO
 const io = new SocketIOServer(httpServer, {
@@ -79,7 +83,7 @@ app.set('io', io);
 
 // Initialize WebRTC infrastructure with LiveKit
 let roomManager: LiveKitRoomManager | null = null;
-// let mediaBridge: TwilioMediaBridge | null = null; // TEMP DISABLED - phone bridge
+let mediaBridge: TwilioMediaBridge | null = null;
 
 const livekitUrl = process.env.LIVEKIT_WS_URL;
 const livekitApiKey = process.env.LIVEKIT_API_KEY;
@@ -91,16 +95,16 @@ if (livekitUrl && livekitApiKey && livekitApiSecret) {
   
   try {
     roomManager = new LiveKitRoomManager(livekitUrl, livekitApiKey, livekitApiSecret);
-    // mediaBridge = new TwilioMediaBridge(roomManager); // TEMP DISABLED - phone bridge
+    mediaBridge = new TwilioMediaBridge(roomManager);
     
     // Make available to routes
     app.set('roomManager', roomManager);
-    // app.set('mediaBridge', mediaBridge); // TEMP DISABLED
+    app.set('mediaBridge', mediaBridge);
     
     // Initialize connection to LiveKit (non-blocking)
     roomManager.initialize().then(() => {
       console.log('✅ [WEBRTC] Connected to LiveKit Cloud');
-      console.log('ℹ️  [WEBRTC] Browser-to-browser WebRTC ready (phone bridging disabled temporarily)');
+      console.log('✅ [WEBRTC] Phone call bridge enabled - PSTN calls can connect to WebRTC rooms');
     }).catch((error) => {
       console.error('❌ [WEBRTC] Failed to connect to LiveKit:', error);
       console.warn('⚠️ [WEBRTC] Continuing without WebRTC (falling back to Twilio conferences)');
@@ -194,7 +198,7 @@ app.use('/api/episodes', apiLimiter, episodeRoutes);
 app.use('/api/shows', apiLimiter, showRoutes);
 app.use('/api/twilio', twilioWebhookLimiter, twilioRoutes); // Twilio webhooks
 app.use('/api/twilio', apiLimiter, twilioPlaybackRoutes); // Twilio conference playback
-// app.use('/api/twilio/media-stream', mediaStreamRoutes); // Twilio Media Streams WebSocket (TEMPORARILY DISABLED - needs express-ws setup)
+app.use('/api/twilio/media-stream', mediaStreamRoutes); // Twilio Media Streams WebSocket (phone call → WebRTC bridge)
 app.use('/api/live-stream', liveStreamRoutes); // Live audio stream for callers on hold
 app.use('/api/analysis', apiLimiter, analysisRoutes);
 app.use('/api/audio-assets', apiLimiter, audioAssetRoutes);
