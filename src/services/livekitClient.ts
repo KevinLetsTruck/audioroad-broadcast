@@ -110,6 +110,32 @@ export class LiveKitClient {
       console.log('👋 [LIVEKIT-CLIENT] Participant left:', participant.identity);
       this.emit('participant-left', participant);
     });
+
+    // CRITICAL: Receive phone audio data packets
+    this.room.on(RoomEvent.DataReceived, (
+      payload: Uint8Array,
+      participant: RemoteParticipant | undefined
+    ) => {
+      try {
+        // Decode data message
+        const text = new TextDecoder().decode(payload);
+        const data = JSON.parse(text);
+
+        // Check if it's phone audio
+        if (data.type === 'phone-audio') {
+          console.log('📞 [LIVEKIT-CLIENT] Received phone audio chunk');
+          
+          // Decode base64 audio
+          const audioBase64 = data.audio;
+          const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
+          
+          // Create AudioBuffer and play
+          this.playPhoneAudio(audioBytes, data.sampleRate || 8000);
+        }
+      } catch (error) {
+        console.error('❌ [LIVEKIT-CLIENT] Failed to process data:', error);
+      }
+    });
   }
 
   /**
@@ -199,6 +225,55 @@ export class LiveKitClient {
    */
   getRoom(): Room | null {
     return this.room;
+  }
+
+  /**
+   * Play phone audio using Web Audio API
+   * Converts PCM bytes to AudioBuffer and plays
+   */
+  private audioContext: AudioContext | null = null;
+  private audioQueue: Array<{buffer: AudioBuffer, scheduledTime: number}> = [];
+  private nextPlayTime: number = 0;
+
+  private async playPhoneAudio(pcmBytes: Uint8Array, sampleRate: number): Promise<void> {
+    try {
+      // Initialize audio context if needed
+      if (!this.audioContext) {
+        this.audioContext = new AudioContext({ sampleRate: 48000 }); // Standard rate
+        this.nextPlayTime = this.audioContext.currentTime;
+      }
+
+      // Convert PCM bytes to Float32 samples
+      const int16Array = new Int16Array(pcmBytes.buffer);
+      const float32Array = new Float32Array(int16Array.length);
+      for (let i = 0; i < int16Array.length; i++) {
+        float32Array[i] = int16Array[i] / 32768.0; // Convert to -1.0 to 1.0
+      }
+
+      // Create audio buffer
+      const audioBuffer = this.audioContext.createBuffer(
+        1, // Mono
+        float32Array.length,
+        sampleRate
+      );
+      audioBuffer.copyToChannel(float32Array, 0);
+
+      // Schedule playback
+      const source = this.audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(this.audioContext.destination);
+
+      // Play immediately or queue
+      const now = this.audioContext.currentTime;
+      const playTime = Math.max(now, this.nextPlayTime);
+      source.start(playTime);
+      
+      // Update next play time
+      this.nextPlayTime = playTime + audioBuffer.duration;
+
+    } catch (error) {
+      console.error('❌ [LIVEKIT-CLIENT] Failed to play phone audio:', error);
+    }
   }
 
   /**

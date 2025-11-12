@@ -301,6 +301,38 @@ export class LiveKitRoomManager extends EventEmitter {
       return null;
     }
   }
+
+  /**
+   * Forward phone audio to LiveKit room
+   * Uses data messages since LiveKit doesn't support server-side audio publishing
+   * Browser clients will receive this data and play it locally
+   */
+  async forwardAudioToRoom(roomName: string, participantId: string, audioData: Buffer): Promise<void> {
+    try {
+      // Send audio data as room data message
+      // Browser clients subscribed to this room will receive it
+      const payload = {
+        type: 'phone-audio',
+        participantId,
+        audio: audioData.toString('base64'), // Send as base64
+        timestamp: Date.now(),
+        sampleRate: 8000 // Twilio uses 8kHz
+      };
+
+      // Use LiveKit's sendData API to broadcast to all participants in room
+      await this.client.sendData(
+        roomName,
+        Buffer.from(JSON.stringify(payload)),
+        { destinationIdentities: [] } // Empty = broadcast to all
+      );
+
+    } catch (error: any) {
+      // Don't log every error (too verbose), just track failures
+      if (Math.random() < 0.01) { // Log 1% of errors
+        console.error(`❌ [LIVEKIT] Failed to forward audio to room ${roomName}:`, error.message);
+      }
+    }
+  }
 }
 
 export default LiveKitRoomManager;

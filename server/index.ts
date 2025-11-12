@@ -98,6 +98,17 @@ if (livekitUrl && livekitApiKey && livekitApiSecret) {
     roomManager = new LiveKitRoomManager(livekitUrl, livekitApiKey, livekitApiSecret);
     mediaBridge = new TwilioMediaBridge(roomManager);
     
+    // CRITICAL: Listen for phone audio and forward to LiveKit
+    mediaBridge.on('audio-from-phone', async (data) => {
+      try {
+        // Forward phone audio to LiveKit room
+        // LiveKit will broadcast this to all participants in the room
+        await roomManager.forwardAudioToRoom(data.roomId, data.participantId, data.audioData);
+      } catch (error) {
+        console.error('❌ [AUDIO-BRIDGE] Failed to forward phone audio to LiveKit:', error);
+      }
+    });
+    
     // Make available to routes
     app.set('roomManager', roomManager);
     app.set('mediaBridge', mediaBridge);
