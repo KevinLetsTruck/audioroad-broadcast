@@ -473,10 +473,14 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     }
 
     // Get LiveKit URL from environment
-    const livekitUrl = import.meta.env.VITE_LIVEKIT_WS_URL;
+    // Fallback to hardcoded URL if build variable not set
+    const livekitUrl = import.meta.env.VITE_LIVEKIT_WS_URL || 'wss://audioroad-broadcast-st6f3yzp.livekit.cloud';
+    
     if (!livekitUrl) {
       throw new Error('VITE_LIVEKIT_WS_URL not configured');
     }
+    
+    console.log('🔌 [WEBRTC] LiveKit URL:', livekitUrl);
 
     console.log('🔌 [WEBRTC] Initializing LiveKit WebRTC service...');
 
