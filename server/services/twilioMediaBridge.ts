@@ -10,6 +10,8 @@
 import { EventEmitter } from 'events';
 import WebRTCRoomManager from './webrtcRoomManager.js';
 import { Encoder as MuLawEncoder, Decoder as MuLawDecoder } from 'alawmulaw';
+import RTPHandler, { RTP_PAYLOAD_TYPES } from './rtpHandler.js';
+import JitterBuffer from './jitterBuffer.js';
 
 // Audio constants
 const SAMPLE_RATE = 8000; // Twilio uses 8kHz
@@ -25,7 +27,16 @@ interface MediaStreamConnection {
   audioBuffer: Buffer[];
   muLawDecoder: MuLawDecoder;
   muLawEncoder: MuLawEncoder;
-  sequenceNumber: number;
+  rtpHandler: RTPHandler;
+  jitterBuffer: JitterBuffer;
+  playbackInterval: NodeJS.Timeout | null;
+  stats: {
+    packetsReceived: number;
+    packetsSent: number;
+    bytesReceived: number;
+    bytesSent: number;
+    startTime: number;
+  };
 }
 
 export class TwilioMediaBridge extends EventEmitter {
@@ -59,7 +70,25 @@ export class TwilioMediaBridge extends EventEmitter {
       audioBuffer: [],
       muLawDecoder: new MuLawDecoder(),
       muLawEncoder: new MuLawEncoder(),
-      sequenceNumber: 0
+      rtpHandler: new RTPHandler(
+        undefined, // Auto-generate SSRC
+        RTP_PAYLOAD_TYPES.PCMU, // muLaw
+        SAMPLE_RATE,
+        FRAME_SIZE
+      ),
+      jitterBuffer: new JitterBuffer(
+        3,  // Min 3 packets (60ms)
+        20, // Max 20 packets (400ms)
+        5   // Target 5 packets (100ms)
+      ),
+      playbackInterval: null,
+      stats: {
+        packetsReceived: 0,
+        packetsSent: 0,
+        bytesReceived: 0,
+        bytesSent: 0,
+        startTime: Date.now()
+      }
     };
 
     this.activeStreams.set(callSid, connection);
@@ -81,6 +110,9 @@ export class TwilioMediaBridge extends EventEmitter {
               displayName,
               true // As publisher
             );
+            
+            // Start playback loop (pulls from jitter buffer)
+            this.startPlaybackLoop(connection);
             break;
 
           case 'media':
@@ -110,7 +142,7 @@ export class TwilioMediaBridge extends EventEmitter {
 
   /**
    * Handle incoming audio from phone call
-   * Convert from muLaw to PCM format
+   * Convert from muLaw to PCM, package as RTP, add to jitter buffer
    */
   private async handleIncomingAudio(
     connection: MediaStreamConnection,
@@ -120,23 +152,74 @@ export class TwilioMediaBridge extends EventEmitter {
       // Decode base64 to get muLaw encoded audio
       const muLawData = Buffer.from(payload, 'base64');
       
+      // Update statistics
+      connection.stats.packetsReceived++;
+      connection.stats.bytesReceived += muLawData.length;
+      
       // Convert muLaw (8-bit) to PCM (16-bit signed)
       const pcmData = connection.muLawDecoder.process(muLawData);
       
-      // Buffer the PCM audio for processing
-      connection.audioBuffer.push(pcmData);
+      // Create RTP packet
+      const rtpPacket = connection.rtpHandler.createPacket(pcmData);
       
-      // Emit event for room manager to forward to Janus
-      // The room manager will handle packaging this as RTP
-      this.emit('audio-from-phone', {
-        participantId: connection.participantId,
-        roomId: connection.roomId,
-        audioData: pcmData,
-        sampleRate: SAMPLE_RATE
-      });
+      // Add to jitter buffer for smooth playback
+      connection.jitterBuffer.push(rtpPacket);
+      
+      // Log stats periodically
+      if (connection.stats.packetsReceived % 100 === 0) {
+        const jitterStats = connection.jitterBuffer.getStats();
+        const duration = (Date.now() - connection.stats.startTime) / 1000;
+        console.log(`📊 [MEDIA-BRIDGE] ${connection.callSid} - ${duration.toFixed(1)}s`);
+        console.log(`   Packets: ${connection.stats.packetsReceived} received, ${jitterStats.packetsPlayed} played`);
+        console.log(`   Jitter: ${jitterStats.averageJitter.toFixed(2)}ms avg, buffer: ${jitterStats.currentDepth}/${jitterStats.targetDepth}`);
+        console.log(`   Loss: ${jitterStats.packetsLate} late, ${jitterStats.packetsDropped} dropped`);
+      }
       
     } catch (error) {
       console.error('❌ [MEDIA-BRIDGE] Error processing audio:', error);
+    }
+  }
+
+  /**
+   * Start playback loop
+   * Pulls packets from jitter buffer at regular intervals
+   */
+  private startPlaybackLoop(connection: MediaStreamConnection): void {
+    if (connection.playbackInterval) {
+      return; // Already running
+    }
+
+    console.log(`▶️ [MEDIA-BRIDGE] Starting playback loop for ${connection.callSid}`);
+
+    // Play one packet every 20ms (matching Twilio's packet rate)
+    connection.playbackInterval = setInterval(() => {
+      try {
+        const packet = connection.jitterBuffer.pop();
+        
+        if (packet) {
+          // Emit audio to Janus for forwarding to WebRTC participants
+          this.emit('audio-from-phone', {
+            participantId: connection.participantId,
+            roomId: connection.roomId,
+            audioData: packet.payload,
+            sampleRate: SAMPLE_RATE,
+            timestamp: packet.timestamp
+          });
+        }
+      } catch (error) {
+        console.error('❌ [MEDIA-BRIDGE] Playback error:', error);
+      }
+    }, 20); // 20ms interval (50 packets/second)
+  }
+
+  /**
+   * Stop playback loop
+   */
+  private stopPlaybackLoop(connection: MediaStreamConnection): void {
+    if (connection.playbackInterval) {
+      clearInterval(connection.playbackInterval);
+      connection.playbackInterval = null;
+      console.log(`⏹️ [MEDIA-BRIDGE] Stopped playback loop for ${connection.callSid}`);
     }
   }
 
@@ -211,6 +294,18 @@ export class TwilioMediaBridge extends EventEmitter {
     console.log(`📴 [MEDIA-BRIDGE] Stopping media stream for ${callSid}`);
 
     try {
+      // Stop playback loop
+      this.stopPlaybackLoop(connection);
+      
+      // Log final statistics
+      const duration = (Date.now() - connection.stats.startTime) / 1000;
+      const jitterStats = connection.jitterBuffer.getStats();
+      console.log(`📊 [MEDIA-BRIDGE] Final stats for ${callSid} (${duration.toFixed(1)}s):`);
+      console.log(`   Packets: ${connection.stats.packetsReceived} received, ${jitterStats.packetsPlayed} played`);
+      console.log(`   Bytes: ${connection.stats.bytesReceived} received, ${connection.stats.bytesSent} sent`);
+      console.log(`   Quality: ${jitterStats.packetsLate} late, ${jitterStats.packetsDropped} dropped, ${jitterStats.packetsDuplicate} duplicate`);
+      console.log(`   Jitter: ${jitterStats.averageJitter.toFixed(2)}ms average`);
+      
       // Remove from WebRTC room
       await this.roomManager.removeParticipant(connection.participantId);
       
