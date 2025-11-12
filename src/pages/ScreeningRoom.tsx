@@ -34,8 +34,15 @@ export default function ScreeningRoom() {
   const screenerReady = broadcast.twilioDevice !== null || localDeviceReady;
   const screenerConnected = activeCall !== null;
   
-  // Initialize session Twilio device (one per session, reused for all roles)
+  // Initialize session Twilio device ONLY if NOT using WebRTC
+  // (WebRTC mode uses LiveKit instead of Twilio Device)
   useEffect(() => {
+    if (useWebRTC) {
+      console.log('🔌 [WEBRTC-MODE] Skipping Twilio Device initialization (using LiveKit)');
+      setLocalDeviceReady(true); // Mark as ready so UI works
+      return;
+    }
+    
     if (!broadcast.twilioDevice && !localDeviceReady) {
       console.log('📞 [SCREENER] Initializing session device');
       const sessionId = `session-${Date.now()}`;
@@ -48,7 +55,7 @@ export default function ScreeningRoom() {
           console.error('❌ [SCREENER] Failed to initialize:', err);
         });
     }
-  }, [broadcast.twilioDevice]);
+  }, [broadcast.twilioDevice, useWebRTC, localDeviceReady]);
 
   useEffect(() => {
     console.log('🚀 ScreeningRoom mounted - initializing...');
