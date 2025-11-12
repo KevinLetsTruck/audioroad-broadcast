@@ -572,6 +572,14 @@ export default function ScreeningRoom() {
       // === WebRTC Flow (LiveKit) ===
       console.log('🔌 [WEBRTC] Connecting screener via LiveKit...');
       
+      // CRITICAL: Disconnect Twilio Device if it was initialized (prevents dual connections)
+      if (broadcast.twilioDevice) {
+        console.log('🔌 [WEBRTC] Disconnecting Twilio Device (switching to WebRTC)');
+        broadcast.twilioDevice.disconnectAll();
+        broadcast.twilioDevice.destroy();
+        broadcast.setState({ twilioDevice: null });
+      }
+      
       try {
         // Ensure WebRTC is initialized
         if (!broadcast.webrtcService || !broadcast.webrtcService.isConnected()) {
