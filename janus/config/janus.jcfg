@@ -1,0 +1,67 @@
+# Janus Gateway Configuration for AudioRoad Broadcast
+# Audio-only, optimized for low latency
+
+general: {
+  configs_folder = "/opt/janus/etc/janus"
+  plugins_folder = "/opt/janus/lib/janus/plugins"
+  transports_folder = "/opt/janus/lib/janus/transports"
+  events_folder = "/opt/janus/lib/janus/events"
+  loggers_folder = "/opt/janus/lib/janus/loggers"
+  
+  # Use nice for debugging, change to info for production
+  debug_level = 4
+  debug_timestamps = true
+  debug_colors = true
+  
+  # Session timeout
+  session_timeout = 60
+  
+  # API secret (set via environment)
+  api_secret = "${JANUS_API_SECRET}"
+  
+  # Admin secret (set via environment)  
+  admin_secret = "${JANUS_ADMIN_SECRET}"
+}
+
+# WebSocket transport
+transports: {
+  transport.websockets: {
+    enabled = true
+    ws_port = 8188
+    wss_port = 8989
+    
+    # Enable for all interfaces
+    ws_interface = "0.0.0.0"
+    
+    # Logging
+    ws_logging = "info"
+  }
+}
+
+# Plugins
+plugins: {
+  # VideoRoom plugin (we use for audio rooms)
+  plugin.videoroom: {
+    enabled = true
+    
+    # Audio only
+    #audiocodec = "opus"
+    
+    # Room settings
+    #max_participants = 50
+    #bitrate = 256000
+  }
+}
+
+# NAT traversal
+nat: {
+  # Use Twilio TURN or configure own
+  stun_server = "stun:global.stun.twilio.com:3478"
+  
+  # TURN will be configured via API
+  nice_debug = false
+  
+  # Public IP (will be set via environment)
+  nat_1_1_mapping = "${PUBLIC_IP}"
+}
+

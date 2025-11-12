@@ -1,0 +1,33 @@
+# Docker Compose for Janus Gateway
+# For local development and testing
+
+version: '3.8'
+
+services:
+  janus:
+    build:
+      context: .
+      dockerfile: janus/Dockerfile
+    container_name: audioroad-janus
+    ports:
+      - "8188:8188"  # WebSocket
+      - "8088:8088"  # HTTP API
+      - "20000-20100:20000-20100/udp"  # RTP ports
+    environment:
+      - JANUS_API_SECRET=${JANUS_API_SECRET:-your-api-secret}
+      - JANUS_ADMIN_SECRET=${JANUS_ADMIN_SECRET:-your-admin-secret}
+      - PUBLIC_IP=${PUBLIC_IP:-auto}
+    volumes:
+      - ./janus/config:/opt/janus/etc/janus
+      - janus-data:/opt/janus/share/janus
+    restart: unless-stopped
+    networks:
+      - audioroad-network
+
+volumes:
+  janus-data:
+
+networks:
+  audioroad-network:
+    driver: bridge
+
