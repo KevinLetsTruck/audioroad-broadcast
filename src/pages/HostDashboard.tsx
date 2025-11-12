@@ -306,39 +306,63 @@ export default function HostDashboard() {
     try {
       console.log('🎙️ [START-BROADCAST] Starting show broadcast...');
       
-      // CRITICAL: Ensure Twilio device is initialized BEFORE starting
-      if (!broadcast.twilioDevice) {
-        console.log('⚠️ [START-BROADCAST] Twilio device not initialized, initializing now...');
-        try {
-          await broadcast.initializeTwilio(`host-${Date.now()}`);
-          console.log('✅ [START-BROADCAST] Twilio device initialized');
-          // Wait a moment for device to fully register
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        } catch (deviceError) {
-          console.error('❌ [START-BROADCAST] Failed to initialize Twilio device:', deviceError);
-          alert('Failed to initialize phone system. Please refresh the page and try again.');
-          return;
-        }
-      }
-      
-      // CRITICAL: Disconnect any existing calls first (e.g., if you were on Screening Room)
-      if (broadcast.activeCalls.size > 0) {
-        console.log('📞 [START-BROADCAST] Disconnecting existing calls before starting show...');
-        await broadcast.disconnectCurrentCall();
-        // Wait for disconnect to complete
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        console.log('✅ [START-BROADCAST] Existing calls disconnected');
-      }
+      // Check if using WebRTC mode
+      const useWebRTC = broadcast.useWebRTC;
+      console.log(`🔌 [START-BROADCAST] Connection mode: ${useWebRTC ? 'WebRTC (LiveKit)' : 'Twilio Device'}`);
       
       // Get show for opener
       const showResponse = await fetch(`/api/shows/${activeEpisode.showId}`);
       const show = showResponse.ok ? await showResponse.json() : null;
       
-      // Step 1: Connect host to LIVE conference (this creates it)
-      // CRITICAL: Host must join LIVE conference, not screening
-      console.log('🔄 [START-BROADCAST] Connecting host to LIVE conference...');
-      console.log('   This creates the live-{id} conference for approved callers');
-      await broadcast.connectToCall(`host-${activeEpisode.id}`, 'Host', activeEpisode.id, 'host');
+      // Step 1: Connect host audio (WebRTC or Twilio)
+      if (useWebRTC) {
+        // === WebRTC Flow (LiveKit) ===
+        console.log('🔌 [WEBRTC] Initializing LiveKit connection...');
+        
+        try {
+          await broadcast.initializeWebRTC();
+          console.log('✅ [WEBRTC] Connected to LiveKit');
+          
+          await broadcast.joinLiveRoomWebRTC(activeEpisode.id, 'Host');
+          console.log('✅ [WEBRTC] Joined live room');
+        } catch (webrtcError) {
+          console.error('❌ [WEBRTC] Failed:', webrtcError);
+          alert('Failed to connect via WebRTC. Check browser console for details.');
+          return;
+        }
+      } else {
+        // === Twilio Device Flow (Original) ===
+        
+        // CRITICAL: Ensure Twilio device is initialized BEFORE starting
+        if (!broadcast.twilioDevice) {
+          console.log('⚠️ [START-BROADCAST] Twilio device not initialized, initializing now...');
+          try {
+            await broadcast.initializeTwilio(`host-${Date.now()}`);
+            console.log('✅ [START-BROADCAST] Twilio device initialized');
+            // Wait a moment for device to fully register
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (deviceError) {
+            console.error('❌ [START-BROADCAST] Failed to initialize Twilio device:', deviceError);
+            alert('Failed to initialize phone system. Please refresh the page and try again.');
+            return;
+          }
+        }
+        
+        // CRITICAL: Disconnect any existing calls first (e.g., if you were on Screening Room)
+        if (broadcast.activeCalls.size > 0) {
+          console.log('📞 [START-BROADCAST] Disconnecting existing calls before starting show...');
+          await broadcast.disconnectCurrentCall();
+          // Wait for disconnect to complete
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          console.log('✅ [START-BROADCAST] Existing calls disconnected');
+        }
+        
+        // Connect host to LIVE conference (this creates it)
+        // CRITICAL: Host must join LIVE conference, not screening
+        console.log('🔄 [START-BROADCAST] Connecting host to LIVE conference...');
+        console.log('   This creates the live-{id} conference for approved callers');
+        await broadcast.connectToCall(`host-${activeEpisode.id}`, 'Host', activeEpisode.id, 'host');
+      }
       
       // Step 2: Initialize mixer
       const mixerInstance = await broadcast.initializeMixer();
@@ -610,6 +634,13 @@ export default function HostDashboard() {
       await broadcast.destroyMixer();
       console.log('✅ [END] Mixer cleaned up');
       
+      // Step 2.5: Disconnect WebRTC if it was used
+      if (broadcast.useWebRTC && broadcast.webrtcService) {
+        console.log('📴 [END] Disconnecting WebRTC...');
+        await broadcast.disconnectWebRTC();
+        console.log('✅ [END] WebRTC disconnected');
+      }
+      
       // Step 3: End the episode in database
       const response = await fetch(`/api/episodes/${activeEpisode.id}/end`, {
         method: 'PATCH',
@@ -678,9 +709,28 @@ export default function HostDashboard() {
               variant="pills"
               className="[&>div]:m-0 [&>div>div]:mb-0 [&>div>div]:flex [&>div>div]:items-center"
             />
+            
+            {/* WebRTC Mode Toggle */}
+            {!isLive && activeEpisode && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                <label className="flex items-center gap-2 cursor-pointer text-sm">
+                  <input
+                    type="checkbox"
+                    checked={broadcast.useWebRTC}
+                    onChange={(e) => broadcast.setUseWebRTC(e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-dark dark:text-white">Use WebRTC</span>
+                  {broadcast.webrtcConnected && (
+                    <Badge variant="success" size="sm">Connected</Badge>
+                  )}
+                </label>
+              </div>
+            )}
+            
             {!isLive && activeEpisode && activeEpisode.conferenceActive && activeEpisode.status === 'scheduled' && (
               <Button variant="success" size="sm" onClick={startBroadcast} className="!py-2.5 !gap-2 !justify-start !text-left">
-                START SHOW
+                START SHOW {broadcast.useWebRTC && '(WebRTC)'}
               </Button>
             )}
             {isLive && (
