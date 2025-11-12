@@ -140,7 +140,11 @@ export class LiveKitClient {
 
   /**
    * Publish local audio track
+   * ALSO captures audio to send to phone callers
    */
+  private audioCapture: MediaStream | null = null;
+  private audioProcessor: ScriptProcessorNode | null = null;
+
   async publishAudio(audioTrack: MediaStreamTrack): Promise<void> {
     if (!this.room) {
       throw new Error('Not connected to room');
@@ -149,17 +153,95 @@ export class LiveKitClient {
     console.log('🎤 [LIVEKIT-CLIENT] Publishing audio track...');
 
     try {
+      // Publish to LiveKit (for other WebRTC participants)
       await this.room.localParticipant.publishTrack(audioTrack, {
         name: 'microphone',
         source: Track.Source.Microphone
       });
 
-      console.log('✅ [LIVEKIT-CLIENT] Audio track published');
+      // ALSO capture audio to forward to phone callers
+      await this.startAudioCapture(audioTrack);
+
+      console.log('✅ [LIVEKIT-CLIENT] Audio track published + capture started');
       this.emit('track-published', audioTrack);
 
     } catch (error) {
       console.error('❌ [LIVEKIT-CLIENT] Failed to publish audio:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Start capturing audio to send to phone callers
+   */
+  private async startAudioCapture(audioTrack: MediaStreamTrack): Promise<void> {
+    try {
+      // Create audio context for processing
+      if (!this.audioContext) {
+        this.audioContext = new AudioContext({ sampleRate: 48000 });
+      }
+
+      // Create media stream from track
+      this.audioCapture = new MediaStream([audioTrack]);
+      
+      // Create audio source
+      const source = this.audioContext.createMediaStreamSource(this.audioCapture);
+      
+      // Use ScriptProcessor to capture audio chunks
+      const bufferSize = 4096;
+      this.audioProcessor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
+      
+      this.audioProcessor.onaudioprocess = (e) => {
+        const inputData = e.inputBuffer.getChannelData(0);
+        
+        // Convert Float32 to Int16 PCM
+        const pcmData = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          const s = Math.max(-1, Math.min(1, inputData[i]));
+          pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        // Send to server via data channel every 100ms (about 10 packets/sec)
+        if (Math.random() < 0.2) { // Send ~20% of packets to reduce bandwidth
+          this.sendAudioToPhone(pcmData);
+        }
+      };
+
+      source.connect(this.audioProcessor);
+      this.audioProcessor.connect(this.audioContext.destination);
+
+      console.log('✅ [LIVEKIT-CLIENT] Audio capture started for phone forwarding');
+
+    } catch (error) {
+      console.error('❌ [LIVEKIT-CLIENT] Failed to start audio capture:', error);
+    }
+  }
+
+  /**
+   * Send captured audio to phone caller via HTTP endpoint
+   */
+  private sendAudioToPhone(pcmData: Int16Array): void {
+    if (!this.room) return;
+
+    try {
+      // Send audio directly to backend endpoint for phone forwarding
+      const payload = {
+        roomName: this.room.name,
+        audio: btoa(String.fromCharCode(...new Uint8Array(pcmData.buffer))),
+        timestamp: Date.now(),
+        sampleRate: 48000
+      };
+
+      // Use fetch with keepalive to avoid blocking
+      fetch('/api/webrtc/forward-to-phone', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        keepalive: true
+      }).catch(() => {}); // Ignore errors (too many requests)
+
+    } catch (error) {
+      // Don't log every error (too noisy)
     }
   }
 

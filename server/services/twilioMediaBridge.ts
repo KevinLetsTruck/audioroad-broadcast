@@ -345,6 +345,18 @@ export class TwilioMediaBridge extends EventEmitter {
   getStreamInfo(callSid: string): MediaStreamConnection | undefined {
     return this.activeStreams.get(callSid);
   }
+
+  /**
+   * Find callSid for a given room (for forwarding browser audio to phone)
+   */
+  getCallSidForRoom(roomId: string): string | null {
+    for (const [callSid, connection] of this.activeStreams.entries()) {
+      if (connection.roomId === roomId) {
+        return callSid;
+      }
+    }
+    return null;
+  }
 }
 
 export default TwilioMediaBridge;

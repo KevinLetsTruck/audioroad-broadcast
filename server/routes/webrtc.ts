@@ -97,6 +97,46 @@ router.get('/rooms/:roomName/stats', async (req: Request, res: Response) => {
 });
 
 /**
+ * Forward browser audio to phone caller
+ * POST /api/webrtc/forward-to-phone
+ */
+router.post('/forward-to-phone', async (req: Request, res: Response) => {
+  const { roomName, audio, sampleRate } = req.body;
+
+  if (!roomName || !audio) {
+    return res.status(400).json({ error: 'Missing roomName or audio' });
+  }
+
+  try {
+    const mediaBridge = req.app.get('mediaBridge');
+
+    if (!mediaBridge) {
+      return res.status(503).json({ error: 'Media bridge not initialized' });
+    }
+
+    // Decode base64 audio to Buffer
+    const audioBuffer = Buffer.from(audio, 'base64');
+
+    // Find callSid for this room
+    const callSid = mediaBridge.getCallSidForRoom(roomName);
+
+    if (!callSid) {
+      // No phone call in this room - that's okay, just ignore
+      return res.json({ status: 'no-caller' });
+    }
+
+    // Forward audio to phone
+    mediaBridge.sendAudioToPhone(callSid, audioBuffer);
+
+    res.json({ status: 'ok' });
+
+  } catch (error: any) {
+    console.error('❌ [WEBRTC] Forward audio error:', error);
+    res.status(500).json({ error: 'Failed to forward audio', message: error.message });
+  }
+});
+
+/**
  * Health check
  * GET /api/webrtc/health
  */
