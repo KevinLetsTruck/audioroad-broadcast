@@ -9,9 +9,12 @@
 
 import { EventEmitter } from 'events';
 import LiveKitRoomManager from './livekitRoomManager.js';
-import { Encoder as MuLawEncoder, Decoder as MuLawDecoder } from 'alawmulaw';
+import * as alawmulaw from 'alawmulaw';
 import RTPHandler, { RTP_PAYLOAD_TYPES } from './rtpHandler.js';
 import JitterBuffer from './jitterBuffer.js';
+
+const MuLawEncoder = alawmulaw.mulaw.encode;
+const MuLawDecoder = alawmulaw.mulaw.decode;
 
 // Audio constants
 const SAMPLE_RATE = 8000; // Twilio uses 8kHz
@@ -25,8 +28,6 @@ interface MediaStreamConnection {
   participantId: string;
   ws: any; // WebSocket from Twilio
   audioBuffer: Buffer[];
-  muLawDecoder: MuLawDecoder;
-  muLawEncoder: MuLawEncoder;
   rtpHandler: RTPHandler;
   jitterBuffer: JitterBuffer;
   playbackInterval: NodeJS.Timeout | null;
@@ -68,8 +69,6 @@ export class TwilioMediaBridge extends EventEmitter {
       participantId,
       ws,
       audioBuffer: [],
-      muLawDecoder: new MuLawDecoder(),
-      muLawEncoder: new MuLawEncoder(),
       rtpHandler: new RTPHandler(
         undefined, // Auto-generate SSRC
         RTP_PAYLOAD_TYPES.PCMU, // muLaw
@@ -157,7 +156,7 @@ export class TwilioMediaBridge extends EventEmitter {
       connection.stats.bytesReceived += muLawData.length;
       
       // Convert muLaw (8-bit) to PCM (16-bit signed)
-      const pcmData = connection.muLawDecoder.process(muLawData);
+      const pcmData = Buffer.from(MuLawDecoder(muLawData));
       
       // Create RTP packet
       const rtpPacket = connection.rtpHandler.createPacket(pcmData);
@@ -236,7 +235,7 @@ export class TwilioMediaBridge extends EventEmitter {
 
     try {
       // Convert PCM (16-bit signed) to muLaw (8-bit)
-      const muLawData = connection.muLawEncoder.process(pcmAudioData);
+      const muLawData = Buffer.from(MuLawEncoder(pcmAudioData));
       
       // Encode to base64 for Twilio
       const payload = muLawData.toString('base64');

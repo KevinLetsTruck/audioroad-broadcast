@@ -50,33 +50,33 @@ export class LiveKitRoomManager extends EventEmitter {
    */
   async ensureRoomExists(roomName: string, maxParticipants: number = 50): Promise<void> {
     try {
-      // Try to get room info
-      await this.client.getRoom(roomName);
-      console.log(`ℹ️ [LIVEKIT] Room already exists: ${roomName}`);
-    } catch (error: any) {
-      // Room doesn't exist, create it
-      if (error.message.includes('not found') || error.code === 5) {
-        try {
-          await this.client.createRoom({
-            name: roomName,
-            emptyTimeout: 300, // Room closes after 5 minutes empty
-            maxParticipants: maxParticipants
-          });
-          console.log(`✅ [LIVEKIT] Room created: ${roomName}`);
-        } catch (createError: any) {
-          console.error(`❌ [LIVEKIT] Failed to create room ${roomName}:`, createError.message);
-          throw createError;
-        }
-      } else {
-        console.error(`❌ [LIVEKIT] Error checking room ${roomName}:`, error.message);
+      // List rooms to check if it exists
+      const rooms = await this.client.listRooms();
+      const exists = rooms.some(r => r.name === roomName);
+      
+      if (exists) {
+        console.log(`ℹ️ [LIVEKIT] Room already exists: ${roomName}`);
+        return;
       }
+      
+      // Room doesn't exist, create it
+      await this.client.createRoom({
+        name: roomName,
+        emptyTimeout: 300, // Room closes after 5 minutes empty
+        maxParticipants: maxParticipants
+      });
+      console.log(`✅ [LIVEKIT] Room created: ${roomName}`);
+      
+    } catch (error: any) {
+      console.error(`❌ [LIVEKIT] Error with room ${roomName}:`, error.message);
+      // Continue anyway - room might exist or will be created on join
     }
   }
 
   /**
    * Generate access token for participant to join room
    */
-  generateToken(roomName: string, participantIdentity: string, participantName: string): string {
+  async generateToken(roomName: string, participantIdentity: string, participantName: string): Promise<string> {
     const token = new AccessToken(this.apiKey, this.apiSecret, {
       identity: participantIdentity,
       name: participantName
@@ -107,7 +107,7 @@ export class LiveKitRoomManager extends EventEmitter {
     await this.ensureRoomExists(roomName);
 
     // Generate token for participant
-    const token = this.generateToken(roomName, participantId, displayName);
+    const token = await this.generateToken(roomName, participantId, displayName);
 
     // Track participant
     this.participants.set(participantId, {
@@ -293,7 +293,9 @@ export class LiveKitRoomManager extends EventEmitter {
    */
   async getRoomStats(roomName: string): Promise<any> {
     try {
-      return await this.client.getRoom(roomName);
+      const rooms = await this.client.listRooms();
+      const room = rooms.find(r => r.name === roomName);
+      return room || null;
     } catch (error: any) {
       console.error('❌ [LIVEKIT] Failed to get room stats:', error.message);
       return null;
