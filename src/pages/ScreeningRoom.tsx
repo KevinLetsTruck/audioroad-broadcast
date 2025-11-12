@@ -575,9 +575,12 @@ export default function ScreeningRoom() {
       // CRITICAL: Disconnect Twilio Device if it was initialized (prevents dual connections)
       if (broadcast.twilioDevice) {
         console.log('🔌 [WEBRTC] Disconnecting Twilio Device (switching to WebRTC)');
-        broadcast.twilioDevice.disconnectAll();
-        broadcast.twilioDevice.destroy();
-        broadcast.setState({ twilioDevice: null });
+        try {
+          broadcast.twilioDevice.disconnectAll();
+          broadcast.twilioDevice.destroy();
+        } catch (e) {
+          console.warn('⚠️ Error destroying Twilio Device:', e);
+        }
       }
       
       try {
