@@ -5,7 +5,7 @@
  * Much simpler than Janus - LiveKit SDK handles everything!
  */
 
-import { Room, RoomEvent, Track, RemoteTrack, RemoteTrackPublication, LocalParticipant } from 'livekit-client';
+import { Room, RoomEvent, Track, RemoteTrack, RemoteTrackPublication, LocalParticipant, RemoteParticipant } from 'livekit-client';
 
 export interface LiveKitConfig {
   wsUrl: string;
@@ -114,7 +114,7 @@ export class LiveKitClient {
     // CRITICAL: Receive phone audio data packets
     this.room.on(RoomEvent.DataReceived, (
       payload: Uint8Array,
-      participant: RemoteParticipant | undefined
+      _participant?: RemoteParticipant
     ) => {
       try {
         // Decode data message
@@ -314,7 +314,6 @@ export class LiveKitClient {
    * Converts PCM bytes to AudioBuffer and plays
    */
   private audioContext: AudioContext | null = null;
-  private audioQueue: Array<{buffer: AudioBuffer, scheduledTime: number}> = [];
   private nextPlayTime: number = 0;
 
   private async playPhoneAudio(pcmBytes: Uint8Array, sampleRate: number): Promise<void> {
