@@ -558,16 +558,19 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     // Get the service directly from singleton (React state might not be updated yet)
     const service = getWebRTCService({ livekitUrl: import.meta.env.VITE_LIVEKIT_WS_URL || 'wss://audioroad-broadcast-st6f3yzp.livekit.cloud' });
     
-    if (!service || !service.isConnected()) {
+    if (!service) {
       throw new Error('WebRTC service failed to initialize');
     }
+    
+    // Don't check isConnected() here - connection happens when joinLiveRoom calls client.connect(token)
+    console.log('🔌 [WEBRTC] Service ready, proceeding to join room...');
 
     try {
       // Get local microphone stream
       await service.setLocalAudioStream();
       console.log('✅ [WEBRTC] Got local audio stream');
       
-      // Join live room
+      // Join live room (this connects to LiveKit with a token from backend)
       await service.joinLiveRoom(episodeId, displayName);
 
       // Note: Host mic goes directly to LiveKit via WebRTC
