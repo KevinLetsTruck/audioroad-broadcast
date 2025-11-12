@@ -4,7 +4,7 @@
  */
 
 import express, { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -46,7 +46,7 @@ interface WebSocketRouter extends express.Router {
           const call = await prisma.call.findFirst({
             where: { twilioCallSid: callSid || undefined },
             include: { caller: true }
-          });
+          }) as Prisma.CallGetPayload<{ include: { caller: true } }> | null;
 
           if (!call) {
             console.error(`❌ [MEDIA-STREAM] Call not found: ${callSid}`);
