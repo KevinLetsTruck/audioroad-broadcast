@@ -494,38 +494,51 @@ export default function ScreeningRoom() {
   const handlePickUpCall = async (call: any) => {
     console.log('📞 Picking up call:', call.id);
     
-    // CRITICAL: ALWAYS disconnect any existing calls, even if React state is cleared
-    // Check the device itself, not just React state
-    const deviceHasActiveCalls = broadcast.twilioDevice?.calls && broadcast.twilioDevice.calls.length > 0;
-    if (broadcast.activeCalls.size > 0 || deviceHasActiveCalls) {
-      console.warn('⚠️ Active call detected - disconnecting before pickup');
-      try {
-        await broadcast.disconnectCurrentCall();
-        setActiveCall(null);
-        // Longer wait to ensure Twilio releases the device
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        console.log('✅ Previous call disconnected, device free');
-      } catch (e) {
-        console.error('❌ Failed to disconnect:', e);
+    // Check if using WebRTC mode
+    const useWebRTC = broadcast.useWebRTC;
+    console.log(`🔌 [SCREENING] Connection mode: ${useWebRTC ? 'WebRTC (LiveKit)' : 'Twilio Device'}`);
+    
+    // CRITICAL: ALWAYS disconnect any existing calls
+    if (useWebRTC) {
+      // Disconnect WebRTC if active
+      if (broadcast.webrtcService && broadcast.webrtcService.isInRoom()) {
+        console.warn('⚠️ [WEBRTC] Already in a room - leaving first');
+        await broadcast.leaveRoomWebRTC();
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    } else {
+      // Disconnect Twilio Device if active
+      const deviceHasActiveCalls = broadcast.twilioDevice?.calls && broadcast.twilioDevice.calls.length > 0;
+      if (broadcast.activeCalls.size > 0 || deviceHasActiveCalls) {
+        console.warn('⚠️ Active call detected - disconnecting before pickup');
+        try {
+          await broadcast.disconnectCurrentCall();
+          setActiveCall(null);
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          console.log('✅ Previous call disconnected, device free');
+        } catch (e) {
+          console.error('❌ Failed to disconnect:', e);
+        }
       }
     }
     
-    // Update call status to 'screening' in database
+    // Update call status to 'screening' via API (moves caller to screening room)
     try {
-      await fetch(`/api/calls/${call.id}/screen`, {
-        method: 'PATCH'
+      await fetch(`/api/screening/${call.id}/pickup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ screenerId: 'screener-current' })
       });
-      console.log('✅ Call status updated to screening');
+      console.log('✅ Call moved to screening room');
     } catch (error) {
       console.error('⚠️ Error updating call status:', error);
       // Continue anyway
     }
     
-    // Set active call first (this will cause DocumentUploadWidget to re-render with new callerId)
+    // Set active call first
     setActiveCall(call);
     
     // CLEAR form for fresh entry each call
-    // Screener will enter current info, not pre-fill from previous calls
     setScreenerNotes({
       name: '',
       location: '',
@@ -535,48 +548,76 @@ export default function ScreeningRoom() {
       notes: ''
     });
     
-    // Refresh queues to remove this call from "Queued for Host" list
+    // Refresh queues
     fetchQueuedCalls();
     
-    // Connect screener's audio to the caller using global device
-    if (!screenerReady) {
-      console.error('⚠️ Phone system not ready');
-      setActiveCall(null);
-      return;
-    }
-
-    console.log('🎙️ Connecting screener to caller...');
-    try {
-      const callerName = call.caller?.name || 'Caller';
+    // Connect screener's audio (WebRTC or Twilio)
+    if (useWebRTC) {
+      // === WebRTC Flow (LiveKit) ===
+      console.log('🔌 [WEBRTC] Connecting screener via LiveKit...');
       
-      // Connect screener to conference
-      await broadcast.connectToCall(call.id, callerName, activeEpisode.id, 'screener');
-      console.log('✅ Screener audio connection initiated');
-      
-      // Wait a moment for screener to fully connect to conference
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // CRITICAL: Unmute caller so screener can talk to them (keep in screening state)
-      console.log('📞 Unmuting caller for screening...');
       try {
-        // Use unmute endpoint to just unmute (keeps participant in screening state)
-        const onAirRes = await fetch(`/api/participants/${call.id}/unmute`, { method: 'PATCH' });
-        if (onAirRes.ok) {
-          console.log('✅ Caller unmuted for screening');
-        } else {
-          const errorText = await onAirRes.text();
-          console.error('⚠️ on-air endpoint failed:', onAirRes.status, errorText);
+        // Ensure WebRTC is initialized
+        if (!broadcast.webrtcService || !broadcast.webrtcService.isConnected()) {
+          await broadcast.initializeWebRTC();
+          console.log('✅ [WEBRTC] LiveKit initialized');
         }
         
-        // Extra safety: Wait then verify they're actually unmuted
-        await new Promise(resolve => setTimeout(resolve, 500));
-        console.log('✅ Screening connection complete');
-      } catch (holdError) {
-        console.error('⚠️ Failed to unmute caller:', holdError);
+        // Join screening room
+        await broadcast.joinScreeningRoomWebRTC(
+          call.episodeId,
+          call.id,
+          'Screener'
+        );
+        console.log('✅ [WEBRTC] Joined screening room');
+      } catch (webrtcError) {
+        console.error('❌ [WEBRTC] Failed to join:', webrtcError);
+        alert('Failed to connect via WebRTC. Check browser console.');
+        setActiveCall(null);
+        return;
       }
-    } catch (error) {
-      console.error('❌ Error connecting to caller:', error);
-      setActiveCall(null);
+    } else {
+      // === Twilio Device Flow (Original) ===
+      
+      if (!screenerReady) {
+        console.error('⚠️ Phone system not ready');
+        setActiveCall(null);
+        return;
+      }
+
+      console.log('🎙️ Connecting screener to caller...');
+      try {
+        const callerName = call.caller?.name || 'Caller';
+        
+        // Connect screener to conference
+        await broadcast.connectToCall(call.id, callerName, activeEpisode.id, 'screener');
+        console.log('✅ Screener audio connection initiated');
+        
+        // Wait a moment for screener to fully connect to conference
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // CRITICAL: Unmute caller so screener can talk to them (keep in screening state)
+        console.log('📞 Unmuting caller for screening...');
+        try {
+          // Use unmute endpoint to just unmute (keeps participant in screening state)
+          const onAirRes = await fetch(`/api/participants/${call.id}/unmute`, { method: 'PATCH' });
+          if (onAirRes.ok) {
+            console.log('✅ Caller unmuted for screening');
+          } else {
+            const errorText = await onAirRes.text();
+            console.error('⚠️ on-air endpoint failed:', onAirRes.status, errorText);
+          }
+          
+          // Extra safety: Wait then verify they're actually unmuted
+          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log('✅ Screening connection complete');
+        } catch (holdError) {
+          console.error('⚠️ Failed to unmute caller:', holdError);
+        }
+      } catch (error) {
+        console.error('❌ Error connecting to caller:', error);
+        setActiveCall(null);
+      }
     }
   };
 
@@ -718,6 +759,25 @@ export default function ScreeningRoom() {
             <h2 className="text-lg font-bold">Call Screening Room</h2>
             {activeEpisode && <span className="text-sm text-gray-500">{activeEpisode.title}</span>}
           </div>
+          
+          {/* WebRTC Mode Toggle */}
+          {!activeCall && activeEpisode && (
+            <>
+              <div className="h-6 w-px bg-gray-600"></div>
+              <label className="flex items-center gap-2 cursor-pointer text-sm">
+                <input
+                  type="checkbox"
+                  checked={broadcast.useWebRTC}
+                  onChange={(e) => broadcast.setUseWebRTC(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span>Use WebRTC</span>
+                {broadcast.webrtcConnected && (
+                  <span className="px-2 py-0.5 bg-green-600 text-white text-xs rounded">Connected</span>
+                )}
+              </label>
+            </>
+          )}
           
           {!activeCall && activeEpisode && (
             <>
