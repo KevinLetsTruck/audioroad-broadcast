@@ -135,12 +135,24 @@ export class TwilioMediaBridge extends EventEmitter {
     });
 
     ws.on('close', async () => {
-      console.log(`📴 [MEDIA-BRIDGE] WebSocket closed for ${callSid}`);
+      const duration = (Date.now() - connection.stats.startTime) / 1000;
+      console.log(`📴 [MEDIA-BRIDGE] WebSocket closed for ${callSid} after ${duration.toFixed(1)}s`);
+      
+      // Alert if connection closed very quickly (indicates setup failure)
+      if (duration < 5) {
+        console.error(`⚠️ [MEDIA-BRIDGE] Connection closed after only ${duration.toFixed(1)}s!`);
+        console.error(`   This usually indicates a setup error or Twilio rejecting the connection`);
+        console.error(`   Packets received: ${connection.stats.packetsReceived}`);
+      }
+      
       await this.stopMediaStream(callSid);
     });
 
     ws.on('error', (error: Error) => {
       console.error(`❌ [MEDIA-BRIDGE] WebSocket error for ${callSid}:`, error);
+      console.error(`   Error type: ${error.name}`);
+      console.error(`   Error message: ${error.message}`);
+      console.error(`   Connection age: ${((Date.now() - connection.stats.startTime) / 1000).toFixed(1)}s`);
     });
   }
 
@@ -161,7 +173,23 @@ export class TwilioMediaBridge extends EventEmitter {
       connection.stats.bytesReceived += muLawData.length;
       
       // Convert muLaw (8-bit) to PCM (16-bit signed)
-      const pcmData = Buffer.from(MuLawDecoder(muLawData));
+      const pcmInt16Array = MuLawDecoder(muLawData); // Returns Int16Array
+      
+      // Convert Int16Array to Buffer (2 bytes per sample, little-endian)
+      const pcmData = Buffer.allocUnsafe(pcmInt16Array.length * 2);
+      for (let i = 0; i < pcmInt16Array.length; i++) {
+        pcmData.writeInt16LE(pcmInt16Array[i], i * 2);
+      }
+      
+      // Log first packet to verify encoding
+      if (connection.stats.packetsReceived === 1) {
+        console.log(`🔊 [MEDIA-BRIDGE] First audio packet decoded:`);
+        console.log(`   muLaw bytes: ${muLawData.length}`);
+        console.log(`   PCM Int16 samples: ${pcmInt16Array.length}`);
+        console.log(`   PCM Buffer bytes: ${pcmData.length} (should be ${pcmInt16Array.length * 2})`);
+        console.log(`   First 5 Int16 values: [${Array.from(pcmInt16Array.slice(0, 5)).join(', ')}]`);
+        console.log(`   First 10 PCM bytes: [${Array.from(pcmData.slice(0, 10)).join(', ')}]`);
+      }
       
       // Create RTP packet
       const rtpPacket = connection.rtpHandler.createPacket(pcmData);
@@ -254,8 +282,16 @@ export class TwilioMediaBridge extends EventEmitter {
       
       for (let i = 0; i < numSamples8k; i++) {
         // Simple decimation: take every 6th sample
-        // (Could use low-pass filter first for better quality, but this works)
         pcmInt16_8k[i] = pcmInt16_48k[i * downsampleRatio];
+      }
+      
+      // Log first outgoing packet to verify downsampling
+      if (connection.stats.packetsSent === 0) {
+        console.log(`🎤 [MEDIA-BRIDGE] First outgoing audio packet:`);
+        console.log(`   Input: ${pcmInt16_48k.length} samples at 48kHz`);
+        console.log(`   Output: ${pcmInt16_8k.length} samples at 8kHz (ratio: ${downsampleRatio})`);
+        console.log(`   First 5 samples 48k: [${Array.from(pcmInt16_48k.slice(0, 5)).join(', ')}]`);
+        console.log(`   First 5 samples 8k: [${Array.from(pcmInt16_8k.slice(0, 5)).join(', ')}]`);
       }
       
       // Now encode 8kHz PCM to 8kHz muLaw
@@ -368,19 +404,22 @@ export class TwilioMediaBridge extends EventEmitter {
    * Find callSid for a given room (for forwarding browser audio to phone)
    */
   getCallSidForRoom(roomId: string): string | null {
-    // Log all active streams to debug
-    console.log(`🔍 [MEDIA-BRIDGE] Looking for call in room: ${roomId}`);
-    console.log(`   Active streams: ${this.activeStreams.size}`);
-    
     for (const [callSid, connection] of this.activeStreams.entries()) {
-      console.log(`   - CallSid: ${callSid}, Room: ${connection.roomId}, Match: ${connection.roomId === roomId}`);
       if (connection.roomId === roomId) {
-        console.log(`✅ [MEDIA-BRIDGE] Found call ${callSid} in room ${roomId}`);
         return callSid;
       }
     }
     
-    console.log(`❌ [MEDIA-BRIDGE] No call found in room: ${roomId}`);
+    // Only log if we have active streams but none match (indicates room mapping issue)
+    if (this.activeStreams.size > 0) {
+      console.error(`❌ [MEDIA-BRIDGE] Room mapping mismatch!`);
+      console.error(`   Looking for: ${roomId}`);
+      console.error(`   Active streams: ${this.activeStreams.size}`);
+      for (const [callSid, connection] of this.activeStreams.entries()) {
+        console.error(`   - ${callSid}: ${connection.roomId}`);
+      }
+    }
+    
     return null;
   }
 }

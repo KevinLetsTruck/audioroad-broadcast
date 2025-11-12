@@ -159,11 +159,11 @@ export class LiveKitClient {
           const audioBase64 = data.audio;
           const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
           
-          // Create AudioBuffer and play
+          // Create AudioBuffer and play - DON'T silence errors during debugging
           this.playPhoneAudio(audioBytes, data.sampleRate || 8000).catch(err => {
-            if (Math.random() < 0.01) { // Log only 1% of errors
-              console.error('❌ [LIVEKIT-CLIENT] Failed to play audio:', err);
-            }
+            console.error('❌ [LIVEKIT-CLIENT] Failed to play audio:', err);
+            console.error('   Audio size:', audioBytes.length, 'bytes');
+            console.error('   Sample rate:', data.sampleRate);
           });
         }
       } catch (error) {
@@ -368,6 +368,17 @@ export class LiveKitClient {
 
   private async playPhoneAudio(pcmBytes: Uint8Array, sampleRate: number): Promise<void> {
     try {
+      // Validate input
+      if (pcmBytes.length === 0) {
+        console.error('❌ [AUDIO] Received 0 bytes - skipping');
+        return;
+      }
+      
+      if (pcmBytes.length % 2 !== 0) {
+        console.error(`❌ [AUDIO] Odd byte count: ${pcmBytes.length} - truncating to even`);
+        pcmBytes = pcmBytes.slice(0, pcmBytes.length - 1);
+      }
+
       // Initialize audio context if needed
       if (!this.audioContext) {
         this.audioContext = new AudioContext({ sampleRate: 48000 });
@@ -380,15 +391,15 @@ export class LiveKitClient {
         await this.audioContext.resume();
       }
 
-      // Log first playback
+      // Log first playback with detailed info
       if (!this.audioPlaybackStarted) {
         this.audioPlaybackStarted = true;
         console.log('🔊 [AUDIO] Starting phone audio playback...');
         console.log(`   PCM bytes: ${pcmBytes.length}, sample rate: ${sampleRate}Hz`);
+        console.log(`   First 10 bytes: [${Array.from(pcmBytes.slice(0, 10)).join(', ')}]`);
       }
 
-      // SIMPLE APPROACH: Just convert PCM bytes to Float32 and let browser handle resampling
-      // PCM is 16-bit signed little-endian
+      // Convert PCM bytes to Float32 (16-bit signed little-endian)
       const numSamples = Math.floor(pcmBytes.length / 2);
       const float32Array = new Float32Array(numSamples);
       
@@ -405,6 +416,12 @@ export class LiveKitClient {
         
         // Normalize to -1.0 to 1.0
         float32Array[i] = value / 32768.0;
+      }
+
+      // Verify we have valid audio data
+      const hasNonZero = float32Array.some(s => Math.abs(s) > 0.001);
+      if (!hasNonZero && !this.audioPlaybackStarted) {
+        console.warn('⚠️ [AUDIO] All samples near zero - might be silence or corrupt data');
       }
 
       // Create audio buffer - let browser resample from 8kHz to 48kHz
@@ -436,8 +453,13 @@ export class LiveKitClient {
       this.nextPlayTime = playTime + duration;
 
     } catch (error) {
-      console.error('❌ [LIVEKIT-CLIENT] Failed to play phone audio:', error);
-      console.error('   Error details:', error);
+      console.error('❌ [AUDIO] Playback FAILED:', error);
+      console.error('   PCM bytes length:', pcmBytes.length);
+      console.error('   Sample rate:', sampleRate);
+      console.error('   Error message:', error instanceof Error ? error.message : error);
+      console.error('   Error stack:', error instanceof Error ? error.stack : 'No stack');
+      // DON'T silence - we need to see this error
+      throw error;
     }
   }
 

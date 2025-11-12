@@ -255,17 +255,34 @@ const prismaForMediaStream = new PrismaClient();
         
         console.log(`▶️ [MEDIA-STREAM] Stream starting for call: ${callSid}`);
 
-        // Look up call in database
-        const call = await prismaForMediaStream.call.findFirst({
-          where: { twilioCallSid: callSid || undefined },
-          include: { caller: true }
-        }) as Prisma.CallGetPayload<{ include: { caller: true } }> | null;
+        // Look up call in database with retry logic (call record might not exist yet)
+        let call = null;
+        let retries = 0;
+        const maxRetries = 10; // 5 seconds total
+        
+        while (!call && retries < maxRetries) {
+          call = await prismaForMediaStream.call.findFirst({
+            where: { twilioCallSid: callSid || undefined },
+            include: { caller: true }
+          }) as Prisma.CallGetPayload<{ include: { caller: true } }> | null;
+          
+          if (!call) {
+            console.log(`⏳ [MEDIA-STREAM] Call not found yet, retry ${retries + 1}/${maxRetries}...`);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            retries++;
+          }
+        }
 
         if (!call) {
-          console.error(`❌ [MEDIA-STREAM] Call not found: ${callSid}`);
+          console.error(`❌ [MEDIA-STREAM] Call not found after ${retries} retries: ${callSid}`);
+          console.error(`   This means the call record was never created in /incoming-call`);
+          console.error(`   Check if /incoming-call endpoint is being called and creating records`);
           ws.close();
           return;
         }
+        
+        console.log(`✅ [MEDIA-STREAM] Found call record: ${call.id} (status: ${call.status}, retries: ${retries})`);
+
 
         // Get media bridge
         const mediaBridge = req.app.get('mediaBridge');
