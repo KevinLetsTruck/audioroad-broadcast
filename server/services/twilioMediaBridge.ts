@@ -8,7 +8,7 @@
  */
 
 import { EventEmitter } from 'events';
-import WebRTCRoomManager from './webrtcRoomManager.js';
+import LiveKitRoomManager from './livekitRoomManager.js';
 import { Encoder as MuLawEncoder, Decoder as MuLawDecoder } from 'alawmulaw';
 import RTPHandler, { RTP_PAYLOAD_TYPES } from './rtpHandler.js';
 import JitterBuffer from './jitterBuffer.js';
@@ -40,10 +40,10 @@ interface MediaStreamConnection {
 }
 
 export class TwilioMediaBridge extends EventEmitter {
-  private roomManager: WebRTCRoomManager;
+  private roomManager: LiveKitRoomManager;
   private activeStreams: Map<string, MediaStreamConnection> = new Map();
 
-  constructor(roomManager: WebRTCRoomManager) {
+  constructor(roomManager: LiveKitRoomManager) {
     super();
     this.roomManager = roomManager;
   }

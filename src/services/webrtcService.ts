@@ -1,14 +1,13 @@
 /**
  * WebRTC Service
  * High-level API for WebRTC audio rooms
- * Wraps Janus client with application-specific logic
+ * Uses LiveKit Cloud for production-ready WebRTC
  */
 
-import JanusClient from './janusClient';
+import LiveKitClient from './livekitClient';
 
 export interface WebRTCConfig {
-  janusUrl: string;
-  iceServers?: RTCIceServer[];
+  livekitUrl: string;
 }
 
 export interface RoomInfo {
@@ -26,7 +25,7 @@ export interface ParticipantInfo {
 }
 
 export class WebRTCService {
-  private client: JanusClient | null = null;
+  private client: LiveKitClient | null = null;
   private config: WebRTCConfig;
   private currentRoom: RoomInfo | null = null;
   private localStream: MediaStream | null = null;
@@ -47,38 +46,38 @@ export class WebRTCService {
       return;
     }
 
-    console.log('🔌 [WEBRTC] Initializing WebRTC service...');
+    console.log('🔌 [WEBRTC] Initializing LiveKit WebRTC service...');
 
     try {
-      this.client = new JanusClient({
-        serverUrl: this.config.janusUrl,
-        iceServers: this.config.iceServers
-      });
+      this.client = new LiveKitClient(this.config.livekitUrl);
 
       // Forward events
-      this.client.on('webrtcup', () => {
+      this.client.on('connected', () => {
         this.emit('connected');
       });
 
-      this.client.on('track', (stream: MediaStream) => {
-        this.remoteStream = stream;
-        this.emit('remote-stream', stream);
+      this.client.on('webrtcup', () => {
+        this.emit('webrtcup');
       });
 
-      this.client.on('hangup', () => {
+      this.client.on('track', () => {
+        // Track automatically plays via audio element in LiveKit
+        this.emit('remote-track');
+      });
+
+      this.client.on('disconnected', () => {
         this.emit('disconnected');
+      });
+
+      this.client.on('reconnecting', () => {
+        this.emit('reconnecting');
       });
 
       this.client.on('reconnected', () => {
         this.emit('reconnected');
       });
 
-      this.client.on('connection-failed', () => {
-        this.emit('connection-failed');
-      });
-
-      await this.client.connect();
-      console.log('✅ [WEBRTC] Service initialized');
+      console.log('✅ [WEBRTC] LiveKit service initialized');
 
     } catch (error) {
       console.error('❌ [WEBRTC] Failed to initialize:', error);
@@ -90,29 +89,51 @@ export class WebRTCService {
    * Join live broadcast room as host
    */
   async joinLiveRoom(episodeId: string, displayName: string): Promise<void> {
-    if (!this.client || !this.client.isConnected()) {
-      throw new Error('Not connected to WebRTC server');
+    if (!this.client) {
+      throw new Error('WebRTC client not initialized');
     }
 
     if (!this.localStream) {
       throw new Error('No local audio stream available');
     }
 
-    const roomId = `live-${episodeId}`;
+    const roomName = `live-${episodeId}`;
 
-    console.log(`🔌 [WEBRTC] Joining live room: ${roomId}`);
+    console.log(`🔌 [WEBRTC] Joining live room: ${roomName}`);
 
     try {
-      await this.client.joinRoom(roomId, displayName, this.localStream);
+      // Get access token from backend
+      const response = await fetch('/api/webrtc/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomName,
+          participantName: displayName,
+          participantId: `host-${episodeId}`
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get LiveKit token');
+      }
+
+      const { token } = await response.json();
+
+      // Connect to LiveKit room
+      await this.client.connect(token);
+
+      // Publish local audio
+      const audioTrack = this.localStream.getAudioTracks()[0];
+      await this.client.publishAudio(audioTrack);
 
       this.currentRoom = {
-        id: roomId,
+        id: roomName,
         type: 'live',
         episodeId
       };
 
       this.emit('room-joined', this.currentRoom);
-      console.log('✅ [WEBRTC] Joined live room:', roomId);
+      console.log('✅ [WEBRTC] Joined live room:', roomName);
 
     } catch (error) {
       console.error('❌ [WEBRTC] Failed to join live room:', error);
@@ -128,29 +149,51 @@ export class WebRTCService {
     callId: string,
     displayName: string
   ): Promise<void> {
-    if (!this.client || !this.client.isConnected()) {
-      throw new Error('Not connected to WebRTC server');
+    if (!this.client) {
+      throw new Error('WebRTC client not initialized');
     }
 
     if (!this.localStream) {
       throw new Error('No local audio stream available');
     }
 
-    const roomId = `screening-${episodeId}-${callId}`;
+    const roomName = `screening-${episodeId}-${callId}`;
 
-    console.log(`🔌 [WEBRTC] Joining screening room: ${roomId}`);
+    console.log(`🔌 [WEBRTC] Joining screening room: ${roomName}`);
 
     try {
-      await this.client.joinRoom(roomId, displayName, this.localStream);
+      // Get access token from backend
+      const response = await fetch('/api/webrtc/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomName,
+          participantName: displayName,
+          participantId: `screener-${callId}`
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get LiveKit token');
+      }
+
+      const { token } = await response.json();
+
+      // Connect to LiveKit room
+      await this.client.connect(token);
+
+      // Publish local audio
+      const audioTrack = this.localStream.getAudioTracks()[0];
+      await this.client.publishAudio(audioTrack);
 
       this.currentRoom = {
-        id: roomId,
+        id: roomName,
         type: 'screening',
         episodeId
       };
 
       this.emit('room-joined', this.currentRoom);
-      console.log('✅ [WEBRTC] Joined screening room:', roomId);
+      console.log('✅ [WEBRTC] Joined screening room:', roomName);
 
     } catch (error) {
       console.error('❌ [WEBRTC] Failed to join screening room:', error);
@@ -169,7 +212,7 @@ export class WebRTCService {
     console.log('📴 [WEBRTC] Leaving room:', this.currentRoom?.id);
 
     try {
-      await this.client.leaveRoom();
+      await this.client.disconnect();
       
       const leftRoom = this.currentRoom;
       this.currentRoom = null;
@@ -217,15 +260,12 @@ export class WebRTCService {
   /**
    * Mute/unmute local microphone
    */
-  setMuted(muted: boolean): void {
-    if (!this.localStream) {
+  async setMuted(muted: boolean): Promise<void> {
+    if (!this.client) {
       return;
     }
 
-    this.localStream.getAudioTracks().forEach(track => {
-      track.enabled = !muted;
-    });
-
+    await this.client.setMuted(muted);
     this.emit('muted-changed', muted);
     console.log(`🔇 [WEBRTC] ${muted ? 'Muted' : 'Unmuted'} local microphone`);
   }
@@ -268,7 +308,7 @@ export class WebRTCService {
   /**
    * Get connection stats
    */
-  async getStats(): Promise<RTCStatsReport | null> {
+  async getStats(): Promise<Map<string, any> | null> {
     if (!this.client) {
       return null;
     }

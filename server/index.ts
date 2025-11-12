@@ -43,13 +43,14 @@ import healthRoutes from './routes/health.js';
 import mediaStreamRoutes from './routes/mediaStream.js';
 import screeningRoutes from './routes/screening.js';
 import liveRoomRoutes from './routes/liveRoom.js';
+import webrtcRoutes from './routes/webrtc.js';
 // import broadcastRoutes from './routes/broadcast.js'; // Temporarily disabled until migration runs
 
 // Import services
 import { initializeSocketHandlers } from './services/socketService.js';
 import { initializeStreamSocketHandlers, startHLSServerOnBoot } from './services/streamSocketService.js';
 import { audioCache } from './services/audioCache.js';
-import WebRTCRoomManager from './services/webrtcRoomManager.js';
+import LiveKitRoomManager from './services/livekitRoomManager.js';
 import TwilioMediaBridge from './services/twilioMediaBridge.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -76,28 +77,31 @@ initializeStreamSocketHandlers(io);
 // Make io available to routes
 app.set('io', io);
 
-// Initialize WebRTC infrastructure (if Janus URL configured)
-let roomManager: WebRTCRoomManager | null = null;
+// Initialize WebRTC infrastructure with LiveKit
+let roomManager: LiveKitRoomManager | null = null;
 let mediaBridge: TwilioMediaBridge | null = null;
 
-const janusUrl = process.env.JANUS_WS_URL;
-if (janusUrl) {
-  console.log('🔌 [WEBRTC] Initializing WebRTC infrastructure...');
-  console.log('   Janus URL:', janusUrl);
+const livekitUrl = process.env.LIVEKIT_WS_URL;
+const livekitApiKey = process.env.LIVEKIT_API_KEY;
+const livekitApiSecret = process.env.LIVEKIT_API_SECRET;
+
+if (livekitUrl && livekitApiKey && livekitApiSecret) {
+  console.log('🔌 [WEBRTC] Initializing LiveKit WebRTC infrastructure...');
+  console.log('   LiveKit URL:', livekitUrl);
   
   try {
-    roomManager = new WebRTCRoomManager(janusUrl);
+    roomManager = new LiveKitRoomManager(livekitUrl, livekitApiKey, livekitApiSecret);
     mediaBridge = new TwilioMediaBridge(roomManager);
     
     // Make available to routes
     app.set('roomManager', roomManager);
     app.set('mediaBridge', mediaBridge);
     
-    // Initialize connection to Janus (don't await - let it connect in background)
+    // Initialize connection to LiveKit (non-blocking)
     roomManager.initialize().then(() => {
-      console.log('✅ [WEBRTC] Connected to Janus Gateway');
+      console.log('✅ [WEBRTC] Connected to LiveKit Cloud');
     }).catch((error) => {
-      console.error('❌ [WEBRTC] Failed to connect to Janus:', error);
+      console.error('❌ [WEBRTC] Failed to connect to LiveKit:', error);
       console.warn('⚠️ [WEBRTC] Continuing without WebRTC (falling back to Twilio conferences)');
     });
   } catch (error) {
@@ -105,8 +109,8 @@ if (janusUrl) {
     console.warn('⚠️ [WEBRTC] Continuing without WebRTC');
   }
 } else {
-  console.log('ℹ️ [WEBRTC] Janus WebSocket URL not configured - WebRTC features disabled');
-  console.log('   Set JANUS_WS_URL environment variable to enable WebRTC');
+  console.log('ℹ️ [WEBRTC] LiveKit not configured - WebRTC features disabled');
+  console.log('   Set LIVEKIT_WS_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET to enable WebRTC');
 }
 
 // Trust proxy - for Railway deployment
@@ -183,6 +187,7 @@ app.use('/api/calls', apiLimiter, moveToLiveRoutes);
 app.use('/api/calls', apiLimiter, redirectToStreamRoutes);
 app.use('/api/screening', apiLimiter, screeningRoutes); // WebRTC screening room management
 app.use('/api/live-room', apiLimiter, liveRoomRoutes); // WebRTC live room participant management
+app.use('/api/webrtc', apiLimiter, webrtcRoutes); // LiveKit token generation and room management
 app.use('/api/callers', apiLimiter, callerRoutes);
 app.use('/api/episodes', apiLimiter, episodeRoutes);
 app.use('/api/shows', apiLimiter, showRoutes);

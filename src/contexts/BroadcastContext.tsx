@@ -472,36 +472,32 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
       return webrtcService;
     }
 
-    // Get Janus URL from environment
-    const janusUrl = import.meta.env.VITE_JANUS_WS_URL;
-    if (!janusUrl) {
-      throw new Error('VITE_JANUS_WS_URL not configured');
+    // Get LiveKit URL from environment
+    const livekitUrl = import.meta.env.VITE_LIVEKIT_WS_URL;
+    if (!livekitUrl) {
+      throw new Error('VITE_LIVEKIT_WS_URL not configured');
     }
 
-    console.log('🔌 [WEBRTC] Initializing WebRTC service...');
+    console.log('🔌 [WEBRTC] Initializing LiveKit WebRTC service...');
 
     try {
       const service = getWebRTCService({
-        janusUrl,
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:global.stun.twilio.com:3478' }
-        ]
+        livekitUrl
       });
 
       // Set up event listeners
       service.on('connected', () => {
-        console.log('✅ [WEBRTC] Connected to Janus Gateway');
+        console.log('✅ [WEBRTC] Connected to LiveKit Cloud');
         setWebrtcConnected(true);
       });
 
       service.on('disconnected', () => {
-        console.log('📴 [WEBRTC] Disconnected from Janus Gateway');
+        console.log('📴 [WEBRTC] Disconnected from LiveKit Cloud');
         setWebrtcConnected(false);
       });
 
       service.on('reconnected', () => {
-        console.log('🔄 [WEBRTC] Reconnected to Janus Gateway');
+        console.log('🔄 [WEBRTC] Reconnected to LiveKit Cloud');
         setWebrtcConnected(true);
       });
 

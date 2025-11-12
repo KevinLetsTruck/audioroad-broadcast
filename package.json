@@ -48,6 +48,8 @@
     "icecast-metadata-js": "^1.2.9",
     "jsonwebtoken": "^9.0.2",
     "lamejs": "^1.2.1",
+    "livekit-client": "^2.15.15",
+    "livekit-server-sdk": "^2.14.0",
     "multer": "^2.0.2",
     "openai": "^6.7.0",
     "pcm-convert": "^1.6.5",
