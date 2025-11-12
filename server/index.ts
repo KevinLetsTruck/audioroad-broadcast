@@ -42,6 +42,7 @@ import audioProxyRoutes from './routes/audioProxy.js';
 import healthRoutes from './routes/health.js';
 import mediaStreamRoutes from './routes/mediaStream.js';
 import screeningRoutes from './routes/screening.js';
+import liveRoomRoutes from './routes/liveRoom.js';
 // import broadcastRoutes from './routes/broadcast.js'; // Temporarily disabled until migration runs
 
 // Import services
@@ -181,6 +182,7 @@ app.use('/api/calls', apiLimiter, callRoutes);
 app.use('/api/calls', apiLimiter, moveToLiveRoutes);
 app.use('/api/calls', apiLimiter, redirectToStreamRoutes);
 app.use('/api/screening', apiLimiter, screeningRoutes); // WebRTC screening room management
+app.use('/api/live-room', apiLimiter, liveRoomRoutes); // WebRTC live room participant management
 app.use('/api/callers', apiLimiter, callerRoutes);
 app.use('/api/episodes', apiLimiter, episodeRoutes);
 app.use('/api/shows', apiLimiter, showRoutes);
