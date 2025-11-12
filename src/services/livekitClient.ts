@@ -358,14 +358,11 @@ export class LiveKitClient {
         this.audioContext = new AudioContext({ sampleRate: 48000 }); // Standard rate
         this.nextPlayTime = this.audioContext.currentTime;
         console.log('🔊 [AUDIO] AudioContext created, sample rate:', this.audioContext.sampleRate);
-        console.log('🔊 [AUDIO] AudioContext state:', this.audioContext.state);
       }
 
       // Resume AudioContext if suspended (browser security requires user gesture)
       if (this.audioContext.state === 'suspended') {
-        console.log('🔊 [AUDIO] Resuming suspended AudioContext...');
         await this.audioContext.resume();
-        console.log('✅ [AUDIO] AudioContext resumed, state:', this.audioContext.state);
       }
 
       // Log first playback only
@@ -375,34 +372,74 @@ export class LiveKitClient {
         console.log(`   Received ${pcmBytes.length} bytes at ${sampleRate}Hz`);
       }
 
-      // Convert PCM bytes to Float32 samples
-      const int16Array = new Int16Array(pcmBytes.buffer);
-      const float32Array = new Float32Array(int16Array.length);
-      for (let i = 0; i < int16Array.length; i++) {
-        float32Array[i] = int16Array[i] / 32768.0; // Convert to -1.0 to 1.0
+      // Ensure even number of bytes for 16-bit PCM
+      if (pcmBytes.length % 2 !== 0) {
+        console.warn('⚠️ [AUDIO] Odd byte count, truncating');
+        pcmBytes = pcmBytes.slice(0, pcmBytes.length - 1);
       }
 
-      // Create audio buffer at phone's sample rate (8kHz from Twilio)
-      // Browser will automatically resample to match AudioContext rate (48kHz)
+      // Convert PCM bytes to Int16 samples (handle byte order properly)
+      const numSamples = pcmBytes.length / 2;
+      const int16Array = new Int16Array(numSamples);
+      for (let i = 0; i < numSamples; i++) {
+        // Little-endian: low byte first, high byte second
+        const low = pcmBytes[i * 2];
+        const high = pcmBytes[i * 2 + 1];
+        int16Array[i] = (high << 8) | low;
+        // Handle sign extension for negative numbers
+        if (int16Array[i] > 32767) {
+          int16Array[i] -= 65536;
+        }
+      }
+
+      // MANUAL UPSAMPLING: 8kHz → 48kHz (6x)
+      // Simple linear interpolation for better quality than browser's automatic resampling
+      const upsampleFactor = 6; // 8kHz * 6 = 48kHz
+      const upsampledLength = int16Array.length * upsampleFactor;
+      const upsampledFloat = new Float32Array(upsampledLength);
+
+      for (let i = 0; i < int16Array.length - 1; i++) {
+        const sample1 = int16Array[i] / 32768.0;
+        const sample2 = int16Array[i + 1] / 32768.0;
+        
+        for (let j = 0; j < upsampleFactor; j++) {
+          const fraction = j / upsampleFactor;
+          const interpolated = sample1 + (sample2 - sample1) * fraction;
+          upsampledFloat[i * upsampleFactor + j] = interpolated;
+        }
+      }
+      
+      // Handle last sample
+      const lastSample = int16Array[int16Array.length - 1] / 32768.0;
+      for (let j = 0; j < upsampleFactor; j++) {
+        upsampledFloat[(int16Array.length - 1) * upsampleFactor + j] = lastSample;
+      }
+
+      // Create audio buffer at 48kHz (no browser resampling needed)
       const audioBuffer = this.audioContext.createBuffer(
         1, // Mono
-        float32Array.length,
-        sampleRate // Use phone's actual rate (8000)
+        upsampledFloat.length,
+        48000 // Match AudioContext rate
       );
-      audioBuffer.copyToChannel(float32Array, 0);
+      audioBuffer.copyToChannel(upsampledFloat, 0);
 
-      // Schedule playback
+      // Create playback chain with filtering
       const source = this.audioContext.createBufferSource();
       source.buffer = audioBuffer;
       
-      // Add low-pass filter to reduce noise/static
+      // Low-pass filter to remove high-frequency noise
       const filter = this.audioContext.createBiquadFilter();
       filter.type = 'lowpass';
-      filter.frequency.value = 3400; // Phone audio bandwidth
-      filter.Q.value = 1;
+      filter.frequency.value = 3400; // Phone audio bandwidth (300Hz-3400Hz)
+      filter.Q.value = 0.7;
+      
+      // Optional: Gain node for volume control
+      const gainNode = this.audioContext.createGain();
+      gainNode.gain.value = 1.5; // Boost volume slightly
       
       source.connect(filter);
-      filter.connect(this.audioContext.destination);
+      filter.connect(gainNode);
+      gainNode.connect(this.audioContext.destination);
 
       // Play immediately or queue
       const now = this.audioContext.currentTime;

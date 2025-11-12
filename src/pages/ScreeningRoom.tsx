@@ -29,33 +29,10 @@ export default function ScreeningRoom() {
   const [isOpeningLines, setIsOpeningLines] = useState(false);
   const [openLinesError, setOpenLinesError] = useState('');
 
-  // Check if Twilio device is ready (use global or initialize if needed)
-  const [localDeviceReady, setLocalDeviceReady] = useState(false);
-  const screenerReady = broadcast.twilioDevice !== null || localDeviceReady;
+  // Don't auto-initialize - let "Open Phone Lines" handle device setup based on mode
+  const [localDeviceReady, setLocalDeviceReady] = useState(true); // Always "ready" - devices init on demand
+  const screenerReady = true; // Always ready - connection happens when clicking "Open Phone Lines"
   const screenerConnected = activeCall !== null;
-  
-  // Initialize session Twilio device ONLY if NOT using WebRTC
-  // (WebRTC mode uses LiveKit instead of Twilio Device)
-  useEffect(() => {
-    if (broadcast.useWebRTC) {
-      console.log('🔌 [WEBRTC-MODE] Skipping Twilio Device initialization (using LiveKit)');
-      setLocalDeviceReady(true); // Mark as ready so UI works
-      return;
-    }
-    
-    if (!broadcast.twilioDevice && !localDeviceReady) {
-      console.log('📞 [SCREENER] Initializing session device');
-      const sessionId = `session-${Date.now()}`;
-      broadcast.initializeTwilio(sessionId)
-        .then(() => {
-          setLocalDeviceReady(true);
-          console.log('✅ [SCREENER] Session device ready');
-        })
-        .catch(err => {
-          console.error('❌ [SCREENER] Failed to initialize:', err);
-        });
-    }
-  }, [broadcast.twilioDevice, broadcast.useWebRTC, localDeviceReady]);
 
   useEffect(() => {
     console.log('🚀 ScreeningRoom mounted - initializing...');
