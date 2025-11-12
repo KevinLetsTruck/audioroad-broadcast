@@ -41,6 +41,7 @@ import directMp3Routes from './routes/directMp3.js';
 import audioProxyRoutes from './routes/audioProxy.js';
 import healthRoutes from './routes/health.js';
 import mediaStreamRoutes from './routes/mediaStream.js';
+import screeningRoutes from './routes/screening.js';
 // import broadcastRoutes from './routes/broadcast.js'; // Temporarily disabled until migration runs
 
 // Import services
@@ -179,6 +180,7 @@ app.use('/api/clerk', clerkWebhooksRoutes); // Clerk webhooks (no rate limit - C
 app.use('/api/calls', apiLimiter, callRoutes);
 app.use('/api/calls', apiLimiter, moveToLiveRoutes);
 app.use('/api/calls', apiLimiter, redirectToStreamRoutes);
+app.use('/api/screening', apiLimiter, screeningRoutes); // WebRTC screening room management
 app.use('/api/callers', apiLimiter, callerRoutes);
 app.use('/api/episodes', apiLimiter, episodeRoutes);
 app.use('/api/shows', apiLimiter, showRoutes);

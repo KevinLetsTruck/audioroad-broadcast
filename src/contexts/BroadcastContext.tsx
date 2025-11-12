@@ -69,12 +69,15 @@ interface BroadcastContextType {
   setOnAir: (callId: string) => void;
   disconnectCurrentCall: () => Promise<void>;
   
-  // Actions - WebRTC
+  // Actions - WebRTC (Host)
   initializeWebRTC: () => Promise<WebRTCService>;
   joinLiveRoomWebRTC: (episodeId: string, displayName: string) => Promise<void>;
   leaveRoomWebRTC: () => Promise<void>;
   setUseWebRTC: (enabled: boolean) => void;
   disconnectWebRTC: () => Promise<void>;
+  
+  // Actions - WebRTC (Screener)
+  joinScreeningRoomWebRTC: (episodeId: string, callId: string, displayName: string) => Promise<void>;
 }
 
 const BroadcastContext = createContext<BroadcastContextType | null>(null);
@@ -566,6 +569,42 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
   };
 
   /**
+   * Join screening room via WebRTC (for screener)
+   */
+  const joinScreeningRoomWebRTC = async (
+    episodeId: string,
+    callId: string,
+    displayName: string
+  ): Promise<void> => {
+    if (!webrtcService || !webrtcService.isConnected()) {
+      throw new Error('WebRTC service not initialized');
+    }
+
+    console.log(`🔌 [WEBRTC] Joining screening room: episode=${episodeId}, call=${callId}`);
+
+    try {
+      // Get local microphone stream
+      await webrtcService.setLocalAudioStream();
+      
+      // Join screening room
+      await webrtcService.joinScreeningRoom(episodeId, callId, displayName);
+
+      // Add local stream to mixer
+      const localStream = webrtcService.getLocalStream();
+      if (localStream && mixer) {
+        mixer.addAudioStream(localStream, 'screener-mic-webrtc', 'Screener Microphone (WebRTC)');
+        refreshAudioSources();
+      }
+
+      console.log('✅ [WEBRTC] Joined screening room');
+
+    } catch (error) {
+      console.error('❌ [WEBRTC] Failed to join screening room:', error);
+      throw error;
+    }
+  };
+
+  /**
    * Leave current WebRTC room
    */
   const leaveRoomWebRTC = async (): Promise<void> => {
@@ -581,6 +620,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
       // Remove WebRTC streams from mixer
       if (mixer) {
         mixer.removeSource('host-mic-webrtc');
+        mixer.removeSource('screener-mic-webrtc');
         mixer.removeSource('webrtc-remote');
         refreshAudioSources();
       }
@@ -668,6 +708,7 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     disconnectCurrentCall,
     initializeWebRTC,
     joinLiveRoomWebRTC,
+    joinScreeningRoomWebRTC,
     leaveRoomWebRTC,
     setUseWebRTC: setUseWebRTCFunc,
     disconnectWebRTC
