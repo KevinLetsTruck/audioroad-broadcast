@@ -235,10 +235,8 @@ export class LiveKitClient {
           pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
         }
 
-        // Send to server via data channel every 100ms (about 10 packets/sec)
-        if (Math.random() < 0.2) { // Send ~20% of packets to reduce bandwidth
-          this.sendAudioToPhone(pcmData);
-        }
+        // Send ALL audio to phone (don't drop packets!)
+        this.sendAudioToPhone(pcmData);
       };
 
       source.connect(this.audioProcessor);
@@ -254,6 +252,9 @@ export class LiveKitClient {
   /**
    * Send captured audio to phone caller via HTTP endpoint
    */
+  private audioSentCount = 0;
+  private lastAudioLog = 0;
+  
   private sendAudioToPhone(pcmData: Int16Array): void {
     if (!this.room) return;
 
@@ -266,16 +267,30 @@ export class LiveKitClient {
         sampleRate: 48000
       };
 
+      // Log periodically to confirm audio is being sent
+      this.audioSentCount++;
+      const now = Date.now();
+      if (now - this.lastAudioLog > 5000) {
+        console.log(`🎤 [AUDIO-TO-PHONE] Sent ${this.audioSentCount} audio packets in last 5s to room: ${this.room.name}`);
+        this.audioSentCount = 0;
+        this.lastAudioLog = now;
+      }
+
       // Use fetch with keepalive to avoid blocking
       fetch('/api/webrtc/forward-to-phone', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
         keepalive: true
-      }).catch(() => {}); // Ignore errors (too many requests)
+      }).catch((err) => {
+        // Log first few errors
+        if (this.audioSentCount < 5) {
+          console.error('❌ [AUDIO-TO-PHONE] Fetch error:', err);
+        }
+      });
 
     } catch (error) {
-      // Don't log every error (too noisy)
+      console.error('❌ [AUDIO-TO-PHONE] Error preparing audio:', error);
     }
   }
 

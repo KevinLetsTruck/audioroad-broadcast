@@ -100,6 +100,9 @@ router.get('/rooms/:roomName/stats', async (req: Request, res: Response) => {
  * Forward browser audio to phone caller
  * POST /api/webrtc/forward-to-phone
  */
+let audioPacketCount = 0;
+let lastAudioLogTime = Date.now();
+
 router.post('/forward-to-phone', async (req: Request, res: Response) => {
   const { roomName, audio, sampleRate } = req.body;
 
@@ -117,11 +120,23 @@ router.post('/forward-to-phone', async (req: Request, res: Response) => {
     // Decode base64 audio to Buffer
     const audioBuffer = Buffer.from(audio, 'base64');
 
+    // Log periodically
+    audioPacketCount++;
+    const now = Date.now();
+    if (now - lastAudioLogTime > 5000) {
+      console.log(`📞 [BROWSER→PHONE] Received ${audioPacketCount} audio packets in 5s for room: ${roomName}`);
+      audioPacketCount = 0;
+      lastAudioLogTime = now;
+    }
+
     // Find callSid for this room
     const callSid = mediaBridge.getCallSidForRoom(roomName);
 
     if (!callSid) {
-      // No phone call in this room - that's okay, just ignore
+      // No phone call in this room
+      if (audioPacketCount === 1) {
+        console.log(`ℹ️ [BROWSER→PHONE] No caller in room: ${roomName}`);
+      }
       return res.json({ status: 'no-caller' });
     }
 
