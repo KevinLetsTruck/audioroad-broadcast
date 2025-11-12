@@ -96,6 +96,18 @@ export class TwilioMediaBridge extends EventEmitter {
 
     this.activeStreams.set(callSid, connection);
 
+    // Add participant to WebRTC room immediately
+    await this.roomManager.addParticipant(
+      participantId,
+      roomId,
+      displayName,
+      true // As publisher
+    );
+    
+    // Start playback loop immediately (pulls from jitter buffer)
+    this.startPlaybackLoop(connection);
+    console.log(`▶️ [MEDIA-BRIDGE] Playback loop started, waiting for audio...`);
+
     // Handle incoming audio from phone call
     ws.on('message', async (message: string) => {
       try {
@@ -105,17 +117,6 @@ export class TwilioMediaBridge extends EventEmitter {
           case 'start':
             connection.streamSid = msg.streamSid;
             console.log(`▶️ [MEDIA-BRIDGE] Stream started: ${msg.streamSid}`);
-            
-            // Add participant to WebRTC room
-            await this.roomManager.addParticipant(
-              participantId,
-              roomId,
-              displayName,
-              true // As publisher
-            );
-            
-            // Start playback loop (pulls from jitter buffer)
-            this.startPlaybackLoop(connection);
             break;
 
           case 'media':

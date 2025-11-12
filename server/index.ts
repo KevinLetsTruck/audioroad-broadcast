@@ -245,93 +245,74 @@ const prismaForMediaStream = new PrismaClient();
 (app as any).ws('/api/twilio/media-stream/stream', async (ws: any, req: any) => {
   console.log('📞 [MEDIA-STREAM] New WebSocket connection from Twilio');
   
-  let callSid: string | null = null;
-  let streamSid: string | null = null;
-
-  ws.on('message', async (message: string) => {
+  // Set up one-time handler to get call info, then fully delegate to Media Bridge
+  const initialHandler = async (message: string) => {
     try {
       const msg = JSON.parse(message);
 
-      switch (msg.event) {
-        case 'connected':
-          console.log('✅ [MEDIA-STREAM] Connected:', msg.protocol);
-          break;
+      if (msg.event === 'start') {
+        const callSid = msg.start.callSid;
+        
+        console.log(`▶️ [MEDIA-STREAM] Stream starting for call: ${callSid}`);
 
-        case 'start':
-          callSid = msg.start.callSid;
-          streamSid = msg.streamSid;
-          
-          console.log(`▶️ [MEDIA-STREAM] Stream started for call: ${callSid}`);
+        // Look up call in database
+        const call = await prismaForMediaStream.call.findFirst({
+          where: { twilioCallSid: callSid || undefined },
+          include: { caller: true }
+        }) as Prisma.CallGetPayload<{ include: { caller: true } }> | null;
 
-          // Look up call in database
-          const call = await prismaForMediaStream.call.findFirst({
-            where: { twilioCallSid: callSid || undefined },
-            include: { caller: true }
-          }) as Prisma.CallGetPayload<{ include: { caller: true } }> | null;
+        if (!call) {
+          console.error(`❌ [MEDIA-STREAM] Call not found: ${callSid}`);
+          ws.close();
+          return;
+        }
 
-          if (!call) {
-            console.error(`❌ [MEDIA-STREAM] Call not found: ${callSid}`);
-            ws.close();
-            return;
-          }
+        // Get media bridge
+        const mediaBridge = req.app.get('mediaBridge');
+        
+        if (!mediaBridge) {
+          console.error('❌ [MEDIA-STREAM] Media bridge not initialized');
+          ws.close();
+          return;
+        }
 
-          // Get media bridge
-          const mediaBridge = req.app.get('mediaBridge');
-          
-          if (!mediaBridge) {
-            console.error('❌ [MEDIA-STREAM] Media bridge not initialized');
-            ws.close();
-            return;
-          }
+        // Determine room based on call status
+        const callerName = call.caller.name || call.caller.phoneNumber || 'Unknown Caller';
+        let roomId: string;
 
-          // Determine room based on call status
-          const callerName = call.caller.name || call.caller.phoneNumber || 'Unknown Caller';
-          let roomId: string;
+        switch (call.status) {
+          case 'queued':
+          case 'ringing':
+            roomId = 'lobby';
+            break;
+          case 'screening':
+            roomId = `screening-${call.episodeId}-${call.id}`;
+            break;
+          case 'approved':
+          case 'on-air':
+          case 'on-hold':
+            roomId = `live-${call.episodeId}`;
+            break;
+          default:
+            roomId = 'lobby';
+        }
 
-          switch (call.status) {
-            case 'queued':
-            case 'ringing':
-              roomId = 'lobby';
-              break;
-            case 'screening':
-              roomId = `screening-${call.episodeId}-${call.id}`;
-              break;
-            case 'approved':
-            case 'on-air':
-            case 'on-hold':
-              roomId = `live-${call.episodeId}`;
-              break;
-            default:
-              roomId = 'lobby';
-          }
+        // Remove this initial handler BEFORE delegating
+        ws.removeListener('message', initialHandler);
 
-          // Start media stream bridge
-          await mediaBridge.startMediaStream(ws, callSid, roomId, call.id, callerName);
-          console.log(`✅ [MEDIA-STREAM] Call ${callSid} bridged to room: ${roomId}`);
-          break;
-
-        case 'stop':
-          console.log(`⏹️ [MEDIA-STREAM] Stream stopped: ${streamSid}`);
-          if (callSid && req.app.get('mediaBridge')) {
-            await req.app.get('mediaBridge').stopMediaStream(callSid);
-          }
-          break;
+        // Now let Media Bridge take over completely
+        // It will set up its own 'message' handler for 'media' and 'stop' events
+        // Playback starts immediately (no need to wait for another 'start' message)
+        await mediaBridge.startMediaStream(ws, callSid, roomId, call.id, callerName);
+        console.log(`✅ [MEDIA-STREAM] Call ${callSid} bridged to room: ${roomId}`);
       }
     } catch (error) {
       console.error('❌ [MEDIA-STREAM] Error:', error);
     }
-  });
+  };
 
-  ws.on('close', async () => {
-    console.log(`📴 [MEDIA-STREAM] WebSocket closed for call: ${callSid}`);
-    if (callSid && req.app.get('mediaBridge')) {
-      await req.app.get('mediaBridge').stopMediaStream(callSid);
-    }
-  });
-
-  ws.on('error', (error: Error) => {
-    console.error('❌ [MEDIA-STREAM] WebSocket error:', error);
-  });
+  // Set up initial handler
+  ws.on('message', initialHandler);
 });
 
 // Serve static files from the React app in production
