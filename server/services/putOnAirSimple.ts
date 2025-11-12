@@ -34,7 +34,7 @@ export async function putOnAirSimple(callId: string, mediaBridge?: any): Promise
       console.log(`🔌 [ON-AIR] Using WebRTC - moving Media Stream to live room`);
       
       const liveRoom = `live-${call.episodeId}`;
-      await mediaBridge.moveToRoom(call.twilioCallSid, liveRoom);
+      await mediaBridge.moveStreamToRoom(call.twilioCallSid, liveRoom);
       
       console.log(`✅ [ON-AIR] Caller moved to live room: ${liveRoom}`);
       
