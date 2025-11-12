@@ -40,13 +40,15 @@ import podcastRoutes from './routes/podcast.js';
 import directMp3Routes from './routes/directMp3.js';
 import audioProxyRoutes from './routes/audioProxy.js';
 import healthRoutes from './routes/health.js';
+import mediaStreamRoutes from './routes/mediaStream.js';
 // import broadcastRoutes from './routes/broadcast.js'; // Temporarily disabled until migration runs
 
 // Import services
 import { initializeSocketHandlers } from './services/socketService.js';
 import { initializeStreamSocketHandlers, startHLSServerOnBoot } from './services/streamSocketService.js';
-import { initializeMediaStreamWebSocket } from './routes/mediaStream.js';
 import { audioCache } from './services/audioCache.js';
+import WebRTCRoomManager from './services/webrtcRoomManager.js';
+import TwilioMediaBridge from './services/twilioMediaBridge.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -69,11 +71,41 @@ const io = new SocketIOServer(httpServer, {
 initializeSocketHandlers(io);
 initializeStreamSocketHandlers(io);
 
-// Initialize Twilio MediaStreams WebSocket
-initializeMediaStreamWebSocket(httpServer);
-
 // Make io available to routes
 app.set('io', io);
+
+// Initialize WebRTC infrastructure (if Janus URL configured)
+let roomManager: WebRTCRoomManager | null = null;
+let mediaBridge: TwilioMediaBridge | null = null;
+
+const janusUrl = process.env.JANUS_WS_URL;
+if (janusUrl) {
+  console.log('🔌 [WEBRTC] Initializing WebRTC infrastructure...');
+  console.log('   Janus URL:', janusUrl);
+  
+  try {
+    roomManager = new WebRTCRoomManager(janusUrl);
+    mediaBridge = new TwilioMediaBridge(roomManager);
+    
+    // Make available to routes
+    app.set('roomManager', roomManager);
+    app.set('mediaBridge', mediaBridge);
+    
+    // Initialize connection to Janus (don't await - let it connect in background)
+    roomManager.initialize().then(() => {
+      console.log('✅ [WEBRTC] Connected to Janus Gateway');
+    }).catch((error) => {
+      console.error('❌ [WEBRTC] Failed to connect to Janus:', error);
+      console.warn('⚠️ [WEBRTC] Continuing without WebRTC (falling back to Twilio conferences)');
+    });
+  } catch (error) {
+    console.error('❌ [WEBRTC] Failed to initialize WebRTC infrastructure:', error);
+    console.warn('⚠️ [WEBRTC] Continuing without WebRTC');
+  }
+} else {
+  console.log('ℹ️ [WEBRTC] Janus WebSocket URL not configured - WebRTC features disabled');
+  console.log('   Set JANUS_WS_URL environment variable to enable WebRTC');
+}
 
 // Trust proxy - for Railway deployment
 app.set('trust proxy', 1);
@@ -152,6 +184,7 @@ app.use('/api/episodes', apiLimiter, episodeRoutes);
 app.use('/api/shows', apiLimiter, showRoutes);
 app.use('/api/twilio', twilioWebhookLimiter, twilioRoutes); // Twilio webhooks
 app.use('/api/twilio', apiLimiter, twilioPlaybackRoutes); // Twilio conference playback
+app.use('/api/twilio/media-stream', mediaStreamRoutes); // Twilio Media Streams WebSocket (WebRTC bridge)
 app.use('/api/live-stream', liveStreamRoutes); // Live audio stream for callers on hold
 app.use('/api/analysis', apiLimiter, analysisRoutes);
 app.use('/api/audio-assets', apiLimiter, audioAssetRoutes);

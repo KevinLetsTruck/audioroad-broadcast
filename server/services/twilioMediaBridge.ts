@@ -9,6 +9,12 @@
 
 import { EventEmitter } from 'events';
 import WebRTCRoomManager from './webrtcRoomManager.js';
+import { Encoder as MuLawEncoder, Decoder as MuLawDecoder } from 'alawmulaw';
+
+// Audio constants
+const SAMPLE_RATE = 8000; // Twilio uses 8kHz
+const BYTES_PER_SAMPLE = 1; // muLaw is 8-bit
+const FRAME_SIZE = 160; // 20ms at 8kHz (8000 * 0.02)
 
 interface MediaStreamConnection {
   callSid: string;
@@ -17,6 +23,9 @@ interface MediaStreamConnection {
   participantId: string;
   ws: any; // WebSocket from Twilio
   audioBuffer: Buffer[];
+  muLawDecoder: MuLawDecoder;
+  muLawEncoder: MuLawEncoder;
+  sequenceNumber: number;
 }
 
 export class TwilioMediaBridge extends EventEmitter {
@@ -47,7 +56,10 @@ export class TwilioMediaBridge extends EventEmitter {
       roomId,
       participantId,
       ws,
-      audioBuffer: []
+      audioBuffer: [],
+      muLawDecoder: new MuLawDecoder(),
+      muLawEncoder: new MuLawEncoder(),
+      sequenceNumber: 0
     };
 
     this.activeStreams.set(callSid, connection);
@@ -98,22 +110,30 @@ export class TwilioMediaBridge extends EventEmitter {
 
   /**
    * Handle incoming audio from phone call
-   * Convert from muLaw to format Janus expects
+   * Convert from muLaw to PCM format
    */
   private async handleIncomingAudio(
     connection: MediaStreamConnection,
     payload: string
   ): Promise<void> {
     try {
-      // Decode base64
-      const audioData = Buffer.from(payload, 'base64');
+      // Decode base64 to get muLaw encoded audio
+      const muLawData = Buffer.from(payload, 'base64');
       
-      // TODO: Convert muLaw to PCM
-      // For now, buffer the audio
-      connection.audioBuffer.push(audioData);
+      // Convert muLaw (8-bit) to PCM (16-bit signed)
+      const pcmData = connection.muLawDecoder.process(muLawData);
       
-      // Send to Janus room (this will need RTP packaging)
-      // This is a placeholder - full implementation needs RTP wrapper
+      // Buffer the PCM audio for processing
+      connection.audioBuffer.push(pcmData);
+      
+      // Emit event for room manager to forward to Janus
+      // The room manager will handle packaging this as RTP
+      this.emit('audio-from-phone', {
+        participantId: connection.participantId,
+        roomId: connection.roomId,
+        audioData: pcmData,
+        sampleRate: SAMPLE_RATE
+      });
       
     } catch (error) {
       console.error('❌ [MEDIA-BRIDGE] Error processing audio:', error);
@@ -122,9 +142,9 @@ export class TwilioMediaBridge extends EventEmitter {
 
   /**
    * Send outgoing audio to phone call
-   * Convert from WebRTC to muLaw for Twilio
+   * Convert from PCM to muLaw for Twilio
    */
-  sendAudioToPhone(callSid: string, audioData: Buffer): void {
+  sendAudioToPhone(callSid: string, pcmAudioData: Buffer): void {
     const connection = this.activeStreams.get(callSid);
     
     if (!connection || !connection.ws) {
@@ -132,11 +152,13 @@ export class TwilioMediaBridge extends EventEmitter {
     }
 
     try {
-      // TODO: Convert from PCM to muLaw
-      // Encode to base64
-      const payload = audioData.toString('base64');
+      // Convert PCM (16-bit signed) to muLaw (8-bit)
+      const muLawData = connection.muLawEncoder.process(pcmAudioData);
       
-      // Send to Twilio
+      // Encode to base64 for Twilio
+      const payload = muLawData.toString('base64');
+      
+      // Send to Twilio Media Stream
       connection.ws.send(JSON.stringify({
         event: 'media',
         streamSid: connection.streamSid,

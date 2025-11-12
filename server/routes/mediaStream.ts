@@ -1,122 +1,162 @@
 /**
- * Twilio MediaStreams WebSocket Route
- * 
- * Handles WebSocket connections from Twilio for live audio streaming to callers
- * Uses MediaStreams API instead of <Play> to support infinite streams
+ * Twilio Media Stream WebSocket Endpoint
+ * Handles incoming Media Stream connections from Twilio phone calls
  */
 
-import express from 'express';
-import { WebSocketServer, WebSocket } from 'ws';
-import { Server as HTTPServer } from 'http';
-import { TwilioMediaStreamer } from '../services/twilioMediaStream.js';
+import express, { Request, Response } from 'express';
+import expressWs from 'express-ws';
+import { prisma } from '../services/database.js';
 
 const router = express.Router();
 
-// Store active streamers
-const activeStreamers = new Map<string, TwilioMediaStreamer>();
+// Enable WebSocket on this router
+expressWs(router as any);
 
 /**
- * Initialize WebSocket server for Twilio MediaStreams
+ * WebSocket endpoint for Twilio Media Streams
+ * Twilio connects here for each phone call when using <Stream>
  */
-export function initializeMediaStreamWebSocket(httpServer: HTTPServer): void {
-  const wss = new WebSocketServer({ 
-    noServer: true,
-    path: '/api/twilio/media-stream'
-  });
+(router as any).ws('/stream', async (ws: any, req: Request) => {
+  console.log('📞 [MEDIA-STREAM] New WebSocket connection from Twilio');
+  
+  let callSid: string | null = null;
+  let streamSid: string | null = null;
 
-  // Handle HTTP upgrade for WebSocket
-  httpServer.on('upgrade', (request, socket, head) => {
-    console.log('🔄 [MEDIA-STREAM] HTTP Upgrade request:', request.url);
-    
-    if (request.url?.startsWith('/api/twilio/media-stream')) {
-      console.log('✅ [MEDIA-STREAM] Handling upgrade for media-stream');
-      wss.handleUpgrade(request, socket, head, (ws) => {
-        wss.emit('connection', ws, request);
-      });
-    } else {
-      console.log(`⚠️ [MEDIA-STREAM] Ignoring upgrade for: ${request.url}`);
+  ws.on('message', async (message: string) => {
+    try {
+      const msg = JSON.parse(message);
+
+      switch (msg.event) {
+        case 'connected':
+          console.log('✅ [MEDIA-STREAM] Connected:', msg.protocol);
+          break;
+
+        case 'start':
+          callSid = msg.start.callSid;
+          streamSid = msg.streamSid;
+          
+          console.log(`▶️ [MEDIA-STREAM] Stream started for call: ${callSid}`);
+          console.log(`   Stream SID: ${streamSid}`);
+          console.log(`   Custom Parameters:`, msg.start.customParameters);
+
+          // Look up call in database
+          const call = await prisma.call.findFirst({
+            where: { twilioCallSid: callSid }
+          });
+
+          if (!call) {
+            console.error(`❌ [MEDIA-STREAM] Call not found: ${callSid}`);
+            ws.close();
+            return;
+          }
+
+          // Get media bridge from app
+          const mediaBridge = req.app.get('mediaBridge');
+          
+          if (!mediaBridge) {
+            console.error('❌ [MEDIA-STREAM] Media bridge not initialized');
+            ws.close();
+            return;
+          }
+
+          // Determine which room to join based on call status
+          let roomId: string;
+          let displayName: string;
+
+          switch (call.status) {
+            case 'queued':
+            case 'ringing':
+              // New caller goes to lobby
+              roomId = 'lobby';
+              displayName = call.callerName || call.callerPhone;
+              break;
+
+            case 'screening':
+              // Being screened - join screening room
+              roomId = `screening-${call.episodeId}-${call.id}`;
+              displayName = call.callerName || call.callerPhone;
+              break;
+
+            case 'approved':
+            case 'on-air':
+            case 'on-hold':
+              // Join live room
+              roomId = `live-${call.episodeId}`;
+              displayName = call.callerName || call.callerPhone;
+              break;
+
+            default:
+              console.warn(`⚠️ [MEDIA-STREAM] Unexpected call status: ${call.status}`);
+              roomId = 'lobby';
+              displayName = call.callerName || call.callerPhone;
+          }
+
+          // Start media stream bridge
+          await mediaBridge.startMediaStream(
+            ws,
+            callSid,
+            roomId,
+            call.id, // Use call ID as participant ID
+            displayName
+          );
+
+          console.log(`✅ [MEDIA-STREAM] Call ${callSid} bridged to room: ${roomId}`);
+          break;
+
+        case 'media':
+          // Audio data is handled by the media bridge
+          // This is just for logging/debugging
+          break;
+
+        case 'stop':
+          console.log(`⏹️ [MEDIA-STREAM] Stream stopped: ${streamSid}`);
+          
+          if (callSid) {
+            const mediaBridge = req.app.get('mediaBridge');
+            if (mediaBridge) {
+              await mediaBridge.stopMediaStream(callSid);
+            }
+          }
+          break;
+
+        default:
+          console.log(`ℹ️ [MEDIA-STREAM] Unknown event: ${msg.event}`);
+      }
+    } catch (error) {
+      console.error('❌ [MEDIA-STREAM] Error handling message:', error);
     }
   });
 
-  wss.on('connection', (ws: WebSocket, request) => {
-    console.log('🔌 [MEDIA-STREAM] Twilio WebSocket connected');
-    console.log(`   URL: ${request.url}`);
-    console.log(`   Headers:`, request.headers);
+  ws.on('close', async () => {
+    console.log(`📴 [MEDIA-STREAM] WebSocket closed for call: ${callSid}`);
     
-    let callSid: string | null = null;
-    let streamer: TwilioMediaStreamer | null = null;
-
-    ws.on('message', (message: string) => {
-      try {
-        const data = JSON.parse(message);
-
-        switch (data.event) {
-          case 'start':
-            // Twilio sends this when stream starts
-            callSid = data.start?.callSid || data.streamSid;
-            console.log(`📞 [MEDIA-STREAM] Stream started for call: ${callSid}`);
-            
-            // Start streaming live audio to this caller
-            const streamServerUrl = process.env.STREAM_SERVER_URL || 
-              'https://audioroad-streaming-server-production.up.railway.app';
-            const appUrl = process.env.APP_URL || 
-              'https://audioroad-broadcast-production.up.railway.app';
-            const hlsUrl = `${appUrl}/api/audio-proxy/live.m3u8`;
-            
-            streamer = new TwilioMediaStreamer({ hlsUrl, callSid: callSid || undefined });
-            streamer.start(ws);
-            
-            if (callSid) {
-              activeStreamers.set(callSid, streamer);
-            }
-            break;
-
-          case 'media':
-            // Twilio sends inbound audio (we don't need it for hold audio)
-            break;
-
-          case 'stop':
-            // Twilio sends this when stream stops
-            console.log(`📴 [MEDIA-STREAM] Stream stopped for call: ${callSid}`);
-            if (streamer) {
-              streamer.stop();
-            }
-            if (callSid) {
-              activeStreamers.delete(callSid);
-            }
-            break;
-
-          default:
-            console.log(`📊 [MEDIA-STREAM] Unknown event: ${data.event}`);
-        }
-      } catch (error) {
-        console.error('❌ [MEDIA-STREAM] Error handling message:', error);
+    if (callSid) {
+      const mediaBridge = req.app.get('mediaBridge');
+      if (mediaBridge) {
+        await mediaBridge.stopMediaStream(callSid);
       }
-    });
-
-    ws.on('close', () => {
-      console.log('🔌 [MEDIA-STREAM] Twilio WebSocket disconnected');
-      if (streamer) {
-        streamer.stop();
-      }
-      if (callSid) {
-        activeStreamers.delete(callSid);
-      }
-    });
-
-    ws.on('error', (error) => {
-      console.error('❌ [MEDIA-STREAM] WebSocket error:', error);
-      if (streamer) {
-        streamer.stop();
-      }
-      if (callSid) {
-        activeStreamers.delete(callSid);
-      }
-    });
+    }
   });
 
-  console.log('✅ [MEDIA-STREAM] WebSocket server initialized');
-}
+  ws.on('error', (error: Error) => {
+    console.error('❌ [MEDIA-STREAM] WebSocket error:', error);
+  });
+});
+
+/**
+ * Health check endpoint
+ */
+router.get('/health', (req: Request, res: Response) => {
+  const mediaBridge = req.app.get('mediaBridge');
+  const roomManager = req.app.get('roomManager');
+
+  res.json({
+    status: 'ok',
+    mediaBridge: mediaBridge ? 'initialized' : 'missing',
+    roomManager: roomManager ? 'initialized' : 'missing',
+    activeStreams: mediaBridge ? mediaBridge.getActiveStreamsCount() : 0,
+    janusConnected: roomManager ? roomManager.isConnected() : false
+  });
+});
 
 export default router;
-
