@@ -9,6 +9,7 @@ import { createContext, useContext, useState, useEffect, useRef, ReactNode } fro
 import { Device, Call } from '@twilio/voice-sdk';
 import { AudioMixerEngine, AudioSource } from '../services/audioMixerEngine';
 import { StreamEncoder } from '../services/streamEncoder';
+import { getWebRTCService, resetWebRTCService, WebRTCService } from '../services/webrtcService';
 
 interface BroadcastState {
   isLive: boolean;
@@ -43,10 +44,15 @@ interface BroadcastContextType {
   audioSources: AudioSource[];
   levels: Record<string, number>;
   
-  // Calls
+  // Calls (Twilio)
   activeCalls: Map<string, CallInfo>;
   onAirCall: CallInfo | null;
   twilioDevice: Device | null;
+  
+  // WebRTC
+  webrtcService: WebRTCService | null;
+  useWebRTC: boolean;
+  webrtcConnected: boolean;
   
   // Actions - Mixer
   initializeMixer: () => Promise<AudioMixerEngine>;
@@ -55,13 +61,20 @@ interface BroadcastContextType {
   setMuted: (sourceId: string, muted: boolean) => void;
   refreshAudioSources: () => void;
   
-  // Actions - Calls
+  // Actions - Calls (Twilio)
   initializeTwilio: (identity: string) => Promise<Device>;
   destroyTwilioDevice: () => Promise<void>; // Keep for cleanup, but don't use for role switching
   connectToCall: (callId: string, callerName: string, episodeId: string, role?: 'host' | 'screener') => Promise<void>;
   disconnectCall: (callId: string) => Promise<void>;
   setOnAir: (callId: string) => void;
   disconnectCurrentCall: () => Promise<void>;
+  
+  // Actions - WebRTC
+  initializeWebRTC: () => Promise<WebRTCService>;
+  joinLiveRoomWebRTC: (episodeId: string, displayName: string) => Promise<void>;
+  leaveRoomWebRTC: () => Promise<void>;
+  setUseWebRTC: (enabled: boolean) => void;
+  disconnectWebRTC: () => Promise<void>;
 }
 
 const BroadcastContext = createContext<BroadcastContextType | null>(null);
@@ -100,12 +113,17 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
   const [mixer, setMixer] = useState<AudioMixerEngine | null>(null);
   const [encoder, setEncoder] = useState<StreamEncoder | null>(null);
   
-  // Call management
+  // Call management (Twilio)
   const [activeCalls, setActiveCalls] = useState<Map<string, CallInfo>>(new Map());
   const [onAirCall, setOnAirCallState] = useState<CallInfo | null>(null);
   const [twilioDevice, setTwilioDevice] = useState<Device | null>(null);
   const [duration, setDuration] = useState('00:00:00');
   const durationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // WebRTC state
+  const [webrtcService, setWebrtcService] = useState<WebRTCService | null>(null);
+  const [useWebRTC, setUseWebRTC] = useState<boolean>(false);
+  const [webrtcConnected, setWebrtcConnected] = useState<boolean>(false);
   
   // Wrapper for setState with logging and persistence
   const setStateWithLogging = (newState: BroadcastState) => {
@@ -442,6 +460,187 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     console.log('✅ [TWILIO] Device state cleared - ready for fresh start');
   };
 
+  /**
+   * Initialize WebRTC service (for WebRTC-based call management)
+   */
+  const initializeWebRTC = async (): Promise<WebRTCService> => {
+    if (webrtcService && webrtcService.isConnected()) {
+      console.log('ℹ️ [WEBRTC] Already connected');
+      return webrtcService;
+    }
+
+    // Get Janus URL from environment
+    const janusUrl = import.meta.env.VITE_JANUS_WS_URL;
+    if (!janusUrl) {
+      throw new Error('VITE_JANUS_WS_URL not configured');
+    }
+
+    console.log('🔌 [WEBRTC] Initializing WebRTC service...');
+
+    try {
+      const service = getWebRTCService({
+        janusUrl,
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:global.stun.twilio.com:3478' }
+        ]
+      });
+
+      // Set up event listeners
+      service.on('connected', () => {
+        console.log('✅ [WEBRTC] Connected to Janus Gateway');
+        setWebrtcConnected(true);
+      });
+
+      service.on('disconnected', () => {
+        console.log('📴 [WEBRTC] Disconnected from Janus Gateway');
+        setWebrtcConnected(false);
+      });
+
+      service.on('reconnected', () => {
+        console.log('🔄 [WEBRTC] Reconnected to Janus Gateway');
+        setWebrtcConnected(true);
+      });
+
+      service.on('connection-failed', () => {
+        console.error('❌ [WEBRTC] Connection failed');
+        setWebrtcConnected(false);
+      });
+
+      service.on('local-stream', (stream: MediaStream) => {
+        console.log('🎤 [WEBRTC] Local stream ready');
+        // Optionally add to mixer if needed
+      });
+
+      service.on('remote-stream', (stream: MediaStream) => {
+        console.log('📥 [WEBRTC] Remote stream received');
+        // Add remote audio to mixer or audio element
+        if (mixer) {
+          mixer.addAudioStream(stream, 'webrtc-remote', 'WebRTC Participants');
+          refreshAudioSources();
+        }
+      });
+
+      await service.initialize();
+      setWebrtcService(service);
+      
+      console.log('✅ [WEBRTC] Service initialized');
+      return service;
+
+    } catch (error) {
+      console.error('❌ [WEBRTC] Failed to initialize:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Join live room via WebRTC (for host)
+   */
+  const joinLiveRoomWebRTC = async (episodeId: string, displayName: string): Promise<void> => {
+    if (!webrtcService || !webrtcService.isConnected()) {
+      throw new Error('WebRTC service not initialized');
+    }
+
+    console.log(`🔌 [WEBRTC] Joining live room for episode: ${episodeId}`);
+
+    try {
+      // Get local microphone stream
+      await webrtcService.setLocalAudioStream();
+      
+      // Join live room
+      await webrtcService.joinLiveRoom(episodeId, displayName);
+
+      // Add local stream to mixer
+      const localStream = webrtcService.getLocalStream();
+      if (localStream && mixer) {
+        mixer.addAudioStream(localStream, 'host-mic-webrtc', 'Host Microphone (WebRTC)');
+        refreshAudioSources();
+      }
+
+      console.log('✅ [WEBRTC] Joined live room');
+
+    } catch (error) {
+      console.error('❌ [WEBRTC] Failed to join live room:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Leave current WebRTC room
+   */
+  const leaveRoomWebRTC = async (): Promise<void> => {
+    if (!webrtcService) {
+      return;
+    }
+
+    console.log('📴 [WEBRTC] Leaving room...');
+
+    try {
+      await webrtcService.leaveRoom();
+      
+      // Remove WebRTC streams from mixer
+      if (mixer) {
+        mixer.removeSource('host-mic-webrtc');
+        mixer.removeSource('webrtc-remote');
+        refreshAudioSources();
+      }
+
+      console.log('✅ [WEBRTC] Left room');
+
+    } catch (error) {
+      console.error('❌ [WEBRTC] Failed to leave room:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Toggle WebRTC mode
+   */
+  const setUseWebRTCFunc = (enabled: boolean) => {
+    console.log(`🔀 [WEBRTC] Setting useWebRTC: ${enabled}`);
+    setUseWebRTC(enabled);
+    
+    // Save preference
+    try {
+      localStorage.setItem('useWebRTC', enabled.toString());
+    } catch (e) {
+      console.warn('⚠️ [WEBRTC] Could not save preference:', e);
+    }
+  };
+
+  /**
+   * Disconnect from WebRTC
+   */
+  const disconnectWebRTC = async (): Promise<void> => {
+    console.log('🔌 [WEBRTC] Disconnecting...');
+
+    if (webrtcService) {
+      try {
+        await webrtcService.disconnect();
+      } catch (error) {
+        console.error('❌ [WEBRTC] Error during disconnect:', error);
+      }
+    }
+
+    resetWebRTCService();
+    setWebrtcService(null);
+    setWebrtcConnected(false);
+
+    console.log('✅ [WEBRTC] Disconnected');
+  };
+
+  // Load WebRTC preference on mount
+  useEffect(() => {
+    try {
+      const savedPreference = localStorage.getItem('useWebRTC');
+      if (savedPreference) {
+        setUseWebRTC(savedPreference === 'true');
+      }
+    } catch (e) {
+      console.warn('⚠️ [WEBRTC] Could not load preference:', e);
+    }
+  }, []);
+
   const value: BroadcastContextType = {
     state,
     setState: setStateWithLogging,
@@ -453,6 +652,9 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     activeCalls,
     onAirCall,
     twilioDevice,
+    webrtcService,
+    useWebRTC,
+    webrtcConnected,
     initializeMixer,
     destroyMixer,
     setVolume: setVolumeFunc,
@@ -463,7 +665,12 @@ export function BroadcastProvider({ children }: { children: ReactNode }) {
     connectToCall,
     disconnectCall,
     setOnAir,
-    disconnectCurrentCall
+    disconnectCurrentCall,
+    initializeWebRTC,
+    joinLiveRoomWebRTC,
+    leaveRoomWebRTC,
+    setUseWebRTC: setUseWebRTCFunc,
+    disconnectWebRTC
   };
 
   return (
