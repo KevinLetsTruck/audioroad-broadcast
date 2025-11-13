@@ -293,7 +293,7 @@ export class LiveKitClient {
           console.error('❌ [AUDIO-TO-PHONE] Fetch error:', err);
           console.error('   Error type:', err instanceof Error ? err.constructor.name : typeof err);
           console.error('   Error message:', err instanceof Error ? err.message : String(err));
-          console.error('   Room name:', this.room.name);
+          console.error('   Room name:', this.room?.name || 'null');
           console.error('   Audio packet size:', pcmData.length, 'samples');
           if (this.audioSentCount > 5) {
             console.error(`   (Logging every 10th error - this is error #${this.audioSentCount})`);
