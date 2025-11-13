@@ -219,6 +219,13 @@ export class TwilioMediaBridge extends EventEmitter {
       
     } catch (error) {
       console.error('❌ [MEDIA-BRIDGE] Error processing audio:', error);
+      console.error('   Error type:', error instanceof Error ? error.constructor.name : typeof error);
+      console.error('   Error message:', error instanceof Error ? error.message : String(error));
+      console.error('   Call SID:', connection?.callSid || 'unknown');
+      console.error('   Payload length:', payload?.length || 0, 'chars');
+      if (error instanceof Error && error.stack) {
+        console.error('   Error stack:', error.stack);
+      }
     }
   }
 
@@ -326,6 +333,14 @@ export class TwilioMediaBridge extends EventEmitter {
       
     } catch (error) {
       console.error('❌ [MEDIA-BRIDGE] Error sending audio:', error);
+      console.error('   Error type:', error instanceof Error ? error.constructor.name : typeof error);
+      console.error('   Error message:', error instanceof Error ? error.message : String(error));
+      console.error('   Call SID:', callSid);
+      console.error('   Room ID:', connection?.roomId || 'unknown');
+      console.error('   WebSocket state:', connection?.ws?.readyState || 'unknown');
+      if (error instanceof Error && error.stack) {
+        console.error('   Error stack:', error.stack);
+      }
     }
   }
 

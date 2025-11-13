@@ -16,6 +16,7 @@ export class LiveKitClient {
   private room: Room | null = null;
   private wsUrl: string;
   private eventCallbacks: Map<string, Function> = new Map();
+  private phoneAudioPacketCount: number = 0;
 
   constructor(wsUrl: string) {
     this.wsUrl = wsUrl;
@@ -150,20 +151,23 @@ export class LiveKitClient {
 
         // Check if it's phone audio
         if (data.type === 'phone-audio') {
-          // Only log every 100th packet to reduce noise
-          if (Math.random() < 0.01) {
-            console.log('📞 [LIVEKIT-CLIENT] Received phone audio chunk');
+          // Log every 100th packet to reduce noise but maintain visibility
+          this.phoneAudioPacketCount++;
+          if (this.phoneAudioPacketCount % 100 === 0) {
+            console.log(`📞 [LIVEKIT-CLIENT] Received ${this.phoneAudioPacketCount} phone audio chunks`);
           }
           
           // Decode base64 audio
           const audioBase64 = data.audio;
           const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
           
-          // Create AudioBuffer and play - DON'T silence errors during debugging
+          // Create AudioBuffer and play - Log ALL errors during debugging
           this.playPhoneAudio(audioBytes, data.sampleRate || 8000).catch(err => {
             console.error('❌ [LIVEKIT-CLIENT] Failed to play audio:', err);
             console.error('   Audio size:', audioBytes.length, 'bytes');
             console.error('   Sample rate:', data.sampleRate);
+            console.error('   Error type:', err instanceof Error ? err.constructor.name : typeof err);
+            console.error('   Error stack:', err instanceof Error ? err.stack : 'No stack');
           });
         }
       } catch (error) {
@@ -283,14 +287,29 @@ export class LiveKitClient {
         body: JSON.stringify(payload),
         keepalive: true
       }).catch((err) => {
-        // Log first few errors
-        if (this.audioSentCount < 5) {
+        // Log all errors with throttling (every 10th error after first 5)
+        const shouldLog = this.audioSentCount <= 5 || this.audioSentCount % 10 === 0;
+        if (shouldLog) {
           console.error('❌ [AUDIO-TO-PHONE] Fetch error:', err);
+          console.error('   Error type:', err instanceof Error ? err.constructor.name : typeof err);
+          console.error('   Error message:', err instanceof Error ? err.message : String(err));
+          console.error('   Room name:', this.room.name);
+          console.error('   Audio packet size:', pcmData.length, 'samples');
+          if (this.audioSentCount > 5) {
+            console.error(`   (Logging every 10th error - this is error #${this.audioSentCount})`);
+          }
         }
       });
 
     } catch (error) {
       console.error('❌ [AUDIO-TO-PHONE] Error preparing audio:', error);
+      console.error('   Error type:', error instanceof Error ? error.constructor.name : typeof error);
+      console.error('   Error message:', error instanceof Error ? error.message : String(error));
+      console.error('   Room:', this.room?.name || 'null');
+      console.error('   PCM data length:', pcmData?.length || 'null', 'samples');
+      if (error instanceof Error && error.stack) {
+        console.error('   Error stack:', error.stack);
+      }
     }
   }
 

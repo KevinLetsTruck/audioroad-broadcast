@@ -147,7 +147,12 @@ router.post('/forward-to-phone', async (req: Request, res: Response) => {
 
   } catch (error: any) {
     console.error('❌ [WEBRTC] Forward audio error:', error);
-    res.status(500).json({ error: 'Failed to forward audio', message: error.message });
+    console.error('   Error type:', error?.constructor?.name || typeof error);
+    console.error('   Error message:', error?.message || String(error));
+    console.error('   Error stack:', error?.stack || 'No stack');
+    console.error('   Room name:', roomName);
+    console.error('   Audio size:', audio ? Buffer.from(audio, 'base64').length : 'missing', 'bytes');
+    res.status(500).json({ error: 'Failed to forward audio', message: error?.message || String(error) });
   }
 });
 
