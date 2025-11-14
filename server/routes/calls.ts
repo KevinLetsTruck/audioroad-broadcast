@@ -4,9 +4,18 @@ import { emitToEpisode } from '../services/socketService.js';
 import { createCallSchema, updateCallStatusSchema, sanitizeString } from '../utils/validation.js';
 import twilio from 'twilio';
 import { twilioClient } from '../services/twilioService.js';
+import CallFlowService from '../services/callFlowService.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+function getCallFlowService(req: Request): CallFlowService {
+  const service = req.app.get('callFlowService') as CallFlowService | undefined;
+  if (!service) {
+    throw new Error('CallFlowService not initialized');
+  }
+  return service;
+}
 
 /**
  * GET /api/calls - Get all calls for an episode
@@ -27,7 +36,8 @@ router.get('/', async (req: Request, res: Response) => {
           include: {
             show: true
           }
-        }
+        },
+        session: true
       },
       orderBy: {
         incomingAt: 'desc'
@@ -61,7 +71,8 @@ router.get('/:id', async (req: Request, res: Response) => {
           include: {
             show: true
           }
-        }
+        },
+        session: true
       }
     });
 
@@ -115,18 +126,21 @@ router.post('/', async (req: Request, res: Response) => {
         queuedAt: status === 'queued' ? new Date() : undefined
       },
       include: {
-        caller: true
+        caller: true,
+        episode: true
       }
     });
 
     console.log('✅ Call record created:', call.id, 'Status:', call.status);
 
-    // Emit socket event
-    const io = req.app.get('io');
-    emitToEpisode(io, episodeId, 'call:incoming', call);
-    console.log('📡 WebSocket event emitted to episode:', episodeId);
-
-    res.status(201).json(call);
+    try {
+      const callFlow = getCallFlowService(req);
+      const { call: hydratedCall, session } = await callFlow.registerIncomingCall(call.id);
+      res.status(201).json({ call: hydratedCall, session });
+    } catch (flowError) {
+      console.error('⚠️ Failed to register call session:', flowError);
+      res.status(201).json({ call, session: null });
+    }
   } catch (error) {
     console.error('Error creating call:', error);
     res.status(500).json({ error: 'Failed to create call' });
@@ -138,20 +152,8 @@ router.post('/', async (req: Request, res: Response) => {
  */
 router.patch('/:id/queue', async (req: Request, res: Response) => {
   try {
-    const call = await prisma.call.update({
-      where: { id: req.params.id },
-      data: {
-        status: 'queued',
-        queuedAt: new Date()
-      },
-      include: {
-        caller: true
-      }
-    });
-
-    const io = req.app.get('io');
-    emitToEpisode(io, call.episodeId, 'call:queued', call);
-
+    const callFlow = getCallFlowService(req);
+    const { call } = await callFlow.queueCall(req.params.id);
     res.json(call);
   } catch (error) {
     console.error('Error queueing call:', error);
@@ -166,21 +168,8 @@ router.patch('/:id/screen', async (req: Request, res: Response) => {
   try {
     const { screenerUserId } = req.body;
 
-    const call = await prisma.call.update({
-      where: { id: req.params.id },
-      data: {
-        status: 'screening',
-        screenedAt: new Date(),
-        screenerUserId: screenerUserId || undefined
-      },
-      include: {
-        caller: true
-      }
-    });
-
-    const io = req.app.get('io');
-    emitToEpisode(io, call.episodeId, 'call:screening', call);
-
+    const callFlow = getCallFlowService(req);
+    const { call } = await callFlow.startScreening(req.params.id, screenerUserId);
     console.log('✅ Call marked as screening:', call.id);
     res.json(call);
   } catch (error) {
@@ -194,108 +183,22 @@ router.patch('/:id/screen', async (req: Request, res: Response) => {
  */
 router.patch('/:id/approve', async (req: Request, res: Response) => {
   try {
-    // Validate input
     const validated = updateCallStatusSchema.parse(req.body);
     let { screenerNotes, topic } = validated;
     const { priority } = validated;
-    
-    // Sanitize text inputs
+
     if (screenerNotes) screenerNotes = sanitizeString(screenerNotes, 1000);
     if (topic) topic = sanitizeString(topic, 500);
 
-    // Get existing call to preserve conference info
-    const existingCall = await prisma.call.findUnique({
-      where: { id: req.params.id },
-      include: { episode: true }
+    const callFlow = getCallFlowService(req);
+    const { call, queuePosition } = await callFlow.approveCall(req.params.id, {
+      screenerNotes,
+      topic,
+      priority,
     });
 
-    if (!existingCall) {
-      return res.status(404).json({ error: 'Call not found' });
-    }
-
-    // Calculate queue position: count approved calls not yet on-air, ordered by approvedAt
-    const approvedCalls = await prisma.call.findMany({
-      where: {
-        episodeId: existingCall.episodeId,
-        status: 'approved',
-        endedAt: null,
-        onAirAt: null // Not yet on-air
-      },
-      orderBy: { approvedAt: 'asc' }
-    });
-
-    // Count on-air calls
-    const onAirCalls = await prisma.call.count({
-      where: {
-        episodeId: existingCall.episodeId,
-        status: 'on-air',
-        endedAt: null
-      }
-    });
-
-    // Queue position = approved count + 1 (this call) - on-air count
-    const queuePosition = approvedCalls.length + 1 - onAirCalls;
-    const finalPosition = Math.max(1, queuePosition); // Ensure at least 1
-
-    console.log(`📊 Queue position calculated: ${finalPosition} (approved: ${approvedCalls.length + 1}, on-air: ${onAirCalls})`);
-
-    // Update call to approved status
-    const call = await prisma.call.update({
-      where: { id: req.params.id },
-      data: {
-        status: 'approved',
-        approvedAt: new Date(),
-        screenerNotes,
-        topic,
-        priority: priority || 'normal',
-        participantState: 'hold',
-        twilioConferenceSid: existingCall.twilioConferenceSid || `episode-${existingCall.episodeId}`,
-        isMutedInConference: true,
-        isOnHold: false, // NOT on hold - will hear live conference
-        currentConferenceType: 'screening' // Still in screening, about to move
-      },
-      include: {
-        caller: true,
-        episode: true
-      }
-    });
-
-    // CRITICAL: Only move to LIVE if show is live
-    // If show not live yet, keep in SCREENING with hold music
-    const isShowLive = call.episode?.status === 'live';
-    
-    if (call.twilioCallSid && isShowLive) {
-      try {
-        console.log(`🔄 [APPROVE] Show is LIVE, moving to LIVE conference`);
-        const { moveParticipantToLiveConference } = await import('../services/conferenceService.js');
-        await moveParticipantToLiveConference(call.twilioCallSid, call.episodeId);
-        
-        await prisma.call.update({
-          where: { id: call.id },
-          data: { currentConferenceType: 'live' }
-        });
-        
-        console.log(`✅ [APPROVE] In LIVE, can hear show`);
-      } catch (moveError: any) {
-        console.error('❌ [APPROVE] Failed to move:', moveError.message);
-      }
-    } else if (call.twilioCallSid && !isShowLive) {
-      // Show not live yet - caller stays in screening with hold music
-      // We'll move them to LIVE when show starts
-      console.log(`📞 [APPROVE] Show not live, caller will hear hold music in screening`);
-      // No action needed - they stay in screening conference with hold music
-    }
-
-    const io = req.app.get('io');
-    emitToEpisode(io, call.episodeId, 'call:approved', call);
-    emitToEpisode(io, call.episodeId, 'participant:state-changed', { 
-      callId: call.id, 
-      state: 'hold' 
-    });
-
-    console.log(`✅ Call approved: ${call.id} - Participant in HOLD state (conference: ${call.twilioConferenceSid}, queue position: ${finalPosition})`);
-
-    res.json({ ...call, queuePosition: finalPosition });
+    console.log(`✅ Call approved: ${call.id} - Queue position: ${queuePosition}`);
+    res.json({ ...call, queuePosition });
   } catch (error) {
     console.error('Error approving call:', error);
     res.status(500).json({ error: 'Failed to approve call' });
@@ -309,42 +212,8 @@ router.patch('/:id/reject', async (req: Request, res: Response) => {
   try {
     const { reason } = req.body;
 
-    // Get call first to access twilioCallSid
-    const existingCall = await prisma.call.findUnique({
-      where: { id: req.params.id }
-    });
-
-    if (!existingCall) {
-      return res.status(404).json({ error: 'Call not found' });
-    }
-
-    // End the Twilio call to hang up the caller
-    if (existingCall.twilioCallSid && existingCall.twilioCallSid.startsWith('CA')) {
-      try {
-        const { endCall } = await import('../services/twilioService.js');
-        await endCall(existingCall.twilioCallSid);
-        console.log('📴 Ended Twilio call:', existingCall.twilioCallSid);
-      } catch (twilioError) {
-        console.error('⚠️ Error ending Twilio call:', twilioError);
-        // Continue anyway
-      }
-    }
-
-    const call = await prisma.call.update({
-      where: { id: req.params.id },
-      data: {
-        status: 'rejected',
-        endedAt: new Date(),
-        screenerNotes: reason
-      },
-      include: {
-        caller: true
-      }
-    });
-
-    const io = req.app.get('io');
-    emitToEpisode(io, call.episodeId, 'call:rejected', call);
-
+    const callFlow = getCallFlowService(req);
+    const { call } = await callFlow.rejectCall(req.params.id, reason);
     res.json(call);
   } catch (error) {
     console.error('Error rejecting call:', error);
@@ -357,20 +226,8 @@ router.patch('/:id/reject', async (req: Request, res: Response) => {
  */
 router.patch('/:id/onair', async (req: Request, res: Response) => {
   try {
-    const call = await prisma.call.update({
-      where: { id: req.params.id },
-      data: {
-        status: 'on-air',
-        onAirAt: new Date()
-      },
-      include: {
-        caller: true
-      }
-    });
-
-    const io = req.app.get('io');
-    emitToEpisode(io, call.episodeId, 'call:onair', call);
-
+    const callFlow = getCallFlowService(req);
+    const { call } = await callFlow.putOnAir(req.params.id);
     res.json(call);
   } catch (error) {
     console.error('Error putting call on-air:', error);
@@ -385,82 +242,15 @@ router.patch('/:id/complete', async (req: Request, res: Response) => {
   try {
     const { recordingUrl, recordingSid, duration, airDuration } = req.body;
 
-    const call = await prisma.call.findUnique({
-      where: { id: req.params.id }
+    const callFlow = getCallFlowService(req);
+    const { call } = await callFlow.completeCall(req.params.id, {
+      recordingUrl,
+      recordingSid,
+      duration,
+      airDuration,
     });
 
-    if (!call) {
-      return res.status(404).json({ error: 'Call not found' });
-    }
-
-    // Remove participant from conference (if in one)
-    if (call.twilioConferenceSid && call.twilioCallSid) {
-      try {
-        const { removeFromConference } = await import('../services/conferenceService.js');
-        await removeFromConference(call.twilioCallSid, call.episodeId);
-        console.log('📴 Removed participant from conference:', call.twilioCallSid);
-      } catch (confError) {
-        console.error('⚠️ Error removing from conference:', confError);
-        // Fallback: try to end the call directly
-        try {
-          const { endCall } = await import('../services/twilioService.js');
-          await endCall(call.twilioCallSid);
-          console.log('📴 Ended Twilio call directly:', call.twilioCallSid);
-        } catch (twilioError) {
-          console.error('⚠️ Error ending Twilio call:', twilioError);
-        }
-      }
-    } else if (call.twilioCallSid && call.twilioCallSid.startsWith('CA')) {
-      // Not in conference, end call directly
-      try {
-        const { endCall } = await import('../services/twilioService.js');
-        await endCall(call.twilioCallSid);
-        console.log('📴 Ended Twilio call via host:', call.twilioCallSid);
-      } catch (twilioError) {
-        console.error('⚠️ Error ending Twilio call:', twilioError);
-      }
-    }
-
-    // Calculate durations
-    const queueDuration = call.queuedAt && call.onAirAt 
-      ? Math.floor((call.onAirAt.getTime() - call.queuedAt.getTime()) / 1000)
-      : null;
-
-    const calculatedAirDuration = call.onAirAt
-      ? Math.floor((Date.now() - call.onAirAt.getTime()) / 1000)
-      : null;
-
-    const updatedCall = await prisma.call.update({
-      where: { id: req.params.id },
-      data: {
-        status: 'completed',
-        endedAt: new Date(),
-        recordingUrl,
-        recordingSid,
-        airDuration: airDuration || calculatedAirDuration || duration,
-        queueDuration,
-        totalDuration: duration
-      },
-      include: {
-        caller: true
-      }
-    });
-
-    // Update caller stats
-    await prisma.caller.update({
-      where: { id: updatedCall.callerId },
-      data: {
-        lastCallDate: new Date(),
-        totalCalls: {
-          increment: 1
-        }
-      }
-    });
-
-    const io = req.app.get('io');
-    emitToEpisode(io, updatedCall.episodeId, 'call:completed', updatedCall);
-
-    res.json(updatedCall);
+    res.json(call);
   } catch (error) {
     console.error('Error completing call:', error);
     res.status(500).json({ error: 'Failed to complete call' });

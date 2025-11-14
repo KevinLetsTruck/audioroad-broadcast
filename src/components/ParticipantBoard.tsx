@@ -5,671 +5,277 @@
  * Allows host to control who's broadcasting
  */
 
-import { useState, useEffect } from 'react';
-import { io } from 'socket.io-client';
+import { useState } from 'react';
 import { useBroadcast } from '../contexts/BroadcastContext';
-
-interface CallerHistory {
-  totalCalls: number;
-  previousCalls: any[];
-  documentsCount: number;
-  aiSummary: string | null;
-  sentiment: string | null;
-  isFavorite: boolean;
-}
-
-interface Participant {
-  id: string;
-  caller: {
-    name: string;
-    location?: string;
-  };
-  topic?: string;
-  participantState: 'screening' | 'hold' | 'on-air';
-  participantRole: 'caller' | 'guest' | 'co-host';
-  isMutedInConference: boolean;
-  connectedAt: Date;
-}
+import { CallBuckets, CallSnapshot } from '../hooks/useEpisodeCallState';
 
 interface ParticipantBoardProps {
   episodeId: string;
+  callBuckets: CallBuckets;
+  refreshCalls: () => Promise<void>;
 }
 
-export default function ParticipantBoard({ episodeId }: ParticipantBoardProps) {
+export default function ParticipantBoard({ episodeId, callBuckets, refreshCalls }: ParticipantBoardProps) {
   const broadcast = useBroadcast();
-  const [participants, setParticipants] = useState<{
-    onAir: Participant[];
-    onHold: Participant[];
-    screening: Participant[];
-  }>({
-    onAir: [],
-    onHold: [],
-    screening: []
-  });
-  
-  const [expandedCallerId, setExpandedCallerId] = useState<string | null>(null);
-  const [callerHistories, setCallerHistories] = useState<Record<string, CallerHistory>>({});
+  const [actionInProgress, setActionInProgress] = useState(false);
 
-  useEffect(() => {
-    fetchParticipants();
-    
-    // Set up WebSocket for real-time updates
-    const newSocket = io();
-
-    newSocket.on('participant:state-changed', () => {
-      console.log('🔔 Participant state changed - refreshing');
-      fetchParticipants();
-    });
-
-    // Poll every 3 seconds as backup
-    const interval = setInterval(fetchParticipants, 3000);
-
-    return () => {
-      newSocket.close();
-      clearInterval(interval);
-    };
-  }, [episodeId]);
-
-  const fetchParticipants = async () => {
+  const handleAction = async (action: () => Promise<void>) => {
+    setActionInProgress(true);
     try {
-      const response = await fetch(`/api/participants/${episodeId}`);
-      const data = await response.json();
-      setParticipants(data);
-    } catch (error) {
-      console.error('Error fetching participants:', error);
+      await action();
+      await refreshCalls();
+    } finally {
+      setActionInProgress(false);
     }
+  };
+
+  const findSnapshot = (callId: string): CallSnapshot | undefined => {
+    return [...callBuckets.liveOnAir, ...callBuckets.liveMuted, ...callBuckets.screening].find(
+      (snapshot) => snapshot.call?.id === callId,
+    );
   };
 
   const putOnAir = async (callId: string) => {
-    try {
-      console.log('📡 [PARTICIPANT-BOARD] Putting participant on air:', callId);
-      console.log('   Episode ID:', episodeId);
-      console.log('   Connection mode:', broadcast.useWebRTC ? 'WebRTC' : 'Twilio');
-      
-      const participant = [...participants.onAir, ...participants.onHold, ...participants.screening]
-        .find(p => p.id === callId);
-      const callerName = participant?.caller?.name || 'Caller';
-      
-      // In WebRTC mode, host is already connected to LiveKit live room
-      // In Twilio mode, host needs to join conference
-      if (broadcast.useWebRTC) {
-        console.log('✅ [PARTICIPANT-BOARD] Using WebRTC - host already in live room');
-        // No action needed - host is already in live-{episodeId} room
-        // Server will move caller to same room when we call the API below
-      } else {
-        // Twilio mode: Ensure host is connected to conference
-        const hostNeedsConnection = !broadcast.twilioDevice || 
+    await handleAction(async () => {
+      const snapshot = findSnapshot(callId);
+      const call = snapshot?.call;
+      const callerName = call?.caller?.name || 'Caller';
+
+      // Check if host needs to connect (only for Twilio Device mode)
+      if (!broadcast.useWebRTC) {
+        const hostNeedsConnection =
+          !broadcast.twilioDevice ||
           broadcast.activeCalls.size === 0 ||
-          !Array.from(broadcast.activeCalls.values()).some(call => {
-            return call.twilioCall && call.twilioCall.status() !== 'closed';
-          });
-        
-        console.log('   Host needs connection?', hostNeedsConnection);
-        
+          !Array.from(broadcast.activeCalls.values()).some(
+            (activeCall) => activeCall.twilioCall && activeCall.twilioCall.status() !== 'closed',
+          );
+
         if (hostNeedsConnection) {
           if (!broadcast.twilioDevice) {
-            const errorMsg = 'Twilio device not initialized. Please start a show first.';
-            console.error('❌ [PARTICIPANT-BOARD]', errorMsg);
-            alert(errorMsg);
-            return;
+            throw new Error('Twilio device not initialized. Start the show first.');
           }
-          console.log('🔌 [PARTICIPANT-BOARD] Connecting host to LIVE conference...');
-          try {
-            await broadcast.connectToCall(callId, callerName, episodeId, 'host');
-            console.log('⏳ [PARTICIPANT-BOARD] Waiting for LIVE conference SID...');
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            console.log('✅ [PARTICIPANT-BOARD] LIVE conference ready');
-          } catch (error) {
-            console.error('❌ [PARTICIPANT-BOARD] Host connection failed:', error);
-            alert(`Failed to connect to caller: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            return;
-          }
-        } else {
-          console.log(`✅ [PARTICIPANT-BOARD] Host already connected (${broadcast.activeCalls.size} active call(s))`);
+          await broadcast.connectToCall(callId, callerName, episodeId, 'host');
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         }
+      } else {
+        // WebRTC mode: No pre-check needed
+        // The host should have joined the live room, and the server will handle the state transition
+        console.log('🎤 [ON-AIR] WebRTC mode - sending on-air request to server');
       }
-      
-      console.log('📡 [PARTICIPANT-BOARD] Calling API to put on air...');
+
       const response = await fetch(`/api/participants/${callId}/on-air`, { method: 'PATCH' });
-      
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ [PARTICIPANT-BOARD] API call failed:', response.status, errorText);
-        alert(`Failed to put participant on air: ${errorText}`);
-        return;
+        throw new Error('Failed to put participant on air');
       }
-      
-      console.log('✅ [PARTICIPANT-BOARD] Successfully put on air');
-      fetchParticipants();
-    } catch (error) {
-      console.error('❌ [PARTICIPANT-BOARD] Error in putOnAir:', error);
-      alert(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    });
   };
 
   const putOnHold = async (callId: string) => {
-    try {
-      console.log('⏸️ Putting participant on hold:', callId);
-      await fetch(`/api/participants/${callId}/hold`, { method: 'PATCH' });
-      fetchParticipants();
-    } catch (error) {
-      console.error('Error putting on hold:', error);
-    }
+    await handleAction(async () => {
+      const response = await fetch(`/api/participants/${callId}/hold`, { method: 'PATCH' });
+      if (!response.ok) {
+        throw new Error('Failed to move participant to hold');
+      }
+    });
   };
 
   const moveToScreening = async (callId: string) => {
-    try {
-      console.log('🔍 Moving to screening:', callId);
-      await fetch(`/api/participants/${callId}/screening`, { method: 'PATCH' });
-      fetchParticipants();
-    } catch (error) {
-      console.error('Error moving to screening:', error);
-    }
+    await handleAction(async () => {
+      const response = await fetch(`/api/participants/${callId}/screening`, { method: 'PATCH' });
+      if (!response.ok) {
+        throw new Error('Failed to move participant to screening');
+      }
+    });
   };
 
-  const muteParticipant = async (callId: string) => {
-    try {
-      console.log('🔇 Muting participant:', callId);
-      await fetch(`/api/participants/${callId}/mute`, { method: 'PATCH' });
-      fetchParticipants();
-    } catch (error) {
-      console.error('Error muting participant:', error);
-    }
-  };
-
-  const unmuteParticipant = async (callId: string) => {
-    try {
-      console.log('🔊 Unmuting participant:', callId);
-      await fetch(`/api/participants/${callId}/unmute`, { method: 'PATCH' });
-      fetchParticipants();
-    } catch (error) {
-      console.error('Error unmuting participant:', error);
-    }
+  const muteParticipant = async (callId: string, muted: boolean) => {
+    await handleAction(async () => {
+      const endpoint = muted ? 'mute' : 'unmute';
+      const response = await fetch(`/api/participants/${callId}/${endpoint}`, { method: 'PATCH' });
+      if (!response.ok) {
+        throw new Error('Failed to toggle mute');
+      }
+    });
   };
 
   const endCall = async (callId: string) => {
-    if (!confirm('End this call? The participant will be disconnected.')) return;
-    
-    try {
-      console.log('📴 Ending call:', callId);
-      await fetch(`/api/calls/${callId}/complete`, {
+    await handleAction(async () => {
+      const response = await fetch(`/api/calls/${callId}/complete`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ airDuration: 0 })
+        body: JSON.stringify({ airDuration: 0 }),
       });
-      console.log('✅ Call ended successfully');
-      fetchParticipants();
-    } catch (error) {
-      console.error('Error ending call:', error);
-    }
-  };
-
-  const fetchCallerHistory = async (participant: Participant) => {
-    // Get the actual caller record to find their ID
-    try {
-      console.log('📊 Fetching history for caller:', participant.caller?.name);
-      
-      // Find the call to get callerId
-      const callResponse = await fetch(`/api/calls/${participant.id}`);
-      if (!callResponse.ok) return;
-      
-      const call = await callResponse.json();
-      const callerId = call.callerId;
-      
-      if (!callerId) return;
-      
-      // Fetch full caller details with history
-      const callerResponse = await fetch(`/api/callers/${callerId}`);
-      if (!callerResponse.ok) return;
-      
-      const callerData = await callerResponse.json();
-      
-      // Filter out current call from history
-      const previousCalls = callerData.calls
-        ?.filter((c: any) => c.id !== participant.id)
-        .slice(0, 3) || [];
-      
-      setCallerHistories(prev => ({
-        ...prev,
-        [callerId]: {
-          totalCalls: callerData.totalCalls || 0,
-          previousCalls,
-          documentsCount: callerData._count?.documents || 0,
-          aiSummary: callerData.aiSummary,
-          sentiment: callerData.sentiment,
-          isFavorite: callerData.isFavorite || false
-        }
-      }));
-      
-      console.log('✅ Loaded caller history:', callerData.name, 'Total calls:', callerData.totalCalls);
-    } catch (error) {
-      console.error('Error fetching caller history:', error);
-    }
-  };
-
-  const toggleCallerHistory = async (participant: Participant) => {
-    // Get callerId from the participant
-    const call = await fetch(`/api/calls/${participant.id}`).then(r => r.json());
-    const callerId = call.callerId;
-    
-    if (expandedCallerId === callerId) {
-      // Collapse
-      setExpandedCallerId(null);
-    } else {
-      // Expand and fetch history if we don't have it yet
-      setExpandedCallerId(callerId);
-      if (!callerHistories[callerId]) {
-        await fetchCallerHistory(participant);
+      if (!response.ok) {
+        throw new Error('Failed to complete call');
       }
-    }
+    });
   };
 
-  const getRoleIcon = (role: string) => {
-    switch (role) {
-      case 'co-host': return '🎙️';
-      case 'guest': return '👤';
-      case 'caller': return '📞';
-      default: return '📞';
-    }
+  const renderParticipantCard = (snapshot: CallSnapshot, actions: React.ReactNode) => {
+    const call = snapshot.call;
+    if (!call) return null;
+    const session = snapshot.session;
+    const phaseLabel = session?.phase?.replace(/_/g, ' ').toUpperCase();
+
+    return (
+      <div key={call.id} className="bg-gray-800 rounded p-3 flex items-center justify-between">
+        <div className="flex-1">
+          <div className="font-semibold text-white">{call.caller?.name || 'Unknown Caller'}</div>
+          <div className="text-xs text-gray-400">
+            {call.caller?.location ? call.caller.location : 'Location unknown'}
+          </div>
+          {call.topic && <div className="text-xs text-gray-300 mt-1">Topic: {call.topic}</div>}
+          <div className="text-xs text-blue-300 mt-1 flex flex-col gap-1">
+            {phaseLabel && <span>Phase: {phaseLabel}</span>}
+            {session?.currentRoom && <span>Room: {session.currentRoom}</span>}
+            <span>
+              Send Muted: {session?.sendMuted ? 'Yes' : 'No'} | Recv Muted:{' '}
+              {session?.recvMuted ? 'Yes' : 'No'}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">{actions}</div>
+      </div>
+    );
   };
 
-  return (
-    <div className="space-y-4">
-      {/* ON AIR Section */}
+  const renderOnAirSection = () => {
+    const snapshots = callBuckets.liveOnAir;
+    return (
       <div className="bg-red-900/30 border-2 border-red-500 rounded-lg p-4">
         <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
           <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></span>
-          ON AIR ({participants.onAir.length})
+          ON AIR ({snapshots.length})
         </h3>
-        
-        {participants.onAir.length === 0 ? (
+        {snapshots.length === 0 ? (
           <p className="text-sm text-gray-400">No participants on air</p>
         ) : (
           <div className="space-y-2">
-            {participants.onAir.map((p) => {
-              const callerId = (p as any).callerId;
-              const history = callerId ? callerHistories[callerId] : null;
-              const isExpanded = callerId && expandedCallerId === callerId;
-              
-              return (
-                <div key={p.id} className="bg-gray-800 rounded p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">{getRoleIcon(p.participantRole)}</span>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold">{p.caller?.name || 'Unknown'}</span>
-                            {p.isMutedInConference && (
-                              <span className="text-xs text-gray-400" title="Muted">🔇</span>
-                            )}
-                            {history && history.isFavorite && (
-                              <span className="text-yellow-400" title="VIP Caller">⭐</span>
-                            )}
-                            {history && history.totalCalls > 1 && (
-                              <span className="text-xs text-blue-400" title={`${history.totalCalls} total calls`}>
-                                🔄{history.totalCalls}x
-                              </span>
-                            )}
-                          </div>
-                          {p.caller?.location && (
-                            <div className="text-xs text-gray-500">{p.caller.location}</div>
-                          )}
-                          {p.topic && <div className="text-xs text-gray-400">{p.topic}</div>}
-                          
-                          {/* Transcription & Analysis Status */}
-                          <div className="flex items-center gap-2 mt-1">
-                            {(p as any).recordingSid ? (
-                              <span className="text-xs text-green-400" title="Recording captured">🎙️</span>
-                            ) : (
-                              <span className="text-xs text-gray-500" title="No recording yet">⏸️</span>
-                            )}
-                            {(p as any).transcriptText ? (
-                              <span className="text-xs text-green-400" title="Transcribed">📝</span>
-                            ) : (p as any).recordingSid ? (
-                              <span className="text-xs text-yellow-400" title="Transcription in progress...">⏳</span>
-                            ) : null}
-                            {(p as any).aiSummary ? (
-                              <span className="text-xs text-blue-400" title="AI analyzed">🤖</span>
-                            ) : (p as any).transcriptText ? (
-                              <span className="text-xs text-yellow-400" title="Analysis in progress...">⏳</span>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      {callerId && (
-                        <button
-                          onClick={() => toggleCallerHistory(p)}
-                          className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs"
-                          title="View caller history"
-                        >
-                          {isExpanded ? '▲' : '▼'}
-                        </button>
-                      )}
-                      {p.isMutedInConference ? (
-                        <button
-                          onClick={() => unmuteParticipant(p.id)}
-                          className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-semibold"
-                          title="Unmute participant"
-                        >
-                          🔊 Unmute
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => muteParticipant(p.id)}
-                          className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-xs font-semibold"
-                          title="Mute participant"
-                        >
-                          🔇 Mute
-                        </button>
-                      )}
-                      <button
-                        onClick={() => putOnHold(p.id)}
-                        className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs font-semibold"
-                      >
-                        ⏸️ Hold
-                      </button>
-                      <button
-                        onClick={() => endCall(p.id)}
-                        className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-semibold"
-                      >
-                        End
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {/* Expandable Caller History */}
-                  {isExpanded && history && (
-                    <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
-                      {/* Current Call Transcription & Analysis */}
-                      {(p as any).transcriptText || (p as any).aiSummary ? (
-                        <div className="bg-purple-900/30 border border-purple-600 rounded p-2 mb-2">
-                          <div className="text-xs font-semibold text-purple-300 mb-1">📞 This Call</div>
-                          {(p as any).transcriptText && (
-                            <div className="mb-2">
-                              <div className="text-xs font-semibold text-gray-400 mb-1">📝 Transcript</div>
-                              <p className="text-xs text-gray-300 line-clamp-3">{(p as any).transcriptText.substring(0, 200)}...</p>
-                            </div>
-                          )}
-                          {(p as any).aiSummary && (
-                            <div>
-                              <div className="text-xs font-semibold text-gray-400 mb-1">🤖 AI Analysis</div>
-                              <p className="text-xs text-gray-300 mb-1">{(p as any).aiSummary}</p>
-                              {(p as any).aiSentiment && (
-                                <div className="text-xs text-gray-400">
-                                  Sentiment: <span className="capitalize">{(p as any).aiSentiment}</span>
-                                  {(p as any).contentRating && ` • Rating: ${(p as any).contentRating}/100`}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
-                      
-                      {/* AI Summary */}
-                      {history.aiSummary && (
-                        <div className="bg-blue-900/30 border border-blue-600 rounded p-2">
-                          <div className="text-xs font-semibold text-blue-300 mb-1">💡 AI Insights</div>
-                          <p className="text-xs text-gray-300">{history.aiSummary}</p>
-                        </div>
-                      )}
-                      
-                      {/* Previous Calls */}
-                      {history.previousCalls && history.previousCalls.length > 0 && (
-                        <div>
-                          <div className="text-xs font-semibold text-gray-400 mb-1">📅 Previous Calls</div>
-                          <div className="space-y-1">
-                            {history.previousCalls.map((call: any) => (
-                              <div key={call.id} className="bg-gray-900 rounded p-2 text-xs">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-gray-300">
-                                    {new Date(call.incomingAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                  </span>
-                                  {call.airDuration && (
-                                    <span className="text-green-400">{Math.floor(call.airDuration / 60)}m on-air</span>
-                                  )}
-                                </div>
-                                {call.topic && (
-                                  <div className="text-gray-500 mt-1">"{call.topic}"</div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Stats */}
-                      <div className="flex items-center gap-4 text-xs text-gray-400">
-                        <span>📄 {history.documentsCount} documents</span>
-                        {history.sentiment && (
-                          <span>
-                            {history.sentiment === 'positive' && '😊 Positive'}
-                            {history.sentiment === 'neutral' && '😐 Neutral'}
-                            {history.sentiment === 'negative' && '😔 Negative'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {snapshots.map((snapshot) =>
+              renderParticipantCard(
+                snapshot,
+                <>
+                  <button
+                    onClick={() => muteParticipant(snapshot.call.id, false)}
+                    disabled={actionInProgress || !snapshot.call.isMutedInConference}
+                    className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-semibold disabled:opacity-50"
+                  >
+                    🔊 Unmute
+                  </button>
+                  <button
+                    onClick={() => muteParticipant(snapshot.call.id, true)}
+                    disabled={actionInProgress || snapshot.call.isMutedInConference}
+                    className="px-3 py-1 bg-gray-600 hover:bg-gray-700 rounded text-xs font-semibold disabled:opacity-50"
+                  >
+                    🔇 Mute
+                  </button>
+                  <button
+                    onClick={() => putOnHold(snapshot.call.id)}
+                    disabled={actionInProgress}
+                    className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs font-semibold disabled:opacity-50"
+                  >
+                    ⏸️ Hold
+                  </button>
+                  <button
+                    onClick={() => endCall(snapshot.call.id)}
+                    disabled={actionInProgress}
+                    className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-semibold disabled:opacity-50"
+                  >
+                    End
+                  </button>
+                </>,
+              ),
+            )}
           </div>
         )}
       </div>
+    );
+  };
 
-      {/* ON HOLD Section */}
+  const renderOnHoldSection = () => {
+    const snapshots = callBuckets.liveMuted;
+    return (
       <div className="bg-yellow-900/30 border-2 border-yellow-600 rounded-lg p-4">
-        <h3 className="text-lg font-bold mb-3">
-          ⏸️ ON HOLD ({participants.onHold.length})
-        </h3>
-        
-        {participants.onHold.length === 0 ? (
+        <h3 className="text-lg font-bold mb-3">⏸️ ON HOLD ({snapshots.length})</h3>
+        {snapshots.length === 0 ? (
           <p className="text-sm text-gray-400">No participants on hold</p>
         ) : (
           <div className="space-y-2">
-            {participants.onHold.map((p) => {
-              const callerId = (p as any).callerId;
-              const history = callerId ? callerHistories[callerId] : null;
-              const isExpanded = callerId && expandedCallerId === callerId;
-              
-              return (
-                <div key={p.id} className="bg-gray-800 rounded p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">{getRoleIcon(p.participantRole)}</span>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold">{p.caller?.name || 'Unknown'}</span>
-                            {history && history.isFavorite && (
-                              <span className="text-yellow-400" title="VIP Caller">⭐</span>
-                            )}
-                            {history && history.totalCalls > 1 && (
-                              <span className="text-xs text-blue-400" title={`${history.totalCalls} total calls`}>
-                                🔄{history.totalCalls}x
-                              </span>
-                            )}
-                          </div>
-                          {p.caller?.location && (
-                            <div className="text-xs text-gray-500">{p.caller.location}</div>
-                          )}
-                          {p.topic && <div className="text-xs text-gray-400">{p.topic}</div>}
-                          
-                          {/* Transcription & Analysis Status */}
-                          <div className="flex items-center gap-2 mt-1">
-                            {(p as any).recordingSid ? (
-                              <span className="text-xs text-green-400" title="Recording captured">🎙️</span>
-                            ) : (
-                              <span className="text-xs text-gray-500" title="No recording yet">⏸️</span>
-                            )}
-                            {(p as any).transcriptText ? (
-                              <span className="text-xs text-green-400" title="Transcribed">📝</span>
-                            ) : (p as any).recordingSid ? (
-                              <span className="text-xs text-yellow-400" title="Transcription in progress...">⏳</span>
-                            ) : null}
-                            {(p as any).aiSummary ? (
-                              <span className="text-xs text-blue-400" title="AI analyzed">🤖</span>
-                            ) : (p as any).transcriptText ? (
-                              <span className="text-xs text-yellow-400" title="Analysis in progress...">⏳</span>
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      {callerId && (
-                        <button
-                          onClick={() => toggleCallerHistory(p)}
-                          className="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs"
-                          title="View caller history"
-                        >
-                          {isExpanded ? '▲' : '▼'}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => putOnAir(p.id)}
-                        className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-semibold"
-                      >
-                        📡 On Air
-                      </button>
-                      <button
-                        onClick={() => moveToScreening(p.id)}
-                        className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-semibold"
-                      >
-                        Screen
-                      </button>
-                      <button
-                        onClick={() => endCall(p.id)}
-                        className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-semibold"
-                      >
-                        End
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {/* Expandable Caller History */}
-                  {isExpanded && history && (
-                    <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
-                      {/* Current Call Transcription & Analysis */}
-                      {(p as any).transcriptText || (p as any).aiSummary ? (
-                        <div className="bg-purple-900/30 border border-purple-600 rounded p-2 mb-2">
-                          <div className="text-xs font-semibold text-purple-300 mb-1">📞 This Call</div>
-                          {(p as any).transcriptText && (
-                            <div className="mb-2">
-                              <div className="text-xs font-semibold text-gray-400 mb-1">📝 Transcript</div>
-                              <p className="text-xs text-gray-300 line-clamp-3">{(p as any).transcriptText.substring(0, 200)}...</p>
-                            </div>
-                          )}
-                          {(p as any).aiSummary && (
-                            <div>
-                              <div className="text-xs font-semibold text-gray-400 mb-1">🤖 AI Analysis</div>
-                              <p className="text-xs text-gray-300 mb-1">{(p as any).aiSummary}</p>
-                              {(p as any).aiSentiment && (
-                                <div className="text-xs text-gray-400">
-                                  Sentiment: <span className="capitalize">{(p as any).aiSentiment}</span>
-                                  {(p as any).contentRating && ` • Rating: ${(p as any).contentRating}/100`}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
-                      
-                      {/* AI Summary */}
-                      {history.aiSummary && (
-                        <div className="bg-blue-900/30 border border-blue-600 rounded p-2">
-                          <div className="text-xs font-semibold text-blue-300 mb-1">💡 AI Insights</div>
-                          <p className="text-xs text-gray-300">{history.aiSummary}</p>
-                        </div>
-                      )}
-                      
-                      {/* Previous Calls */}
-                      {history.previousCalls && history.previousCalls.length > 0 && (
-                        <div>
-                          <div className="text-xs font-semibold text-gray-400 mb-1">📅 Previous Calls</div>
-                          <div className="space-y-1">
-                            {history.previousCalls.map((call: any) => (
-                              <div key={call.id} className="bg-gray-900 rounded p-2 text-xs">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-gray-300">
-                                    {new Date(call.incomingAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                  </span>
-                                  {call.airDuration && (
-                                    <span className="text-green-400">{Math.floor(call.airDuration / 60)}m on-air</span>
-                                  )}
-                                </div>
-                                {call.topic && (
-                                  <div className="text-gray-500 mt-1">"{call.topic}"</div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Stats */}
-                      <div className="flex items-center gap-4 text-xs text-gray-400">
-                        <span>📄 {history.documentsCount} documents</span>
-                        {history.sentiment && (
-                          <span>
-                            {history.sentiment === 'positive' && '😊 Positive'}
-                            {history.sentiment === 'neutral' && '😐 Neutral'}
-                            {history.sentiment === 'negative' && '😔 Negative'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {snapshots.map((snapshot) =>
+              renderParticipantCard(
+                snapshot,
+                <>
+                  <button
+                    onClick={() => putOnAir(snapshot.call.id)}
+                    disabled={actionInProgress}
+                    className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-semibold disabled:opacity-50"
+                  >
+                    📡 On Air
+                  </button>
+                  <button
+                    onClick={() => moveToScreening(snapshot.call.id)}
+                    disabled={actionInProgress}
+                    className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-semibold disabled:opacity-50"
+                  >
+                    Screen
+                  </button>
+                  <button
+                    onClick={() => endCall(snapshot.call.id)}
+                    disabled={actionInProgress}
+                    className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-semibold disabled:opacity-50"
+                  >
+                    End
+                  </button>
+                </>,
+              ),
+            )}
           </div>
         )}
       </div>
+    );
+  };
 
-      {/* SCREENING Section */}
+  const renderScreeningSection = () => {
+    const snapshots = callBuckets.screening;
+    return (
       <div className="bg-blue-900/30 border-2 border-blue-500 rounded-lg p-4">
-        <h3 className="text-lg font-bold mb-3">
-          🔍 SCREENING ({participants.screening.length})
-        </h3>
-        
-        {participants.screening.length === 0 ? (
+        <h3 className="text-lg font-bold mb-3">🔍 SCREENING ({snapshots.length})</h3>
+        {snapshots.length === 0 ? (
           <p className="text-sm text-gray-400">No calls being screened</p>
         ) : (
           <div className="space-y-2">
-            {participants.screening.map((p) => (
-              <div key={p.id} className="bg-gray-800 rounded p-3 flex items-center justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{getRoleIcon(p.participantRole)}</span>
-                    <div>
-                      <div className="font-semibold">{p.caller?.name || 'Unknown'}</div>
-                      {p.topic && <div className="text-xs text-gray-400">{p.topic}</div>}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-2">
+            {snapshots.map((snapshot) =>
+              renderParticipantCard(
+                snapshot,
+                <>
                   <button
-                    onClick={() => putOnHold(p.id)}
-                    className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-semibold"
+                    onClick={() => putOnHold(snapshot.call.id)}
+                    disabled={actionInProgress}
+                    className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-xs font-semibold disabled:opacity-50"
                   >
                     ✓ Approve
                   </button>
                   <button
-                    onClick={() => endCall(p.id)}
-                    className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-semibold"
+                    onClick={() => endCall(snapshot.call.id)}
+                    disabled={actionInProgress}
+                    className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs font-semibold disabled:opacity-50"
                   >
                     ✗ Reject
                   </button>
-                </div>
-              </div>
-            ))}
+                </>,
+              ),
+            )}
           </div>
         )}
       </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      {renderOnAirSection()}
+      {renderOnHoldSection()}
+      {renderScreeningSection()}
     </div>
   );
 }

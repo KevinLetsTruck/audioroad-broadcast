@@ -11,6 +11,7 @@ import { useBroadcast } from '../contexts/BroadcastContext';
 // StreamEncoder and VideoCapture only used in legacy START SHOW handler (commented out)
 import VUMeter from '../components/VUMeter';
 import ParticipantBoard from '../components/ParticipantBoard';
+import { useEpisodeCallState } from '../hooks/useEpisodeCallState';
 import { detectCurrentShow, getShowDisplayName } from '../utils/showScheduler';
 
 export default function BroadcastControl() {
@@ -76,6 +77,9 @@ export default function BroadcastControl() {
   // Get state from context
   const status = broadcast.state;
   const audioSources = broadcast.audioSources;
+  const { buckets: callBuckets, refresh: refreshCallBuckets } = useEpisodeCallState(
+    status.episodeId ?? null,
+  );
   
   // Debug: log audioSources when they change
   useEffect(() => {
@@ -1180,7 +1184,11 @@ export default function BroadcastControl() {
                     <span>👥</span>
                     <span>Active Participants</span>
                   </h2>
-                  <ParticipantBoard episodeId={status.episodeId} />
+                  <ParticipantBoard
+                    episodeId={status.episodeId}
+                    callBuckets={callBuckets}
+                    refreshCalls={refreshCallBuckets}
+                  />
                 </div>
               )}
 

@@ -9,6 +9,31 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum QuestionType {
+  SHORT_TEXT
+  LONG_TEXT
+  SCALE
+  SINGLE_SELECT
+  MULTI_SELECT
+  CHECKBOX
+  DATE
+  NUMBER
+}
+
+model Practitioner {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String
+  initials        String
+  isAdmin         Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  clerkId         String?
+  clerkMigratedAt DateTime?
+
+  @@index([email])
+}
+
 // ============================================
 // USERS & AUTHENTICATION
 // ============================================
@@ -163,6 +188,14 @@ model Caller {
   @@index([lastCallDate])
 }
 
+enum CallPhase {
+  incoming
+  screening
+  live_muted
+  live_on_air
+  disconnected
+}
+
 model Call {
   id              String    @id @default(cuid())
   episodeId       String
@@ -235,6 +268,29 @@ model Call {
   @@index([status])
   @@index([incomingAt])
   @@index([featured])
+
+  session CallSession?
+}
+
+model CallSession {
+  id                  String      @id @default(cuid())
+  callId              String      @unique
+  call                Call        @relation(fields: [callId], references: [id], onDelete: Cascade)
+  phase               CallPhase
+  currentRoom         String
+  twilioCallSid       String
+  twilioStreamSid     String?
+  livekitParticipantId String?
+  sendMuted           Boolean     @default(true)
+  recvMuted           Boolean     @default(false)
+  metadata            Json?
+  lastTransitionAt    DateTime    @default(now())
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@index([phase])
+  @@index([twilioCallSid])
+  @@index([currentRoom])
 }
 
 // ============================================

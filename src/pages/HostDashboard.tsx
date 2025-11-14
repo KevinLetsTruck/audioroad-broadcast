@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { io } from 'socket.io-client';
 import ChatPanel from '../components/ChatPanel';
 import ParticipantBoard from '../components/ParticipantBoard';
 import { useBroadcast } from '../contexts/BroadcastContext';
 import { Card, Button, Badge, Tabs, Tab, EmptyState } from '../components/ui';
+import { useEpisodeCallState } from '../hooks/useEpisodeCallState';
 
 export default function HostDashboard() {
   const broadcast = useBroadcast(); // Access global mixer
@@ -12,7 +13,6 @@ export default function HostDashboard() {
   const [isLive, setIsLive] = useState(false);
   const [isConnectedToLiveRoom, setIsConnectedToLiveRoom] = useState(false);
   
-  const [approvedCalls, setApprovedCalls] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'calls' | 'documents' | 'announcements' | 'history'>('calls');
   const [allDocuments, setAllDocuments] = useState<any[]>([]);
   const [todaysAnnouncements, setTodaysAnnouncements] = useState<any[]>([]);
@@ -21,6 +21,18 @@ export default function HostDashboard() {
     localStorage.getItem('autoPlayAnnouncements') !== 'false'
   );
   const activeAudioElementsRef = useRef<HTMLAudioElement[]>([]); // Track audio elements to stop them if needed
+
+  const { buckets: callBuckets, refresh: refreshCallState } = useEpisodeCallState(
+    activeEpisode ? activeEpisode.id : null,
+  );
+  const approvedCallSnapshots = useMemo(
+    () => [...(callBuckets.liveMuted ?? []), ...(callBuckets.liveOnAir ?? [])],
+    [callBuckets],
+  );
+  const approvedCalls = useMemo(
+    () => approvedCallSnapshots.map((snapshot) => snapshot.call).filter(Boolean),
+    [approvedCallSnapshots],
+  );
   
 
   useEffect(() => {
@@ -118,11 +130,11 @@ export default function HostDashboard() {
 
   useEffect(() => {
     if (activeEpisode) {
-      fetchApprovedCalls();
-      
+      refreshCallState();
+
       // Poll every 2 seconds
       const interval = setInterval(() => {
-        fetchApprovedCalls();
+        refreshCallState();
       }, 2000);
       
       // Also listen for WebSocket events for immediate updates
@@ -133,12 +145,12 @@ export default function HostDashboard() {
       
       socket.on('call:approved', (data) => {
         console.log('🔔 [HOST] Call approved event received:', data);
-        fetchApprovedCalls();
+        refreshCallState();
       });
       
       socket.on('call:completed', () => {
         console.log('🔔 Call completed event - refreshing queue');
-        fetchApprovedCalls();
+        refreshCallState();
         // On-air call managed globally now - no need to clear locally
       });
       
@@ -161,7 +173,7 @@ export default function HostDashboard() {
           console.log('   Clearing active episode (confirmed match)');
           setActiveEpisode(null);
           setIsLive(false);
-          setApprovedCalls([]);
+          refreshCallState();
         } else {
           console.warn('   ⚠️ Received episode:end for different episode, ignoring');
         }
@@ -222,48 +234,6 @@ export default function HostDashboard() {
       console.log(`📢 [HOST] Loaded ${data.announcements?.length || 0} announcements for today`);
     } catch (error) {
       console.error('Error fetching announcements:', error);
-    }
-  };
-
-  const fetchApprovedCalls = async () => {
-    if (!activeEpisode) return;
-    try {
-      const response = await fetch(`/api/calls?episodeId=${activeEpisode.id}&status=approved`);
-      const calls = await response.json();
-      
-      console.log(`📞 [HOST] Fetching approved calls for episode: ${activeEpisode.id}`);
-      console.log(`   API returned ${calls.length} calls with status=approved`);
-      
-      // Filter for truly active calls (not ended, recent)
-      const now = Date.now();
-      const activeCalls = calls.filter((call: any) => {
-        const isEnded = call.endedAt !== null;
-        const isCompleted = call.status === 'completed';
-        const callTime = new Date(call.incomingAt || call.createdAt).getTime();
-        const age = now - callTime;
-        const isTooOld = age > 4 * 60 * 60 * 1000;
-        
-        if (isEnded) {
-          console.log(`   🗑️ Filtering out ended call: ${call.id}`);
-          return false;
-        }
-        if (isCompleted) {
-          console.log(`   🗑️ Filtering out completed call: ${call.id}`);
-          return false;
-        }
-        if (isTooOld) {
-          console.log(`   🗑️ Filtering out old call: ${call.id} (age: ${Math.round(age/1000/60)} min)`);
-          return false;
-        }
-        
-        console.log(`   ✅ Active call: ${call.caller?.name || 'Unknown'} (${call.id})`);
-        return true;
-      });
-      
-      console.log(`📞 [HOST] Approved calls: ${activeCalls.length} (filtered from ${calls.length} total)`);
-      setApprovedCalls(activeCalls);
-    } catch (error) {
-      console.error('Error fetching approved calls:', error);
     }
   };
 
@@ -818,7 +788,11 @@ export default function HostDashboard() {
             /* Call Management */
             <div>
               {activeEpisode ? (
-                <ParticipantBoard episodeId={activeEpisode.id} />
+                <ParticipantBoard
+                  episodeId={activeEpisode.id}
+                  callBuckets={callBuckets}
+                  refreshCalls={refreshCallState}
+                />
               ) : (
                 <Card variant="default" padding="lg">
                   <EmptyState

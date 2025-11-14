@@ -54,12 +54,27 @@ import { initializeStreamSocketHandlers, startHLSServerOnBoot } from './services
 import { audioCache } from './services/audioCache.js';
 import LiveKitRoomManager from './services/livekitRoomManager.js';
 import TwilioMediaBridge from './services/twilioMediaBridge.js';
+import CallFlowStateMachine from './services/callFlowStateMachine.js';
+import CallFlowService from './services/callFlowService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
+
+// Shared Prisma + call flow state machine
+const prisma = new PrismaClient();
+const callFlowStateMachine = new CallFlowStateMachine(prisma);
+
+callFlowStateMachine
+  .initialize()
+  .then((count) => {
+    console.log(`✅ [CALL-FLOW] State machine initialized (${count} sessions loaded)`);
+  })
+  .catch((error) => {
+    console.error('❌ [CALL-FLOW] Failed to initialize call flow state machine:', error);
+  });
 
 // Create HTTP server
 const httpServer = createServer(app);
@@ -81,6 +96,7 @@ initializeStreamSocketHandlers(io);
 
 // Make io available to routes
 app.set('io', io);
+app.set('callFlowStateMachine', callFlowStateMachine);
 
 // Initialize WebRTC infrastructure with LiveKit
 let roomManager: LiveKitRoomManager | null = null;
@@ -131,6 +147,17 @@ if (livekitUrl && livekitApiKey && livekitApiSecret) {
   console.log('ℹ️ [WEBRTC] LiveKit not configured - WebRTC features disabled');
   console.log('   Set LIVEKIT_WS_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET to enable WebRTC');
 }
+
+// Initialize call flow service after WebRTC infrastructure setup
+const callFlowService = new CallFlowService({
+  prisma,
+  stateMachine: callFlowStateMachine,
+  io,
+  livekit: roomManager,
+  mediaBridge,
+});
+
+app.set('callFlowService', callFlowService);
 
 // Trust proxy - for Railway deployment
 app.set('trust proxy', 1);

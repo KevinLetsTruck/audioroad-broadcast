@@ -7,9 +7,18 @@
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { ParticipantService } from '../services/participantService.js';
+import CallFlowService from '../services/callFlowService.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+function getCallFlowService(req: Request): CallFlowService {
+  const service = req.app.get('callFlowService') as CallFlowService | undefined;
+  if (!service) {
+    throw new Error('CallFlowService not initialized');
+  }
+  return service;
+}
 
 /**
  * GET /api/participants/:episodeId - Get all active participants for an episode
@@ -31,19 +40,15 @@ router.get('/:episodeId', async (req: Request, res: Response) => {
 router.patch('/:callId/on-air', async (req: Request, res: Response) => {
   try {
     const { callId } = req.params;
-    
-    // Get Media Bridge if available (for WebRTC)
+
     const mediaBridge = req.app.get('mediaBridge');
-    
-    // Use simpler stream-based approach
     const { putOnAirSimple } = await import('../services/putOnAirSimple.js');
     await putOnAirSimple(callId, mediaBridge);
-    
-    // Emit WebSocket event
-    const io = req.app.get('io');
-    io.emit('participant:state-changed', { callId, state: 'on-air' });
-    
-    res.json({ success: true, state: 'on-air' });
+
+    const callFlow = getCallFlowService(req);
+    const result = await callFlow.putOnAir(callId);
+
+    res.json({ success: true, state: 'on-air', ...result });
   } catch (error) {
     console.error('Error putting participant on air:', error);
     res.status(500).json({ error: 'Failed to put participant on air' });
@@ -57,12 +62,11 @@ router.patch('/:callId/hold', async (req: Request, res: Response) => {
   try {
     const { callId } = req.params;
     await ParticipantService.putOnHold(callId);
-    
-    // Emit WebSocket event
-    const io = req.app.get('io');
-    io.emit('participant:state-changed', { callId, state: 'hold' });
-    
-    res.json({ success: true, state: 'hold' });
+
+    const callFlow = getCallFlowService(req);
+    const result = await callFlow.putOnHold(callId);
+
+    res.json({ success: true, state: 'hold', ...result });
   } catch (error) {
     console.error('Error putting participant on hold:', error);
     res.status(500).json({ error: 'Failed to put participant on hold' });
@@ -136,18 +140,11 @@ router.patch('/:callId/screening', async (req: Request, res: Response) => {
     }
     
     await ParticipantService.putInScreening(callId);
-    
-    // Emit WebSocket event to episode room AND globally (for screener)
-    const io = req.app.get('io');
-    const { emitToEpisode } = await import('../services/socketService.js');
-    
-    // Emit to episode room (host sees update)
-    emitToEpisode(io, call.episodeId, 'participant:state-changed', { callId, state: 'screening' });
-    
-    // ALSO emit as call:screening for screener room to pick up
-    emitToEpisode(io, call.episodeId, 'call:screening', call);
-    
-    res.json({ success: true, state: 'screening' });
+
+    const callFlow = getCallFlowService(req);
+    const result = await callFlow.returnToScreening(callId);
+
+    res.json({ success: true, state: 'screening', ...result });
   } catch (error) {
     console.error('Error moving participant to screening:', error);
     res.status(500).json({ error: 'Failed to move participant to screening' });

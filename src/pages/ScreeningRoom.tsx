@@ -5,6 +5,7 @@ import { useBroadcast } from '../contexts/BroadcastContext';
 import ChatPanel from '../components/ChatPanel';
 import DocumentUploadWidget from '../components/DocumentUploadWidget';
 import ParticipantBoard from '../components/ParticipantBoard';
+import { useEpisodeCallState } from '../hooks/useEpisodeCallState';
 
 export default function ScreeningRoom() {
   const broadcast = useBroadcast(); // Use global broadcast context
@@ -32,6 +33,9 @@ export default function ScreeningRoom() {
   // Don't auto-initialize - let "Open Phone Lines" handle device setup based on mode
   const screenerReady = true; // Always ready - connection happens when clicking "Open Phone Lines"
   const screenerConnected = activeCall !== null;
+  const { buckets: callBuckets, refresh: refreshCallBuckets } = useEpisodeCallState(
+    activeEpisode ? activeEpisode.id : null,
+  );
 
   useEffect(() => {
     console.log('🚀 ScreeningRoom mounted - initializing...');
@@ -937,7 +941,11 @@ export default function ScreeningRoom() {
             {activeEpisode && !activeCall && (
               <div>
                 <h3 className="text-lg font-semibold text-gray-300 mb-4">📊 All Call States</h3>
-                <ParticipantBoard episodeId={activeEpisode.id} />
+                <ParticipantBoard
+                  episodeId={activeEpisode.id}
+                  callBuckets={callBuckets}
+                  refreshCalls={refreshCallBuckets}
+                />
               </div>
             )}
 
