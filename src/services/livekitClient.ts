@@ -219,8 +219,13 @@ export class LiveKitClient {
         this.audioContext = new AudioContext({ sampleRate: 48000 });
       }
 
-      // Create media stream from track
+      // CRITICAL: Use the track directly, don't create a new MediaStream
+      // Creating a new stream can cause the audio to be silent
       this.audioCapture = new MediaStream([audioTrack]);
+      
+      // Log track state for debugging
+      console.log(`🎤 [AUDIO-CAPTURE] Track state: ${audioTrack.readyState}, enabled: ${audioTrack.enabled}, muted: ${audioTrack.muted}`);
+      console.log(`🎤 [AUDIO-CAPTURE] Track settings:`, audioTrack.getSettings());
       
       // Create audio source
       const source = this.audioContext.createMediaStreamSource(this.audioCapture);
@@ -245,8 +250,9 @@ export class LiveKitClient {
         }
         
         // Convert Float32 to Int16 PCM with gain boost
-        // Apply 10x gain to compensate for low input levels
-        const GAIN = 10.0;
+        // Apply 100x gain to compensate for extremely low input levels
+        // Browser meter shows audio but ScriptProcessorNode captures very quiet signal
+        const GAIN = 100.0;
         const pcmData = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
           const boosted = inputData[i] * GAIN;
