@@ -229,8 +229,20 @@ export class LiveKitClient {
       const bufferSize = 4096;
       this.audioProcessor = this.audioContext.createScriptProcessor(bufferSize, 1, 1);
       
+      let debugPacketCount = 0;
       this.audioProcessor.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
+        
+        // Debug: Log first few packets to see if we're getting audio
+        debugPacketCount++;
+        if (debugPacketCount <= 3) {
+          const max = Math.max(...Array.from(inputData));
+          const min = Math.min(...Array.from(inputData));
+          console.log(`🔊 [AUDIO-CAPTURE] Packet ${debugPacketCount}:`);
+          console.log(`   Samples: ${inputData.length}`);
+          console.log(`   Range: ${min.toFixed(4)} to ${max.toFixed(4)}`);
+          console.log(`   First 5: [${Array.from(inputData.slice(0, 5)).map(v => v.toFixed(4)).join(', ')}]`);
+        }
         
         // Convert Float32 to Int16 PCM
         const pcmData = new Int16Array(inputData.length);
