@@ -244,10 +244,13 @@ export class LiveKitClient {
           console.log(`   First 5: [${Array.from(inputData.slice(0, 5)).map(v => v.toFixed(4)).join(', ')}]`);
         }
         
-        // Convert Float32 to Int16 PCM
+        // Convert Float32 to Int16 PCM with gain boost
+        // Apply 10x gain to compensate for low input levels
+        const GAIN = 10.0;
         const pcmData = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
-          const s = Math.max(-1, Math.min(1, inputData[i]));
+          const boosted = inputData[i] * GAIN;
+          const s = Math.max(-1, Math.min(1, boosted)); // Clamp after gain
           pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
         }
 
