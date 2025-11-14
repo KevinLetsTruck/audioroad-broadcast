@@ -181,7 +181,8 @@ const apiLimiter = rateLimit({
     // Skip rate limiting for critical real-time endpoints
     return req.path.includes('/participants/') || 
            req.path.includes('/episodes') ||
-           req.path.includes('/calls');
+           req.path.includes('/calls') ||
+           req.path.includes('/webrtc/forward-to-phone'); // Audio packets sent frequently
   }
 });
 
