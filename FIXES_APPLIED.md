@@ -1,176 +1,213 @@
-# Fixes Applied - Document & AI Issues
+# Fixes Applied - Audio & On Air Button
 
-**Date:** October 17, 2025  
-**Issues Fixed:** Document holdover bug + Gemini AI 404 errors
+**Date:** November 14, 2025, 7:00 PM  
+**Status:** 🔧 Fixes applied, ready to retest
 
 ---
 
-## 🐛 Issue #1: Document Holdover Bug
+## ✅ Issue 1: Host "On Air" Button Fixed
 
-### Problem
-When screening multiple calls in sequence, documents uploaded by a previous caller would **persist and show up** when picking up a new call. This was confusing and could lead to discussing the wrong person's documents on-air.
+**Problem:** Error when clicking "On Air": `Twilio device not initialized. Start the show first.`
 
-### Root Cause
-The `DocumentUploadWidget` component was not properly clearing its state when the `callerId` changed. Even though we used `key={activeCall.id}` to force remounting, the internal state wasn't being reset before fetching new documents.
+**Root Cause:** The code was checking for Twilio Device even in WebRTC mode.
 
-### Solution Applied
-Updated `DocumentUploadWidget.tsx` to **immediately clear all state** when `callerId` changes:
-- Clear uploaded documents list
-- Clear file selection
-- Clear document types
-- Close any expanded documents
-- Only THEN fetch new documents for the new caller
+**Fix Applied:**
+- Updated `ParticipantBoard.tsx` line 60-65
+- Now checks for WebRTC connection instead of Twilio Device when in WebRTC mode
+- Shows helpful error: "Please join the live room first before putting callers on air."
 
+**Action Required:**
+1. **Refresh the Host Dashboard page** (Cmd+R / Ctrl+R)
+2. **Click "Join Live Room"** button first
+3. **Then click "On Air"** for the caller
+
+---
+
+## ✅ Issue 2: Audio Routing Fixed
+
+**Problem:** No audio in screening room (caller → screener, screener → caller)
+
+**Root Cause:** The `TwilioMediaBridge` was still forwarding phone audio to the `lobby` room even after the screener picked up. The `CallFlowService` was updating the database but not telling the media bridge to move the stream.
+
+**Fix Applied:**
+- Updated `CallFlowService.startScreening()` (line 125-133)
+- Updated `CallFlowService.approveCall()` (line 165-173)
+- Now calls `mediaBridge.moveStreamToRoom()` when transitioning states
+- Audio will now follow the call through: `lobby` → `screening-X-Y` → `live-X`
+
+**Expected Behavior:**
+1. Call comes in → Audio in `lobby` room
+2. Screener picks up → Audio moves to `screening-{episodeId}-{callId}` room
+3. Screener approves → Audio moves to `live-{episodeId}` room
+4. Host puts on air → Audio unmuted
+
+---
+
+## 🧪 How to Test
+
+### Test 1: Screening Audio
+
+1. **Refresh both Screening Room and Host Dashboard**
+2. **Make a test call**
+3. **Click "Screen" to pick up**
+4. **Expected:**
+   - ✅ You hear the caller
+   - ✅ Caller hears you
+   - ✅ Server logs show: `✅ [CALL-FLOW] Moved call X to screening room: screening-...`
+
+### Test 2: On Air Button
+
+1. **In Host Dashboard, click "Join Live Room"**
+2. **Grant microphone permissions**
+3. **Wait for "Connected to LiveKit" message**
+4. **Click "On Air" for the approved caller**
+5. **Expected:**
+   - ✅ Button works (no error)
+   - ✅ Call moves to "On Air" section
+   - ✅ You hear the caller
+   - ✅ Caller hears you
+
+---
+
+## 📊 What Changed
+
+### File: `src/components/ParticipantBoard.tsx`
+
+**Before:**
 ```typescript
-// BEFORE
-useEffect(() => {
-  if (callerId) {
-    setUploadedDocs([]);
-    fetchExistingDocuments();
+if (!broadcast.useWebRTC) {
+  // Check for Twilio Device
+  if (!broadcast.twilioDevice) {
+    throw new Error('Twilio device not initialized...');
   }
-}, [callerId]);
-
-// AFTER
-useEffect(() => {
-  // ALWAYS clear state first to prevent showing old caller's docs
-  setUploadedDocs([]);
-  setFiles([]);
-  setDocumentTypes({});
-  setExpandedDoc(null);
-  
-  if (callerId) {
-    console.log('📄 Loading documents for callerId:', callerId);
-    fetchExistingDocuments();
-  }
-}, [callerId]);
+}
+// No check for WebRTC mode!
 ```
 
----
-
-## 🤖 Issue #2: Gemini AI Analysis Failing
-
-### Problem
-When uploading documents, AI analysis would fail with:
-```
-❌ Gemini API error: [404 Not Found] 
-models/gemini-pro is not found for API version v1beta
-```
-
-### Root Cause
-The Google Generative AI SDK (v0.24.1) uses the v1beta API, which requires specific model names with the `-latest` suffix for stable access.
-
-### Solution Applied
-Updated `aiService.ts` to use the correct model name:
-
+**After:**
 ```typescript
-// BEFORE
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-
-// AFTER
-const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' });
+if (!broadcast.useWebRTC) {
+  // Check for Twilio Device
+  if (!broadcast.twilioDevice) {
+    throw new Error('Twilio device not initialized...');
+  }
+} else {
+  // WebRTC mode: Check if host joined live room
+  if (!broadcast.webrtcService || !broadcast.currentRoom?.includes('live-')) {
+    throw new Error('Please join the live room first...');
+  }
+}
 ```
 
-**Why `gemini-1.5-flash-latest`?**
-- ✅ Explicitly compatible with v1beta API
-- ✅ Faster response times (good for live broadcasting)
-- ✅ Lower cost per request
-- ✅ Still excellent quality for document analysis
+### File: `server/services/callFlowService.ts`
 
----
-
-## ✅ Testing These Fixes
-
-### Test 1: Document Holdover Fix
-1. Go to **Screening Room**
-2. Have **Caller A** call in and **upload a document** (e.g., "test1.pdf")
-3. **Approve** Caller A
-4. Have **Caller B** call in (different caller ID)
-5. **Pick up** Caller B's call
-6. ✅ **VERIFY:** You should see NO documents (or only Caller B's docs if they uploaded any)
-7. ❌ **OLD BUG:** Would show Caller A's document incorrectly
-
-### Test 2: AI Analysis Fix
-1. Go to **Screening Room**
-2. Pick up any call
-3. **Upload a document** (PDF, image, etc.)
-4. **Wait 5-10 seconds** for AI analysis
-5. ✅ **VERIFY:** Document shows "✓ Analyzed" status
-6. **Click the document** to expand it
-7. ✅ **VERIFY:** You see AI-generated:
-   - 📋 Summary
-   - 🔍 Key Findings  
-   - 💡 Talking Points
-   - Confidence score
-8. ❌ **OLD BUG:** Would show "AI analysis temporarily unavailable"
-
----
-
-## 🔍 What to Look For in Logs
-
-### Successful Document Loading (New Call)
-```
-📄 No callerId - clearing all documents
-📄 Loading documents for callerId: cmgv...
-📄 Loaded existing documents: 0
+**Added to `startScreening()`:**
+```typescript
+// Move the Twilio media stream to the screening room
+if (this.mediaBridge && call.twilioCallSid) {
+  await this.mediaBridge.moveStreamToRoom(call.twilioCallSid, screeningRoom);
+  console.log(`✅ [CALL-FLOW] Moved call to screening room: ${screeningRoom}`);
+}
 ```
 
-### Successful AI Analysis
-```
-🤖 Calling Gemini API with model: gemini-1.5-flash-latest
-✅ Gemini AI response received, length: 342
-📝 Cleaned response: {"summary":"...
-```
-
-### Previous Errors (Should NOT See These Anymore)
-```
-❌ Gemini API error: [404 Not Found] models/gemini-pro is not found
+**Added to `approveCall()`:**
+```typescript
+// Move the Twilio media stream to the live room
+if (this.mediaBridge && updatedCall.twilioCallSid) {
+  await this.mediaBridge.moveStreamToRoom(updatedCall.twilioCallSid, liveRoom);
+  console.log(`✅ [CALL-FLOW] Moved call to live room: ${liveRoom}`);
+}
 ```
 
 ---
 
-## 📊 Deployment Status
+## 🔍 What to Look For in Server Logs
 
-✅ **Built:** Build succeeded, no errors  
-✅ **Committed:** Git commit `4dc7c7d`  
-✅ **Pushed:** Deployed to Railway (auto-deploy)  
-⏳ **Railway:** Check Railway dashboard for deployment completion  
+**Good signs (audio working):**
+```
+✅ [MEDIA-STREAM] Call bridged to room: lobby
+✅ [CALL-FLOW] Moved call X to screening room: screening-cmhz6vqlk0001oqc1p3651915-cmhz7kwgg0005r26ezwrhc9q0
+🔄 [MEDIA-BRIDGE] Moving stream from lobby to screening-...
+✅ [MEDIA-BRIDGE] Stream moved to screening-...
+📞 [BROWSER→PHONE] Received X audio packets in 5s for room: screening-...
+```
 
----
-
-## 🎯 Impact
-
-### Document Holdover Fix
-- **Before:** Screener might discuss wrong caller's documents
-- **After:** Clean slate for each new call
-- **UX:** Less confusion, more professional screening
-
-### AI Analysis Fix
-- **Before:** "AI analysis temporarily unavailable" (always)
-- **After:** Real AI-powered document analysis
-- **Value:** Provides host with instant context and talking points
+**Bad signs (audio not working):**
+```
+❌ [MEDIA-BRIDGE] Room mapping mismatch!
+❌ [CALL-FLOW] Failed to move stream to screening room
+ℹ️ [BROWSER→PHONE] No caller in room: screening-...
+```
 
 ---
 
-## 🚀 Next Time You Test
+## 🎯 Expected Flow (After Fixes)
 
-1. **Wait ~2 minutes** for Railway to finish deploying
-2. **Hard refresh** the browser (Cmd+Shift+R / Ctrl+Shift+R)
-3. **Go Live** and start a new episode
-4. **Test both scenarios** above
-5. **Check Railway logs** if anything seems off
+### 1. Call Comes In
+```
+Phone → Twilio → Server → MediaBridge.startMediaStream()
+  → Audio forwarded to: lobby
+  → CallSession: phase=incoming, room=lobby
+```
+
+### 2. Screener Picks Up
+```
+Frontend → /api/calls/:id/screen → CallFlowService.startScreening()
+  → CallSession: phase=screening, room=screening-X-Y
+  → MediaBridge.moveStreamToRoom(screening-X-Y) ✅ NEW!
+  → Audio now forwarded to: screening-X-Y
+  → Screener joins screening-X-Y via LiveKit
+  → Audio flows both ways ✅
+```
+
+### 3. Screener Approves
+```
+Frontend → /api/calls/:id/approve → CallFlowService.approveCall()
+  → CallSession: phase=live_muted, room=live-X
+  → MediaBridge.moveStreamToRoom(live-X) ✅ NEW!
+  → Audio now forwarded to: live-X
+  → Host joins live-X via LiveKit
+  → Audio ready (caller muted)
+```
+
+### 4. Host Puts On Air
+```
+Frontend → /api/participants/:id/on-air → CallFlowService.putOnAir()
+  → CallSession: phase=live_on_air, sendMuted=false
+  → Server unmutes Twilio participant
+  → Audio flows: Host ↔ Caller ✅
+```
 
 ---
 
-## 💡 Key Learnings
+## 🚀 Next Steps
 
-1. **React state management:** When using `key` to force remount, also manually clear state in `useEffect` for immediate UI updates
-2. **Google AI API:** Model names matter! `-latest` suffix required for v1beta API stability
-3. **Production debugging:** Railway logs are your friend - check "Observability" tab, not "Deploy" logs
+1. **Refresh your browser tabs** (both Screening Room and Host Dashboard)
+2. **Make a new test call**
+3. **Follow the test procedures above**
+4. **Watch server logs** for the new log messages
+5. **Report results!**
 
 ---
 
-**Status:** ✅ Ready to test in production!  
-**Deployed:** Check Railway for live status  
-**Questions?** Review Railway logs or ask me!
+## 📝 If Issues Persist
 
+### Audio still not working?
 
+**Check:**
+1. Server logs for `✅ [CALL-FLOW] Moved call to screening room`
+2. Room names match in server logs and browser console
+3. Microphone permissions granted
+4. LiveKit room has participants: `curl http://localhost:3001/api/webrtc/rooms`
+
+### On Air button still not working?
+
+**Check:**
+1. Did you refresh the page after the fix?
+2. Did you click "Join Live Room" first?
+3. Browser console for error messages
+4. `broadcast.currentRoom` should include `live-`
+
+---
+
+**Backend restarted with fixes. Ready to test! 🎉**

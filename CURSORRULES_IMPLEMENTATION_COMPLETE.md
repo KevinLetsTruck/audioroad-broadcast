@@ -294,3 +294,4 @@ If unsure → Check the `.cursorrules` file for examples
 
 
 
+

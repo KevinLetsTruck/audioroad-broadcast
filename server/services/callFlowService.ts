@@ -247,12 +247,23 @@ export class CallFlowService {
       isMutedInConference: false,
     });
 
+    const screeningRoom = this.buildScreeningRoom(call.episodeId, call.id);
     const session = await this.transitionSession(call, {
       targetPhase: 'screening',
-      currentRoom: this.buildScreeningRoom(call.episodeId, call.id),
+      currentRoom: screeningRoom,
       sendMuted: false,
       recvMuted: false,
     });
+
+    // Move the Twilio media stream back to the screening room
+    if (this.mediaBridge && call.twilioCallSid) {
+      try {
+        await this.mediaBridge.moveStreamToRoom(call.twilioCallSid, screeningRoom);
+        console.log(`✅ [CALL-FLOW] Moved call ${callId} back to screening room: ${screeningRoom}`);
+      } catch (error) {
+        console.error(`❌ [CALL-FLOW] Failed to move stream back to screening room:`, error);
+      }
+    }
 
     this.emitCallUpdated(call, session, { events: ['call:screening'] });
     emitToEpisode(this.io, call.episodeId, 'participant:state-changed', {
