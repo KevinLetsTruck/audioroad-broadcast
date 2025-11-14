@@ -165,7 +165,7 @@ app.set('trust proxy', 1);
 // Rate limiting configuration - increased for development
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5000, // Increased from 500 to handle WebRTC/Socket connections
+  max: 50000, // Very high limit for testing
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -173,7 +173,7 @@ const generalLimiter = rateLimit({
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10000, // Very high limit for active broadcasts with multiple users/tabs
+  max: 100000, // Extremely high limit for active broadcasts with WebRTC audio
   message: 'Too many API requests, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -182,7 +182,8 @@ const apiLimiter = rateLimit({
     return req.path.includes('/participants/') || 
            req.path.includes('/episodes') ||
            req.path.includes('/calls') ||
-           req.path.includes('/webrtc/forward-to-phone'); // Audio packets sent frequently
+           req.path.includes('/webrtc/') || // Skip all WebRTC endpoints (audio packets)
+           req.path.includes('/screening/'); // Skip screening endpoints
   }
 });
 
