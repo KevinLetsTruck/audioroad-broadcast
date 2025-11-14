@@ -5,9 +5,18 @@
 
 import express, { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import CallFlowService from '../services/callFlowService.js';
 
 const router = express.Router();
 const prisma = new PrismaClient();
+
+function getCallFlowService(req: Request): CallFlowService {
+  const service = req.app.get('callFlowService') as CallFlowService | undefined;
+  if (!service) {
+    throw new Error('CallFlowService not initialized');
+  }
+  return service;
+}
 
 /**
  * Pick up call (move to screening room)
@@ -20,58 +29,18 @@ router.post('/:callId/pickup', async (req: Request, res: Response) => {
   try {
     console.log(`📞 [SCREENING] Picking up call: ${callId}`);
 
-    // Get call
-    const call = await prisma.call.findUnique({
-      where: { id: callId },
-      include: { episode: true }
-    });
+    // Use CallFlowService to handle the transition
+    const callFlow = getCallFlowService(req);
+    const { call, session } = await callFlow.startScreening(callId, screenerId);
 
-    if (!call) {
-      return res.status(404).json({ error: 'Call not found' });
-    }
+    console.log(`✅ [SCREENING] Call ${callId} moved to screening via CallFlowService`);
+    console.log(`   Session: phase=${session.phase}, room=${session.currentRoom}`);
+    
+    res.json(call);
 
-    if (call.status !== 'queued' && call.status !== 'ringing') {
-      return res.status(400).json({ 
-        error: `Call cannot be picked up in ${call.status} status` 
-      });
-    }
-
-    // Update call status to screening
-    const updatedCall = await prisma.call.update({
-      where: { id: callId },
-      data: {
-        status: 'screening',
-        screenedAt: new Date()
-      }
-    });
-
-    // Get media bridge and move caller to screening room
-    const mediaBridge = req.app.get('mediaBridge');
-    if (mediaBridge && call.twilioCallSid) {
-      const screeningRoomId = `screening-${call.episodeId}-${call.id}`;
-      
-      try {
-        await mediaBridge.moveStreamToRoom(call.twilioCallSid, screeningRoomId);
-        console.log(`✅ [SCREENING] Moved caller to screening room: ${screeningRoomId}`);
-      } catch (error: any) {
-        console.error('❌ [SCREENING] Failed to move to screening room:', error.message);
-        // Continue anyway - caller will be in lobby until next status update
-      }
-    }
-
-    // Emit socket event
-    const io = req.app.get('io');
-    if (io) {
-      io.to(`episode:${call.episodeId}`).emit('call:screening', updatedCall);
-      io.to(`episode:${call.episodeId}`).emit('call:updated', updatedCall);
-    }
-
-    console.log(`✅ [SCREENING] Call ${callId} moved to screening`);
-    res.json(updatedCall);
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ [SCREENING] Pickup error:', error);
-    res.status(500).json({ error: 'Failed to pickup call' });
+    res.status(500).json({ error: 'Failed to pickup call', message: error.message });
   }
 });
 
@@ -81,62 +50,27 @@ router.post('/:callId/pickup', async (req: Request, res: Response) => {
  */
 router.post('/:callId/approve', async (req: Request, res: Response) => {
   const { callId } = req.params;
+  const { screenerNotes, topic, priority } = req.body;
 
   try {
     console.log(`✅ [SCREENING] Approving call: ${callId}`);
 
-    // Get call
-    const call = await prisma.call.findUnique({
-      where: { id: callId },
-      include: { episode: true }
+    // Use CallFlowService to handle the transition
+    const callFlow = getCallFlowService(req);
+    const { call, session } = await callFlow.approveCall(callId, {
+      screenerNotes,
+      topic,
+      priority
     });
 
-    if (!call) {
-      return res.status(404).json({ error: 'Call not found' });
-    }
+    console.log(`✅ [SCREENING] Call ${callId} approved via CallFlowService`);
+    console.log(`   Session: phase=${session.phase}, room=${session.currentRoom}`);
+    
+    res.json(call);
 
-    if (call.status !== 'screening') {
-      return res.status(400).json({ 
-        error: `Call cannot be approved from ${call.status} status` 
-      });
-    }
-
-    // Update call status to approved (will be on hold in live room)
-    const updatedCall = await prisma.call.update({
-      where: { id: callId },
-      data: {
-        status: 'approved',
-        approvedAt: new Date(),
-        participantState: 'on-hold' // On hold until host puts them on air
-      }
-    });
-
-    // Get media bridge and move caller to live room (muted)
-    const mediaBridge = req.app.get('mediaBridge');
-    if (mediaBridge && call.twilioCallSid) {
-      const liveRoomId = `live-${call.episodeId}`;
-      
-      try {
-        await mediaBridge.moveStreamToRoom(call.twilioCallSid, liveRoomId);
-        console.log(`✅ [SCREENING] Moved caller to live room: ${liveRoomId}`);
-      } catch (error: any) {
-        console.error('❌ [SCREENING] Failed to move to live room:', error.message);
-      }
-    }
-
-    // Emit socket events
-    const io = req.app.get('io');
-    if (io) {
-      io.to(`episode:${call.episodeId}`).emit('call:approved', updatedCall);
-      io.to(`episode:${call.episodeId}`).emit('call:updated', updatedCall);
-    }
-
-    console.log(`✅ [SCREENING] Call ${callId} approved and in live room`);
-    res.json(updatedCall);
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ [SCREENING] Approve error:', error);
-    res.status(500).json({ error: 'Failed to approve call' });
+    res.status(500).json({ error: 'Failed to approve call', message: error.message });
   }
 });
 
