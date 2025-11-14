@@ -34,7 +34,9 @@ router.post('/:callId/pickup', async (req: Request, res: Response) => {
     const { call, session } = await callFlow.startScreening(callId, screenerId);
 
     console.log(`✅ [SCREENING] Call ${callId} moved to screening via CallFlowService`);
-    console.log(`   Session: phase=${session.phase}, room=${session.currentRoom}`);
+    if (session) {
+      console.log(`   Session: phase=${session.phase}, room=${session.currentRoom}`);
+    }
     
     res.json(call);
 
@@ -64,7 +66,9 @@ router.post('/:callId/approve', async (req: Request, res: Response) => {
     });
 
     console.log(`✅ [SCREENING] Call ${callId} approved via CallFlowService`);
-    console.log(`   Session: phase=${session.phase}, room=${session.currentRoom}`);
+    if (session) {
+      console.log(`   Session: phase=${session.phase}, room=${session.currentRoom}`);
+    }
     
     res.json(call);
 
