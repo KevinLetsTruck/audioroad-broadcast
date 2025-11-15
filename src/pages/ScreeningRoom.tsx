@@ -576,76 +576,55 @@ export default function ScreeningRoom() {
     // Refresh queues
     fetchQueuedCalls();
     
-    // Connect screener's audio using HYBRID approach:
-    // - Twilio Device for phone connection (bidirectional audio)
-    // - LiveKit for browser features (optional: recording, monitoring, multi-party)
+    // Connect screener's audio using Twilio Device (proven reliable)
+    console.log('📞 [SCREENING] Connecting to call via Twilio Device...');
     
-    console.log('🔌 [HYBRID] Connecting with Twilio Device + LiveKit...');
+    // Ensure Twilio Device is initialized
+    if (!broadcast.twilioDevice) {
+      try {
+        await broadcast.initializeTwilio(`screener-${Date.now()}`);
+        console.log('✅ [SCREENING] Twilio Device initialized');
+      } catch (initError) {
+        console.error('❌ [SCREENING] Failed to initialize Twilio Device:', initError);
+        alert('Failed to initialize phone system. Please refresh and try again.');
+        setActiveCall(null);
+        return;
+      }
+    }
     
     try {
-      // STEP 1: Connect to phone via Twilio Device (this gives bidirectional audio!)
-      console.log('📞 [HYBRID] Step 1: Connecting to phone via Twilio Device...');
-      
-      // Initialize Twilio Device if needed
-      if (!broadcast.twilioDevice) {
-        await broadcast.initializeTwilio(`screener-${Date.now()}`);
-        console.log('✅ [HYBRID] Twilio Device initialized');
-      }
-      
-      // Connect to conference where the caller is
+      // Connect to conference where the caller is (screening conference)
       const callerName = call.caller?.name || 'Caller';
+      console.log(`📞 [SCREENING] Connecting to screening conference for call ${call.id}...`);
+      
       await broadcast.connectToCall(call.id, callerName, activeEpisode.id, 'screener');
-      console.log('✅ [HYBRID] Connected to phone via Twilio Device - bidirectional audio working!');
+      console.log('✅ [SCREENING] Connected to phone via Twilio Device!');
       
-      // STEP 2: Optionally connect to LiveKit for recording/monitoring (if WebRTC mode is on)
-      if (useWebRTC) {
-        console.log('🔌 [HYBRID] Step 2: Connecting to LiveKit for monitoring...');
-        try {
-          // Initialize WebRTC if needed
-          if (!broadcast.webrtcService || !broadcast.webrtcService.isConnected()) {
-            await broadcast.initializeWebRTC();
-            console.log('✅ [HYBRID] LiveKit initialized');
-          }
-          
-          // Join screening room for monitoring/recording
-          const freshCallRes = await fetch(`/api/calls/${call.id}`);
-          if (freshCallRes.ok) {
-            const freshCall = await freshCallRes.json();
-            await broadcast.joinScreeningRoomWebRTC(
-              freshCall.episodeId,
-              freshCall.id,
-              'Screener-Monitor'
-            );
-            console.log('✅ [HYBRID] LiveKit monitoring connected');
-          }
-        } catch (liveKitError) {
-          console.warn('⚠️ [HYBRID] LiveKit monitoring failed (not critical):', liveKitError);
-          // Continue anyway - Twilio Device audio still works
-        }
-      }
+      // Wait for Twilio to fully establish connection
+      await new Promise(resolve => setTimeout(resolve, 1500));
       
-      console.log('🎉 [HYBRID] Full connection established!');
-      console.log('   ✅ Phone audio: Twilio Device (bidirectional)');
-      console.log(`   ${useWebRTC ? '✅' : '⏭️'} Monitoring: LiveKit (${useWebRTC ? 'active' : 'disabled'})`);
-      
-      // STEP 3: Unmute the caller so they can hear you
-      console.log('📞 [HYBRID] Unmuting caller for screening...');
+      // Unmute the caller so they can hear you
+      console.log('📞 [SCREENING] Unmuting caller for bidirectional audio...');
       try {
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait for Twilio to fully connect
-        
         const unmuteRes = await fetch(`/api/participants/${call.id}/unmute`, { method: 'PATCH' });
         if (unmuteRes.ok) {
-          console.log('✅ [HYBRID] Caller unmuted - they can now hear you!');
+          console.log('✅ [SCREENING] Caller unmuted - bidirectional audio active!');
         } else {
-          console.warn('⚠️ [HYBRID] Unmute failed, but you should still hear the caller');
+          const errorText = await unmuteRes.text();
+          console.warn('⚠️ [SCREENING] Unmute failed:', errorText);
         }
       } catch (unmuteError) {
-        console.warn('⚠️ [HYBRID] Unmute error:', unmuteError);
-        // Not critical - connection still works
+        console.warn('⚠️ [SCREENING] Unmute error:', unmuteError);
       }
       
+      // Verify connection
+      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('🎉 [SCREENING] Connection complete!');
+      console.log('   You should hear the caller now');
+      console.log('   Caller should hear you');
+      
     } catch (error) {
-      console.error('❌ [HYBRID] Failed to connect:', error);
+      console.error('❌ [SCREENING] Failed to connect:', error);
       alert(`Failed to connect: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setActiveCall(null);
       return;

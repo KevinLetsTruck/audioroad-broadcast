@@ -941,10 +941,16 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
       }, `Welcome to the AudioRoad Network. ${showName} is currently on the air. The call screener will be right with you.`);
     }
     
-    // Check if LiveKit/WebRTC is enabled (route to Media Stream instead of conference)
-    const useWebRTC = !!(process.env.LIVEKIT_WS_URL && process.env.LIVEKIT_API_KEY);
+    // Check if LiveKit/WebRTC should be used for this episode
+    // IMPORTANT: Just because LiveKit is configured doesn't mean we should use it
+    // Let the frontend decide by checking episode settings or always use conferences for reliability
+    const livekitConfigured = !!(process.env.LIVEKIT_WS_URL && process.env.LIVEKIT_API_KEY);
     
-    if (useWebRTC) {
+    // TEMPORARY: Force conference mode for reliability (Media Streams don't support bidirectional audio)
+    // TODO: Make this configurable per episode
+    const useWebRTC = false; // Set to false to use proven Twilio Conferences
+    
+    if (useWebRTC && livekitConfigured) {
       // Route to Media Stream for WebRTC bridge
       console.log('🎉🎉🎉 [WELCOME-MESSAGE] USING <CONNECT> FOR BIDIRECTIONAL AUDIO 🎉🎉🎉');
       console.log('🔌 [WELCOME-MESSAGE] Routing to Media Stream (WebRTC bridge) - BIDIRECTIONAL');
