@@ -1,0 +1,15 @@
+#!/bin/bash
+# Search for key messages in Railway logs
+echo "Searching for key log messages..."
+echo ""
+echo "=== Incoming Calls ==="
+grep -i "incoming call from" railway_logs.json || echo "No incoming calls found"
+echo ""
+echo "=== TwiML Generated ==="
+grep -i "twiml generated" railway_logs.json || echo "No TwiML logs found"
+echo ""
+echo "=== Stream Starting ==="
+grep -i "stream starting" railway_logs.json || echo "No stream starting logs found"
+echo ""
+echo "=== Start Screening Called ==="
+grep -i "startScreening() called" railway_logs.json || echo "No startScreening logs found"
