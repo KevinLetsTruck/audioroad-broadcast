@@ -283,11 +283,22 @@ export class TwilioMediaBridge extends EventEmitter {
       console.warn(`⚠️ [MEDIA-BRIDGE] sendAudioToPhone called but no connection for ${callSid}`);
       return;
     }
+    
+    // CRITICAL: Check if streamSid is set (Twilio sends this in 'start' message)
+    if (!connection.streamSid) {
+      // Only log once to avoid spam
+      if (connection.stats.packetsSent === 0) {
+        console.warn(`⚠️ [MEDIA-BRIDGE] streamSid not set yet for ${callSid} - waiting for 'start' message from Twilio`);
+        console.warn(`   Audio will be dropped until streamSid is received`);
+      }
+      return;
+    }
 
     // Log every 100th call to confirm this method is being executed
     if (connection.stats.packetsSent % 100 === 0) {
       console.log(`📤 [MEDIA-BRIDGE] sendAudioToPhone() called (packet #${connection.stats.packetsSent})`);
       console.log(`   Buffer size: ${pcmAudioData.length} bytes`);
+      console.log(`   StreamSid: ${connection.streamSid}`);
     }
 
     try {
