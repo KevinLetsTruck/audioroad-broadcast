@@ -42,6 +42,29 @@ router.post('/incoming', async (req: Request, res: Response) => {
     console.log(`   Room: ${event.room?.name}`);
     console.log(`   Participant: ${event.participant?.identity}`);
     
+    // Handle participant_left events (when call ends)
+    if (event.event === 'participant_left' && event.room?.name === 'lobby') {
+      const leftCall = await prisma.call.findFirst({
+        where: { twilioCallSid: event.participant?.sid }
+      });
+      
+      if (leftCall) {
+        await prisma.call.update({
+          where: { id: leftCall.id },
+          data: { status: 'completed', endedAt: new Date() }
+        });
+        
+        const io = req.app.get('io');
+        if (io) {
+          io.to(`episode:${leftCall.episodeId}`).emit('call:completed', { callId: leftCall.id });
+        }
+        
+        console.log(`✅ [LIVEKIT-SIP-WEBHOOK] Call ${leftCall.id} ended`);
+      }
+      
+      return res.sendStatus(200);
+    }
+    
     // Only handle participant_joined events in lobby room
     if (event.event !== 'participant_joined' || event.room?.name !== 'lobby') {
       return res.sendStatus(200); // Acknowledge but ignore
@@ -111,29 +134,6 @@ router.post('/incoming', async (req: Request, res: Response) => {
       console.log(`✅ [LIVEKIT-SIP-WEBHOOK] Call record created: ${call.id}`);
     } else {
       console.log(`ℹ️ [LIVEKIT-SIP-WEBHOOK] Call already exists: ${call.id}`);
-    }
-    
-    // Handle participant_left events too (same endpoint)
-    if (event.event === 'participant_left' && event.room?.name === 'lobby') {
-      const leftCall = await prisma.call.findFirst({
-        where: { twilioCallSid: event.participant?.sid }
-      });
-      
-      if (leftCall) {
-        await prisma.call.update({
-          where: { id: leftCall.id },
-          data: { status: 'completed', endedAt: new Date() }
-        });
-        
-        const io = req.app.get('io');
-        if (io) {
-          io.to(`episode:${leftCall.episodeId}`).emit('call:completed', { callId: leftCall.id });
-        }
-        
-        console.log(`✅ [LIVEKIT-SIP-WEBHOOK] Call ${leftCall.id} ended`);
-      }
-      
-      return res.sendStatus(200);
     }
     
     // Emit Socket.IO event to notify screening UI
