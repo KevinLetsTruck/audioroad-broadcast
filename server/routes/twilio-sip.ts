@@ -39,7 +39,9 @@ router.post('/incoming-call', async (req: Request, res: Response) => {
       caller = await prisma.caller.create({
         data: {
           phoneNumber: From,
-          name: `Caller ${From.slice(-4)}` // Use last 4 digits as default name
+          name: `Caller ${From.slice(-4)}`, // Use last 4 digits as default name
+          firstCallDate: new Date(),
+          lastCallDate: new Date()
         }
       });
       console.log(`✅ [TWILIO-SIP] New caller created: ${caller.id}`);
@@ -111,11 +113,7 @@ router.post('/incoming-call', async (req: Request, res: Response) => {
       callerId: To // Use show's phone number as caller ID
     });
     
-    dial.sip({
-      uri: sipUri,
-      username: call.id, // Use call ID as SIP username for tracking
-      password: process.env.LIVEKIT_SIP_PASSWORD || ''
-    });
+    dial.sip(sipUri);
     
     // If SIP connection fails
     response.say({
@@ -174,7 +172,6 @@ router.post('/call-status', async (req: Request, res: Response) => {
         where: { id: call.id },
         data: {
           status: 'completed',
-          duration: parseInt(CallDuration || '0'),
           endedAt: new Date()
         }
       });
