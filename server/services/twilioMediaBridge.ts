@@ -280,7 +280,14 @@ export class TwilioMediaBridge extends EventEmitter {
     const connection = this.activeStreams.get(callSid);
     
     if (!connection || !connection.ws) {
+      console.warn(`⚠️ [MEDIA-BRIDGE] sendAudioToPhone called but no connection for ${callSid}`);
       return;
+    }
+
+    // Log every 100th call to confirm this method is being executed
+    if (connection.stats.packetsSent % 100 === 0) {
+      console.log(`📤 [MEDIA-BRIDGE] sendAudioToPhone() called (packet #${connection.stats.packetsSent})`);
+      console.log(`   Buffer size: ${pcmAudioData.length} bytes`);
     }
 
     try {
