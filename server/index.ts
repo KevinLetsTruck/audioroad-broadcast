@@ -25,6 +25,7 @@ import episodeRoutes from './routes/episodes.js';
 import showRoutes from './routes/shows.js';
 import twilioRoutes from './routes/twilio.js';
 import twilioSipRoutes from './routes/twilio-sip.js';
+import livekitSipWebhooksRoutes from './routes/livekit-sip-webhooks.js';
 import twilioPlaybackRoutes from './routes/twilio-playback.js';
 import analysisRoutes from './routes/analysis.js';
 import audioAssetRoutes from './routes/audio-assets.js';
@@ -265,6 +266,7 @@ app.use('/api/episodes', apiLimiter, episodeRoutes);
 app.use('/api/shows', apiLimiter, showRoutes);
 app.use('/api/twilio', twilioWebhookLimiter, twilioRoutes); // Twilio webhooks (legacy)
 app.use('/api/twilio-sip', twilioWebhookLimiter, twilioSipRoutes); // Twilio SIP integration (NEW!)
+app.use('/api/livekit-sip', twilioWebhookLimiter, livekitSipWebhooksRoutes); // LiveKit SIP webhooks (NEW!)
 app.use('/api/twilio', apiLimiter, twilioPlaybackRoutes); // Twilio conference playback
 // app.use('/api/twilio/media-stream', mediaStreamRoutes); // DISABLED: WebSocket routing needs fixing
 app.use('/api/live-stream', liveStreamRoutes); // Live audio stream for callers on hold
