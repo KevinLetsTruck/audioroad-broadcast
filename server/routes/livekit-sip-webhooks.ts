@@ -56,9 +56,13 @@ router.post('/incoming', async (req: Request, res: Response) => {
       console.log(`✅ [LIVEKIT-SIP-WEBHOOK] New caller created: ${caller.id}`);
     }
     
-    // Find active episode
+    // Find active or scheduled episode (screeners can take calls before show goes live)
     const activeEpisode = await prisma.episode.findFirst({
-      where: { status: 'live' },
+      where: { 
+        status: { 
+          in: ['scheduled', 'live'] // Accept both scheduled and live episodes
+        } 
+      },
       orderBy: { scheduledStart: 'desc' }
     });
     
