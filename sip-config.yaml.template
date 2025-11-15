@@ -1,0 +1,44 @@
+# LiveKit SIP Service Configuration Template
+# This file bridges Twilio SIP calls into LiveKit rooms
+
+# LiveKit Cloud Connection
+api_key: ${LIVEKIT_API_KEY}
+api_secret: ${LIVEKIT_API_SECRET}
+ws_url: ${LIVEKIT_WS_URL}
+
+# Redis (for state management)
+redis:
+  address: ${REDIS_URL}
+
+# Logging
+log_level: info
+
+# SIP Configuration
+sip:
+  # Public IP address that Twilio will connect to
+  # Railway provides this via $RAILWAY_PUBLIC_DOMAIN
+  ip: ${SIP_PUBLIC_IP}
+  
+  # SIP port (standard is 5060)
+  port: 5060
+  
+  # RTP port range for audio
+  rtp_port:
+    start: 10000
+    end: 20000
+
+# Health check endpoint
+http:
+  port: 8080
+  
+# Room configuration defaults
+room:
+  # Auto-create rooms if they don't exist
+  auto_create: true
+  
+  # Empty rooms are deleted after 5 minutes
+  empty_timeout: 300
+  
+  # Maximum participants per room (safety limit)
+  max_participants: 50
+

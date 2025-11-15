@@ -24,6 +24,7 @@ import callerRoutes from './routes/callers.js';
 import episodeRoutes from './routes/episodes.js';
 import showRoutes from './routes/shows.js';
 import twilioRoutes from './routes/twilio.js';
+import twilioSipRoutes from './routes/twilio-sip.js';
 import twilioPlaybackRoutes from './routes/twilio-playback.js';
 import analysisRoutes from './routes/analysis.js';
 import audioAssetRoutes from './routes/audio-assets.js';
@@ -53,6 +54,8 @@ import { initializeSocketHandlers } from './services/socketService.js';
 import { initializeStreamSocketHandlers, startHLSServerOnBoot } from './services/streamSocketService.js';
 import { audioCache } from './services/audioCache.js';
 import LiveKitRoomManager from './services/livekitRoomManager.js';
+import LiveKitSIPService from './services/livekitSipService.js';
+import SIPCallFlowManager from './services/sipCallFlowManager.js';
 import TwilioMediaBridge from './services/twilioMediaBridge.js';
 import CallFlowStateMachine from './services/callFlowStateMachine.js';
 import CallFlowService from './services/callFlowService.js';
@@ -98,8 +101,10 @@ initializeStreamSocketHandlers(io);
 app.set('io', io);
 app.set('callFlowStateMachine', callFlowStateMachine);
 
-// Initialize WebRTC infrastructure with LiveKit
+// Initialize WebRTC infrastructure with LiveKit + SIP
 let roomManager: LiveKitRoomManager | null = null;
+let sipService: LiveKitSIPService | null = null;
+let sipCallFlowManager: SIPCallFlowManager | null = null;
 let mediaBridge: TwilioMediaBridge | null = null;
 
 const livekitUrl = process.env.LIVEKIT_WS_URL;
@@ -107,11 +112,20 @@ const livekitApiKey = process.env.LIVEKIT_API_KEY;
 const livekitApiSecret = process.env.LIVEKIT_API_SECRET;
 
 if (livekitUrl && livekitApiKey && livekitApiSecret) {
-  console.log('🔌 [WEBRTC] Initializing LiveKit WebRTC infrastructure...');
+  console.log('🔌 [WEBRTC] Initializing LiveKit WebRTC + SIP infrastructure...');
   console.log('   LiveKit URL:', livekitUrl);
   
   try {
+    // Initialize LiveKit room manager
     roomManager = new LiveKitRoomManager(livekitUrl, livekitApiKey, livekitApiSecret);
+    
+    // Initialize SIP service
+    sipService = new LiveKitSIPService(livekitUrl, livekitApiKey, livekitApiSecret);
+    
+    // Initialize SIP call flow manager
+    sipCallFlowManager = new SIPCallFlowManager(prisma, roomManager, sipService);
+    
+    // LEGACY: Keep media bridge for backward compatibility (will be deprecated)
     mediaBridge = new TwilioMediaBridge(roomManager);
     
     // CRITICAL: Listen for phone audio and forward to LiveKit
@@ -129,23 +143,33 @@ if (livekitUrl && livekitApiKey && livekitApiSecret) {
     
     // Make available to routes
     app.set('roomManager', roomManager);
+    app.set('sipService', sipService);
+    app.set('sipCallFlowManager', sipCallFlowManager);
     app.set('mediaBridge', mediaBridge);
     
     // Initialize connection to LiveKit (non-blocking)
-    roomManager.initialize().then(() => {
+    Promise.all([
+      roomManager.initialize(),
+      sipService.initialize(),
+      sipCallFlowManager.initialize()
+    ]).then(() => {
       console.log('✅ [WEBRTC] Connected to LiveKit Cloud');
-      console.log('✅ [WEBRTC] Phone call bridge enabled - PSTN calls can connect to WebRTC rooms');
+      console.log('✅ [SIP] SIP service initialized - Phone calls can route via SIP!');
+      console.log('✅ [CALL-FLOW] SIP call flow manager ready');
+      console.log('');
+      console.log('📞 PSTN → Twilio → SIP → LiveKit → Browser ✅');
+      console.log('');
     }).catch((error) => {
-      console.error('❌ [WEBRTC] Failed to connect to LiveKit:', error);
-      console.warn('⚠️ [WEBRTC] Continuing without WebRTC (falling back to Twilio conferences)');
+      console.error('❌ [WEBRTC/SIP] Failed to initialize:', error);
+      console.warn('⚠️ [WEBRTC/SIP] Continuing without SIP (falling back to legacy mode)');
     });
   } catch (error) {
-    console.error('❌ [WEBRTC] Failed to initialize WebRTC infrastructure:', error);
-    console.warn('⚠️ [WEBRTC] Continuing without WebRTC');
+    console.error('❌ [WEBRTC/SIP] Failed to initialize infrastructure:', error);
+    console.warn('⚠️ [WEBRTC/SIP] Continuing without WebRTC/SIP');
   }
 } else {
-  console.log('ℹ️ [WEBRTC] LiveKit not configured - WebRTC features disabled');
-  console.log('   Set LIVEKIT_WS_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET to enable WebRTC');
+  console.log('ℹ️ [WEBRTC/SIP] LiveKit not configured - WebRTC/SIP features disabled');
+  console.log('   Set LIVEKIT_WS_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET to enable');
 }
 
 // Initialize call flow service after WebRTC infrastructure setup
@@ -239,7 +263,8 @@ app.use('/api/webrtc', apiLimiter, webrtcRoutes); // LiveKit token generation an
 app.use('/api/callers', apiLimiter, callerRoutes);
 app.use('/api/episodes', apiLimiter, episodeRoutes);
 app.use('/api/shows', apiLimiter, showRoutes);
-app.use('/api/twilio', twilioWebhookLimiter, twilioRoutes); // Twilio webhooks
+app.use('/api/twilio', twilioWebhookLimiter, twilioRoutes); // Twilio webhooks (legacy)
+app.use('/api/twilio-sip', twilioWebhookLimiter, twilioSipRoutes); // Twilio SIP integration (NEW!)
 app.use('/api/twilio', apiLimiter, twilioPlaybackRoutes); // Twilio conference playback
 // app.use('/api/twilio/media-stream', mediaStreamRoutes); // DISABLED: WebSocket routing needs fixing
 app.use('/api/live-stream', liveStreamRoutes); // Live audio stream for callers on hold
