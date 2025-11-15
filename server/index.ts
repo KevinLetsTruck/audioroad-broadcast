@@ -249,10 +249,10 @@ app.use(cors({
 
 app.use(cookieParser());
 
-// IMPORTANT: LiveKit webhooks need raw body, so exclude that route from JSON parsing
+// IMPORTANT: LiveKit webhooks need raw body, so use raw parser for that route
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/livekit-sip')) {
-    next(); // Skip JSON parsing for LiveKit webhooks
+    express.raw({ type: 'application/webhook+json' })(req, res, next); // Raw body for LiveKit webhooks
   } else {
     express.json({ limit: '10mb' })(req, res, next);
   }

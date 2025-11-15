@@ -17,9 +17,7 @@ const webhookReceiver = new WebhookReceiver(
   process.env.LIVEKIT_API_SECRET!
 );
 
-// CRITICAL: Use express.raw() middleware for this route to get raw body
-// LiveKit needs the raw body to validate the signature
-router.use(express.raw({ type: 'application/webhook+json' }));
+// NOTE: Raw body handling is done in server/index.ts by skipping JSON parsing for this route
 
 /**
  * POST /api/livekit-sip/incoming
