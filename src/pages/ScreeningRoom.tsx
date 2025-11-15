@@ -589,7 +589,7 @@ export default function ScreeningRoom() {
         }
         
         // Join the lobby room where the SIP caller is waiting
-        await broadcast.joinRoomWebRTC('lobby', 'Screener');
+        await broadcast.joinLiveRoomWebRTC('lobby', 'Screener');
         console.log('✅ [SCREENING] Joined lobby room - should now hear SIP caller!');
         
       } catch (error) {
