@@ -589,9 +589,9 @@ export default function ScreeningRoom() {
         }
         
         // Join the exact lobby room where the SIP caller is waiting
-        // Use webrtcService directly to join specific room (not episode-based room)
+        // Use new joinRoomByName method to join non-episode-specific rooms
         const roomName = 'lobby';
-        await broadcast.webrtcService.joinRoom(roomName, `screener-${Date.now()}`, 'Screener');
+        await broadcast.webrtcService!.joinRoomByName(roomName, `screener-${Date.now()}`, 'Screener');
         console.log('✅ [SCREENING] Joined lobby room - should now hear SIP caller!');
         
       } catch (error) {

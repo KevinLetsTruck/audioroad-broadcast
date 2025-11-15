@@ -142,6 +142,60 @@ export class WebRTCService {
   }
 
   /**
+   * Join any room by exact name (for SIP lobby, etc.)
+   */
+  async joinRoomByName(roomName: string, participantId: string, displayName: string): Promise<void> {
+    if (!this.client) {
+      throw new Error('WebRTC client not initialized');
+    }
+
+    if (!this.localStream) {
+      throw new Error('No local audio stream available');
+    }
+
+    console.log(`🔌 [WEBRTC] Joining room by name: ${roomName}`);
+
+    try {
+      // Get access token from backend
+      const response = await fetch('/api/webrtc/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomName,
+          participantName: displayName,
+          participantId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get LiveKit token');
+      }
+
+      const { token } = await response.json();
+
+      // Connect to LiveKit room
+      await this.client.connect(token);
+
+      // Publish local audio
+      const audioTrack = this.localStream.getAudioTracks()[0];
+      await this.client.publishAudio(audioTrack);
+
+      this.currentRoom = {
+        id: roomName,
+        type: 'lobby' as any,
+        episodeId: '' // Not episode-specific
+      };
+
+      this.emit('room-joined', this.currentRoom);
+      console.log('✅ [WEBRTC] Joined room:', roomName);
+
+    } catch (error) {
+      console.error('❌ [WEBRTC] Failed to join room:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Join screening room as screener
    */
   async joinScreeningRoom(
