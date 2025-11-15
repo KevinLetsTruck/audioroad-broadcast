@@ -130,12 +130,24 @@ router.post('/forward-to-phone', async (req: Request, res: Response) => {
     }
 
     // Find callSid for this room
-    const callSid = mediaBridge.getCallSidForRoom(roomName);
+    let callSid = mediaBridge.getCallSidForRoom(roomName);
+
+    // FALLBACK: If not found, try to find ANY active call and send audio to it
+    // This handles cases where room routing is broken
+    if (!callSid) {
+      const allStreams = mediaBridge.getActiveStreams();
+      if (allStreams.size > 0) {
+        callSid = Array.from(allStreams.keys())[0];
+        console.warn(`⚠️ [BROWSER→PHONE] Room mismatch - using fallback callSid: ${callSid}`);
+        console.warn(`   Requested room: ${roomName}`);
+        console.warn(`   Actual room: ${allStreams.get(callSid)?.roomId}`);
+      }
+    }
 
     if (!callSid) {
-      // No phone call in this room
+      // No phone call at all
       if (audioPacketCount === 1) {
-        console.log(`ℹ️ [BROWSER→PHONE] No caller in room: ${roomName}`);
+        console.log(`ℹ️ [BROWSER→PHONE] No caller in any room`);
       }
       return res.json({ status: 'no-caller' });
     }
