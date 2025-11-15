@@ -429,8 +429,16 @@ export class TwilioMediaBridge extends EventEmitter {
    * Find callSid for a given room (for forwarding browser audio to phone)
    */
   getCallSidForRoom(roomId: string): string | null {
+    console.log(`🔍 [MEDIA-BRIDGE] Looking for call in room: ${roomId}`);
+    console.log(`   Active streams: ${this.activeStreams.size}`);
+    
     for (const [callSid, connection] of this.activeStreams.entries()) {
+      console.log(`   Checking: ${callSid} in room ${connection.roomId}`);
+      console.log(`   Match: ${connection.roomId === roomId}`);
+      console.log(`   Comparison: "${connection.roomId}" === "${roomId}"`);
+      
       if (connection.roomId === roomId) {
+        console.log(`✅ [MEDIA-BRIDGE] Found call ${callSid} for room ${roomId}`);
         return callSid;
       }
     }
