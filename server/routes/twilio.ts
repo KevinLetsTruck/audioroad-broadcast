@@ -946,6 +946,7 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     
     if (useWebRTC) {
       // Route to Media Stream for WebRTC bridge
+      console.log('🎉🎉🎉 [WELCOME-MESSAGE] USING <CONNECT> FOR BIDIRECTIONAL AUDIO 🎉🎉🎉');
       console.log('🔌 [WELCOME-MESSAGE] Routing to Media Stream (WebRTC bridge) - BIDIRECTIONAL');
       
       // CRITICAL: Use <Connect><Stream> for BIDIRECTIONAL audio (not <Start><Stream>)
