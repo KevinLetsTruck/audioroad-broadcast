@@ -1,7 +1,7 @@
 # Dockerfile for LiveKit SIP Service
 # This bridges phone calls from Twilio into LiveKit rooms
 
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install git and build dependencies
 RUN apk add --no-cache git build-base
