@@ -588,8 +588,10 @@ export default function ScreeningRoom() {
           console.log('✅ [SCREENING] LiveKit initialized');
         }
         
-        // Join the lobby room where the SIP caller is waiting
-        await broadcast.joinLiveRoomWebRTC('lobby', 'Screener');
+        // Join the exact lobby room where the SIP caller is waiting
+        // Use webrtcService directly to join specific room (not episode-based room)
+        const roomName = 'lobby';
+        await broadcast.webrtcService.joinRoom(roomName, `screener-${Date.now()}`, 'Screener');
         console.log('✅ [SCREENING] Joined lobby room - should now hear SIP caller!');
         
       } catch (error) {
