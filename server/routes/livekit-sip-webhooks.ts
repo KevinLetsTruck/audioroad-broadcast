@@ -129,7 +129,7 @@ router.post('/participant-left', async (req: Request, res: Response) => {
     });
     
     if (!call) {
-      console.warn(`⚠️ [LIVEKIT-SIP-WEBHOOK] Call not found: ${call_id}`);
+      console.warn(`⚠️ [LIVEKIT-SIP-WEBHOOK] Call not found: ${participant?.sid}`);
       return res.sendStatus(200);
     }
     
