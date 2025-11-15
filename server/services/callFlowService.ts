@@ -109,48 +109,59 @@ export class CallFlowService {
   async startScreening(callId: string, screenerUserId?: string): Promise<TransitionResult> {
     console.log(`🎬 [CALL-FLOW] startScreening() called for call: ${callId}`);
     
-    const call = await this.updateCall(callId, {
-      status: 'screening',
-      screenedAt: new Date(),
-      screenerUserId: screenerUserId ?? undefined,
-      participantState: 'screening',
-    });
+    try {
+      const call = await this.updateCall(callId, {
+        status: 'screening',
+        screenedAt: new Date(),
+        screenerUserId: screenerUserId ?? undefined,
+        participantState: 'screening',
+      });
 
-    console.log(`📝 [CALL-FLOW] Call updated: status=${call.status}, twilioCallSid=${call.twilioCallSid}`);
+      console.log(`📝 [CALL-FLOW] Call updated: status=${call.status}, twilioCallSid=${call.twilioCallSid}`);
 
-    const screeningRoom = this.buildScreeningRoom(call.episodeId, call.id);
-    console.log(`🏠 [CALL-FLOW] Screening room: ${screeningRoom}`);
-    
-    const session = await this.transitionSession(call, {
-      targetPhase: 'screening',
-      currentRoom: screeningRoom,
-      sendMuted: false,
-      recvMuted: false,
-    });
+      const screeningRoom = this.buildScreeningRoom(call.episodeId, call.id);
+      console.log(`🏠 [CALL-FLOW] Screening room: ${screeningRoom}`);
+      
+      const session = await this.transitionSession(call, {
+        targetPhase: 'screening',
+        currentRoom: screeningRoom,
+        sendMuted: false,
+        recvMuted: false,
+      });
 
-    console.log(`📊 [CALL-FLOW] Session created: phase=${session.phase}, room=${session.currentRoom}`);
+      console.log(`📊 [CALL-FLOW] Session created: phase=${session.phase}, room=${session.currentRoom}`);
 
-    // Move the Twilio media stream to the screening room
-    console.log(`🔄 [CALL-FLOW] About to move stream...`);
-    console.log(`   mediaBridge exists: ${!!this.mediaBridge}`);
-    console.log(`   twilioCallSid: ${call.twilioCallSid}`);
-    
-    if (this.mediaBridge && call.twilioCallSid) {
-      try {
-        console.log(`🚀 [CALL-FLOW] Calling moveStreamToRoom(${call.twilioCallSid}, ${screeningRoom})`);
-        await this.mediaBridge.moveStreamToRoom(call.twilioCallSid, screeningRoom);
-        console.log(`✅ [CALL-FLOW] Moved call ${callId} to screening room: ${screeningRoom}`);
-      } catch (error) {
-        console.error(`❌ [CALL-FLOW] Failed to move stream to screening room:`, error);
-        console.error(`   Error details:`, error);
+      // Move the Twilio media stream to the screening room
+      console.log(`🔄 [CALL-FLOW] About to move stream...`);
+      console.log(`   mediaBridge exists: ${!!this.mediaBridge}`);
+      console.log(`   twilioCallSid: ${call.twilioCallSid}`);
+      
+      if (this.mediaBridge && call.twilioCallSid) {
+        try {
+          console.log(`🚀 [CALL-FLOW] Calling moveStreamToRoom(${call.twilioCallSid}, ${screeningRoom})`);
+          await this.mediaBridge.moveStreamToRoom(call.twilioCallSid, screeningRoom);
+          console.log(`✅ [CALL-FLOW] Moved call ${callId} to screening room: ${screeningRoom}`);
+        } catch (error) {
+          console.error(`❌ [CALL-FLOW] Failed to move stream to screening room:`, error);
+          console.error(`   Error details:`, error);
+        }
+      } else {
+        console.warn(`⚠️ [CALL-FLOW] Cannot move stream - mediaBridge: ${!!this.mediaBridge}, twilioCallSid: ${call.twilioCallSid}`);
       }
-    } else {
-      console.warn(`⚠️ [CALL-FLOW] Cannot move stream - mediaBridge: ${!!this.mediaBridge}, twilioCallSid: ${call.twilioCallSid}`);
+
+      this.emitCallUpdated(call, session, { events: ['call:screening'] });
+
+      return { call, session };
+      
+    } catch (error) {
+      console.error(`❌ [CALL-FLOW] startScreening() FAILED for call ${callId}:`, error);
+      console.error(`   Error type: ${error instanceof Error ? error.constructor.name : typeof error}`);
+      console.error(`   Error message: ${error instanceof Error ? error.message : String(error)}`);
+      if (error instanceof Error && error.stack) {
+        console.error(`   Stack trace:`, error.stack);
+      }
+      throw error; // Re-throw so the route handler can catch it
     }
-
-    this.emitCallUpdated(call, session, { events: ['call:screening'] });
-
-    return { call, session };
   }
 
   async approveCall(callId: string, payload: ApproveCallPayload = {}): Promise<TransitionResult> {
