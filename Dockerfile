@@ -25,8 +25,7 @@ ARG DATABASE_URL
 ENV VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY
 ENV DATABASE_URL=$DATABASE_URL
 
-# CRITICAL: Run migrations BEFORE building so Prisma has correct schema
-RUN npx prisma migrate deploy
+# Generate Prisma client (migrations will run at startup, not build time)
 RUN npx prisma generate
 
 # Build application with updated Prisma client
