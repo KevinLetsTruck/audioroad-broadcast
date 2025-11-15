@@ -455,13 +455,6 @@ export class TwilioMediaBridge extends EventEmitter {
     
     return null;
   }
-
-  /**
-   * Get all active streams (for fallback audio routing)
-   */
-  getActiveStreams(): Map<string, MediaStreamConnection> {
-    return this.activeStreams;
-  }
 }
 
 export default TwilioMediaBridge;
