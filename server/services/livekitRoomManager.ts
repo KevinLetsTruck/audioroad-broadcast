@@ -41,8 +41,9 @@ export class LiveKitRoomManager extends EventEmitter {
   async initialize(): Promise<void> {
     console.log('✅ [LIVEKIT] Connected to LiveKit Cloud:', this.wsUrl);
     
-    // Create default lobby room
-    await this.ensureRoomExists('lobby', 10); // 10 max participants
+    // NOTE: Lobby room will be created on-demand when first call arrives
+    // Commenting out pre-creation to avoid startup errors with API keys
+    // await this.ensureRoomExists('lobby', 10);
   }
 
   /**
