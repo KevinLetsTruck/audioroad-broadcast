@@ -302,13 +302,15 @@ export class TwilioMediaBridge extends EventEmitter {
         pcmInt16_8k[i] = pcmInt16_48k[i * downsampleRatio];
       }
       
-      // Log first outgoing packet to verify downsampling
-      if (connection.stats.packetsSent === 0) {
-        console.log(`🎤 [MEDIA-BRIDGE] First outgoing audio packet:`);
+      // Log first 3 outgoing packets to verify audio levels
+      if (connection.stats.packetsSent < 3) {
+        console.log(`🎤 [MEDIA-BRIDGE] Outgoing audio packet #${connection.stats.packetsSent + 1}:`);
         console.log(`   Input: ${pcmInt16_48k.length} samples at 48kHz`);
         console.log(`   Output: ${pcmInt16_8k.length} samples at 8kHz (ratio: ${downsampleRatio})`);
         console.log(`   First 5 samples 48k: [${Array.from(pcmInt16_48k.slice(0, 5)).join(', ')}]`);
         console.log(`   First 5 samples 8k: [${Array.from(pcmInt16_8k.slice(0, 5)).join(', ')}]`);
+        console.log(`   Max value 48k: ${Math.max(...Array.from(pcmInt16_48k))}`);
+        console.log(`   Min value 48k: ${Math.min(...Array.from(pcmInt16_48k))}`);
       }
       
       // Now encode 8kHz PCM to 8kHz muLaw
