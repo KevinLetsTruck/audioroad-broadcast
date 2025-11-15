@@ -946,16 +946,16 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
     
     if (useWebRTC) {
       // Route to Media Stream for WebRTC bridge
-      console.log('🔌 [WELCOME-MESSAGE] Routing to Media Stream (WebRTC bridge)');
+      console.log('🔌 [WELCOME-MESSAGE] Routing to Media Stream (WebRTC bridge) - BIDIRECTIONAL');
       
-      const start = twiml.start();
-      start.stream({
-        url: `wss://${req.get('host')}/api/twilio/media-stream/stream`,
-        track: 'both_tracks' // CRITICAL: Enable bidirectional audio (phone ↔ server)
+      // CRITICAL: Use <Connect><Stream> for BIDIRECTIONAL audio (not <Start><Stream>)
+      // <Start> = unidirectional (receive only)
+      // <Connect> = bidirectional (send and receive)
+      const connect = twiml.connect();
+      connect.stream({
+        url: `wss://${req.get('host')}/api/twilio/media-stream/stream`
+        // Note: track parameter not needed with <Connect> - it's always bidirectional
       });
-      
-      // Keep call alive (caller will be in Media Stream)
-      twiml.pause({ length: 3600 }); // 1 hour
       
     } else {
       // Route to SCREENING conference (original Twilio flow)
