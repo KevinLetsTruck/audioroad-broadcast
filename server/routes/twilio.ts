@@ -951,7 +951,7 @@ router.post('/welcome-message', async (req: Request, res: Response) => {
       const start = twiml.start();
       start.stream({
         url: `wss://${req.get('host')}/api/twilio/media-stream/stream`,
-        track: 'inbound_track'
+        track: 'both_tracks' // CRITICAL: Enable bidirectional audio (phone ↔ server)
       });
       
       // Keep call alive (caller will be in Media Stream)
