@@ -12,29 +12,43 @@ const prisma = new PrismaClient();
 
 /**
  * POST /api/livekit-sip/incoming
- * Called by LiveKit when a SIP call comes in
- * This creates the call record and emits Socket.IO events
+ * Called by LiveKit when room events happen (participant_joined, etc.)
+ * We filter for SIP participants joining the lobby room
  */
 router.post('/incoming', async (req: Request, res: Response) => {
   try {
-    const { call_id, from_number, to_number, trunk_id } = req.body;
+    const { event, participant, room } = req.body;
     
-    console.log('📞 [LIVEKIT-SIP-WEBHOOK] Incoming SIP call from LiveKit:');
-    console.log(`   LiveKit Call ID: ${call_id}`);
-    console.log(`   From: ${from_number}`);
-    console.log(`   To: ${to_number}`);
-    console.log(`   Trunk: ${trunk_id}`);
+    console.log('📞 [LIVEKIT-WEBHOOK] Event from LiveKit:', event);
+    console.log(`   Room: ${room?.name}`);
+    console.log(`   Participant: ${participant?.identity}`);
+    
+    // Only handle participant_joined events in lobby room
+    if (event !== 'participant_joined' || room?.name !== 'lobby') {
+      return res.sendStatus(200); // Acknowledge but ignore
+    }
+    
+    // Check if this is a SIP participant (they have phone number in metadata)
+    const phoneNumber = participant?.attributes?.phoneNumber || participant?.identity;
+    
+    console.log('📞 [LIVEKIT-SIP-WEBHOOK] SIP participant joined lobby:');
+    console.log(`   Identity: ${participant.identity}`);
+    console.log(`   Phone: ${phoneNumber}`);
+    
+    // Extract phone number (might be in different formats)
+    // SIP participants from Twilio usually have caller ID in identity or metadata
+    const callerPhoneNumber = phoneNumber || `+${participant.identity}`;
     
     // Find or create caller
     let caller = await prisma.caller.findFirst({
-      where: { phoneNumber: from_number }
+      where: { phoneNumber: callerPhoneNumber }
     });
     
     if (!caller) {
       caller = await prisma.caller.create({
         data: {
-          phoneNumber: from_number,
-          name: `Caller ${from_number.slice(-4)}`,
+          phoneNumber: callerPhoneNumber,
+          name: `Caller ${callerPhoneNumber.slice(-4)}`,
           firstCallDate: new Date(),
           lastCallDate: new Date()
         }
@@ -49,26 +63,32 @@ router.post('/incoming', async (req: Request, res: Response) => {
     });
     
     if (!activeEpisode) {
-      console.log('⚠️ [LIVEKIT-SIP-WEBHOOK] No active episode - rejecting call');
-      
-      // Tell LiveKit to reject the call (no active show)
-      return res.json({
-        action: 'reject',
-        message: 'No live show at the moment'
-      });
+      console.log('⚠️ [LIVEKIT-SIP-WEBHOOK] No active episode');
+      return res.sendStatus(200); // Acknowledge but don't create call
     }
     
-    // Create call record
-    const call = await prisma.call.create({
-      data: {
-        episodeId: activeEpisode.id,
-        callerId: caller.id,
-        twilioCallSid: call_id, // Use LiveKit call ID
-        status: 'queued'
+    // Check if call record already exists for this participant
+    let call = await prisma.call.findFirst({
+      where: {
+        twilioCallSid: participant.sid,
+        status: { in: ['queued', 'screening', 'approved', 'on-hold', 'on-air'] }
       }
     });
     
-    console.log(`✅ [LIVEKIT-SIP-WEBHOOK] Call record created: ${call.id}`);
+    if (!call) {
+      // Create new call record
+      call = await prisma.call.create({
+        data: {
+          episodeId: activeEpisode.id,
+          callerId: caller.id,
+          twilioCallSid: participant.sid, // Use LiveKit participant SID
+          status: 'queued'
+        }
+      });
+      console.log(`✅ [LIVEKIT-SIP-WEBHOOK] Call record created: ${call.id}`);
+    } else {
+      console.log(`ℹ️ [LIVEKIT-SIP-WEBHOOK] Call already exists: ${call.id}`);
+    }
     
     // Emit Socket.IO event to notify screening UI
     const io = req.app.get('io');
@@ -83,40 +103,29 @@ router.post('/incoming', async (req: Request, res: Response) => {
       console.log(`📢 [LIVEKIT-SIP-WEBHOOK] Socket.IO event emitted to episode:${activeEpisode.id}`);
     }
     
-    // Tell LiveKit to route the call to the lobby room
-    // The screener will pick it up from there
-    return res.json({
-      action: 'accept',
-      room_name: 'lobby',
-      participant_identity: call.id,
-      participant_name: caller.name || `Caller ${from_number.slice(-4)}`
-    });
+    // Acknowledge the webhook
+    return res.sendStatus(200);
     
   } catch (error: any) {
     console.error('❌ [LIVEKIT-SIP-WEBHOOK] Error:', error);
-    
-    // Reject the call on error
-    return res.status(500).json({
-      action: 'reject',
-      message: 'Internal server error'
-    });
+    return res.sendStatus(500);
   }
 });
 
 /**
- * POST /api/livekit-sip/ended
- * Called by LiveKit when a SIP call ends
+ * Handle participant_left events (when call ends)
  */
-router.post('/ended', async (req: Request, res: Response) => {
+router.post('/participant-left', async (req: Request, res: Response) => {
   try {
-    const { call_id, duration } = req.body;
+    const { participant, room } = req.body;
     
-    console.log(`📴 [LIVEKIT-SIP-WEBHOOK] Call ended: ${call_id}`);
-    console.log(`   Duration: ${duration}s`);
+    console.log(`📴 [LIVEKIT-SIP-WEBHOOK] Participant left`);
+    console.log(`   Participant: ${participant?.identity}`);
+    console.log(`   Room: ${room?.name}`);
     
-    // Find call by LiveKit call ID (stored in twilioCallSid)
+    // Find call by LiveKit participant SID
     const call = await prisma.call.findFirst({
-      where: { twilioCallSid: call_id }
+      where: { twilioCallSid: participant?.sid }
     });
     
     if (!call) {
