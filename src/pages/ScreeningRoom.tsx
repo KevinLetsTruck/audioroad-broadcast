@@ -329,12 +329,27 @@ export default function ScreeningRoom() {
     try {
       const response = await fetch(`/api/calls?episodeId=${activeEpisode.id}`);
       const data = await response.json();
-      const activeCalls = data.filter((call: any) => 
-        (call.status === 'queued' || call.status === 'screening') && 
-        !call.endedAt && 
-        call.status !== 'completed' && 
-        call.status !== 'rejected'
-      );
+      
+      // CRITICAL: Only show recent calls (last 30 minutes) to avoid showing old test calls
+      const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
+      
+      const activeCalls = data.filter((call: any) => {
+        const callTime = new Date(call.incomingAt).getTime();
+        const isRecent = callTime > thirtyMinutesAgo;
+        
+        const isActive = (call.status === 'queued' || call.status === 'screening') && 
+          !call.endedAt && 
+          call.status !== 'completed' && 
+          call.status !== 'rejected';
+        
+        if (!isRecent) {
+          console.log(`⏰ [FILTER] Skipping old call ${call.id} from ${new Date(call.incomingAt).toLocaleTimeString()}`);
+        }
+        
+        return isActive && isRecent;
+      });
+      
+      console.log(`📞 [FETCH] Found ${activeCalls.length} active recent calls (filtered ${data.length - activeCalls.length} old calls)`);
       setIncomingCalls(activeCalls);
     } catch (error) {
       console.error('Error fetching queued calls:', error);
@@ -496,6 +511,13 @@ export default function ScreeningRoom() {
 
   const handlePickUpCall = async (call: any) => {
     console.log('📞 Picking up call:', call.id);
+    console.log('🔍 [PICKUP] Call details:');
+    console.log(`   ID: ${call.id}`);
+    console.log(`   Episode ID: ${call.episodeId}`);
+    console.log(`   Twilio Call SID: ${call.twilioCallSid}`);
+    console.log(`   Status: ${call.status}`);
+    console.log(`   Incoming at: ${new Date(call.incomingAt).toLocaleTimeString()}`);
+    console.log(`   Expected screening room: screening-${call.episodeId}-${call.id}`);
     
     // Check if using WebRTC mode
     const useWebRTC = broadcast.useWebRTC;
@@ -577,10 +599,20 @@ export default function ScreeningRoom() {
           console.log('✅ [WEBRTC] LiveKit initialized');
         }
         
-        // Join screening room
+        // CRITICAL: Re-fetch the call from database to get fresh data
+        // This prevents using stale call data from cached list
+        console.log(`🔄 [WEBRTC] Re-fetching fresh call data for ${call.id}...`);
+        const freshCallRes = await fetch(`/api/calls/${call.id}`);
+        if (!freshCallRes.ok) {
+          throw new Error('Call not found - may have been ended');
+        }
+        const freshCall = await freshCallRes.json();
+        console.log(`✅ [WEBRTC] Fresh call data: episodeId=${freshCall.episodeId}, callId=${freshCall.id}`);
+        
+        // Join screening room with FRESH data
         await broadcast.joinScreeningRoomWebRTC(
-          call.episodeId,
-          call.id,
+          freshCall.episodeId,
+          freshCall.id,
           'Screener'
         );
         console.log('✅ [WEBRTC] Joined screening room');
