@@ -1,31 +1,7 @@
 # Dockerfile for LiveKit SIP Service
-# This bridges phone calls from Twilio into LiveKit rooms
+# Uses LiveKit's official pre-built image
 
-FROM golang:alpine AS builder
-
-# Install git and build dependencies
-RUN apk add --no-cache git build-base
-
-# Set working directory
-WORKDIR /workspace
-
-# Clone LiveKit SIP repository
-RUN git clone https://github.com/livekit/sip.git .
-
-# Download dependencies
-RUN go mod download
-
-# Build the SIP service
-RUN go build -o livekit-sip .
-
-# Runtime stage
-FROM alpine:latest
-
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates
-
-# Copy binary from builder
-COPY --from=builder /workspace/livekit-sip /usr/local/bin/livekit-sip
+FROM livekit/sip:latest
 
 # Expose SIP ports
 # 5060: SIP signaling (TCP/UDP)
@@ -33,10 +9,16 @@ COPY --from=builder /workspace/livekit-sip /usr/local/bin/livekit-sip
 EXPOSE 5060/tcp 5060/udp
 EXPOSE 10000-20000/udp
 
-# Create config directory
-RUN mkdir -p /etc/livekit
+# Health check port
+EXPOSE 8080
+
+# The official image already has the binary
+# Environment variables will be provided by Railway:
+# - LIVEKIT_API_KEY
+# - LIVEKIT_API_SECRET  
+# - LIVEKIT_WS_URL
+# - REDIS_URL
+# - etc.
 
 # Run the SIP service
-ENTRYPOINT ["/usr/local/bin/livekit-sip"]
-CMD ["--config", "/etc/livekit/config.yaml"]
-
+CMD ["livekit-sip"]
