@@ -16,7 +16,7 @@ RUN git clone https://github.com/livekit/sip.git .
 RUN go mod download
 
 # Build the SIP service
-RUN go build -o livekit-sip ./cmd/server
+RUN go build -o livekit-sip .
 
 # Runtime stage
 FROM alpine:latest
