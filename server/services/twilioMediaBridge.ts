@@ -291,12 +291,38 @@ export class TwilioMediaBridge extends EventEmitter {
     }
 
     try {
-      // Convert Buffer to Int16Array (48kHz PCM from browser)
-      const pcmInt16_48k = new Int16Array(
-        pcmAudioData.buffer,
-        pcmAudioData.byteOffset,
-        pcmAudioData.length / 2
-      );
+      // TEMPORARY TEST: Generate a 440Hz test tone instead of using browser audio
+      // This will prove if the Twilio audio path works at all
+      const USE_TEST_TONE = true;
+      
+      let pcmInt16_48k: Int16Array;
+      
+      if (USE_TEST_TONE) {
+        // Generate 440Hz sine wave at 48kHz
+        const sampleRate = 48000;
+        const frequency = 440; // A4 note
+        const amplitude = 10000; // Loud but not clipping
+        const numSamples = 4096;
+        
+        pcmInt16_48k = new Int16Array(numSamples);
+        for (let i = 0; i < numSamples; i++) {
+          const t = i / sampleRate;
+          const sample = Math.sin(2 * Math.PI * frequency * t) * amplitude;
+          pcmInt16_48k[i] = Math.round(sample);
+        }
+        
+        if (connection.stats.packetsSent === 0) {
+          console.log(`🔊 [TEST-TONE] Sending 440Hz test tone to phone instead of browser audio`);
+          console.log(`   This will prove if Twilio audio playback works`);
+        }
+      } else {
+        // Convert Buffer to Int16Array (48kHz PCM from browser)
+        pcmInt16_48k = new Int16Array(
+          pcmAudioData.buffer,
+          pcmAudioData.byteOffset,
+          pcmAudioData.length / 2
+        );
+      }
       
       // CRITICAL: Downsample from 48kHz to 8kHz (6:1 ratio)
       // Twilio MUST receive 8kHz audio or it will sound garbled
