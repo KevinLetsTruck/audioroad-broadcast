@@ -576,29 +576,52 @@ export default function ScreeningRoom() {
     // Refresh queues
     fetchQueuedCalls();
     
-    // Connect screener's audio using Twilio Device (proven reliable)
-    console.log('📞 [SCREENING] Connecting to call via Twilio Device...');
-    
-    // Ensure Twilio Device is initialized
-    if (!broadcast.twilioDevice) {
+    // Connect based on mode
+    if (useWebRTC) {
+      // WebRTC/SIP mode: Join the LiveKit lobby room where the SIP caller is
+      console.log('📞 [SCREENING] Connecting via LiveKit WebRTC to lobby room...');
+      
       try {
-        await broadcast.initializeTwilio(`screener-${Date.now()}`);
-        console.log('✅ [SCREENING] Twilio Device initialized');
-      } catch (initError) {
-        console.error('❌ [SCREENING] Failed to initialize Twilio Device:', initError);
-        alert('Failed to initialize phone system. Please refresh and try again.');
+        // Initialize WebRTC if needed
+        if (!broadcast.webrtcService || !broadcast.webrtcService.isConnected()) {
+          await broadcast.initializeWebRTC();
+          console.log('✅ [SCREENING] LiveKit initialized');
+        }
+        
+        // Join the lobby room where the SIP caller is waiting
+        await broadcast.joinRoomWebRTC('lobby', 'Screener');
+        console.log('✅ [SCREENING] Joined lobby room - should now hear SIP caller!');
+        
+      } catch (error) {
+        console.error('❌ [SCREENING] Failed to join LiveKit room:', error);
+        alert('Failed to join call room. Check browser console.');
         setActiveCall(null);
         return;
       }
-    }
-    
-    try {
-      // Connect to conference where the caller is (screening conference)
-      const callerName = call.caller?.name || 'Caller';
-      console.log(`📞 [SCREENING] Connecting to screening conference for call ${call.id}...`);
+    } else {
+      // Twilio Device mode (legacy)
+      console.log('📞 [SCREENING] Connecting to call via Twilio Device...');
       
-      await broadcast.connectToCall(call.id, callerName, activeEpisode.id, 'screener');
-      console.log('✅ [SCREENING] Connected to phone via Twilio Device!');
+      // Ensure Twilio Device is initialized
+      if (!broadcast.twilioDevice) {
+        try {
+          await broadcast.initializeTwilio(`screener-${Date.now()}`);
+          console.log('✅ [SCREENING] Twilio Device initialized');
+        } catch (initError) {
+          console.error('❌ [SCREENING] Failed to initialize Twilio Device:', initError);
+          alert('Failed to initialize phone system. Please refresh and try again.');
+          setActiveCall(null);
+          return;
+        }
+      }
+      
+      try {
+        // Connect to conference where the caller is (screening conference)
+        const callerName = call.caller?.name || 'Caller';
+        console.log(`📞 [SCREENING] Connecting to screening conference for call ${call.id}...`);
+        
+        await broadcast.connectToCall(call.id, callerName, activeEpisode.id, 'screener');
+        console.log('✅ [SCREENING] Connected to phone via Twilio Device!');
       
       // Wait for Twilio to fully establish connection
       await new Promise(resolve => setTimeout(resolve, 1500));
@@ -617,18 +640,19 @@ export default function ScreeningRoom() {
         console.warn('⚠️ [SCREENING] Unmute error:', unmuteError);
       }
       
-      // Verify connection
-      await new Promise(resolve => setTimeout(resolve, 500));
-      console.log('🎉 [SCREENING] Connection complete!');
-      console.log('   You should hear the caller now');
-      console.log('   Caller should hear you');
-      
-    } catch (error) {
-      console.error('❌ [SCREENING] Failed to connect:', error);
-      alert(`Failed to connect: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      setActiveCall(null);
-      return;
-    }
+        // Verify connection
+        await new Promise(resolve => setTimeout(resolve, 500));
+        console.log('🎉 [SCREENING] Connection complete!');
+        console.log('   You should hear the caller now');
+        console.log('   Caller should hear you');
+        
+      } catch (error) {
+        console.error('❌ [SCREENING] Failed to connect:', error);
+        alert(`Failed to connect: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setActiveCall(null);
+        return;
+      }
+    } // End of else (Twilio Device mode)
     
     // Legacy Twilio-only flow (kept for reference, but hybrid approach above is used)
     if (false) {
