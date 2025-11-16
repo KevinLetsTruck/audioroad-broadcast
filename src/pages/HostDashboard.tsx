@@ -11,7 +11,10 @@ export default function HostDashboard() {
   
   const [activeEpisode, setActiveEpisode] = useState<any>(null);
   const [isLive, setIsLive] = useState(false);
-  const [isConnectedToLiveRoom, setIsConnectedToLiveRoom] = useState(false);
+  
+  // Check actual WebRTC connection instead of local state
+  const [localRoomState, setLocalRoomState] = useState(false);
+  const isConnectedToLiveRoom = broadcast.webrtcService?.isInRoom() || localRoomState;
   
   const [activeTab, setActiveTab] = useState<'calls' | 'documents' | 'announcements' | 'history'>('calls');
   const [allDocuments, setAllDocuments] = useState<any[]>([]);
@@ -290,7 +293,7 @@ export default function HostDashboard() {
       // Join live room
       await broadcast.joinLiveRoomWebRTC(activeEpisode.id, 'Host');
       
-      setIsConnectedToLiveRoom(true);
+      setLocalRoomState(true);
       console.log('✅ [JOIN-ROOM] Connected to live room - can now talk with guests/approved callers');
       
     } catch (error) {
@@ -306,7 +309,7 @@ export default function HostDashboard() {
     try {
       console.log('📴 [LEAVE-ROOM] Leaving live room...');
       await broadcast.leaveRoomWebRTC();
-      setIsConnectedToLiveRoom(false);
+      setLocalRoomState(false);
       console.log('✅ [LEAVE-ROOM] Left live room');
     } catch (error) {
       console.error('❌ [LEAVE-ROOM] Failed:', error);
@@ -342,7 +345,7 @@ export default function HostDashboard() {
             console.log('✅ [WEBRTC] Connected to LiveKit');
             
             await broadcast.joinLiveRoomWebRTC(activeEpisode.id, 'Host');
-            setIsConnectedToLiveRoom(true);
+            setLocalRoomState(true);
             console.log('✅ [WEBRTC] Joined live room');
           } catch (webrtcError) {
             console.error('❌ [WEBRTC] Failed:', webrtcError);
@@ -677,7 +680,7 @@ export default function HostDashboard() {
       await response.json();
       setActiveEpisode(null);
       setIsLive(false);
-      setIsConnectedToLiveRoom(false);
+      setLocalRoomState(false);
       
       // Step 4: Update global broadcast state so Broadcast Control knows!
       broadcast.setState({
