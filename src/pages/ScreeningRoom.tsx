@@ -552,17 +552,32 @@ export default function ScreeningRoom() {
       }
     }
     
-    // Update call status to 'screening' via API (moves caller to screening room)
-    try {
-      await fetch(`/api/screening/${call.id}/pickup`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ screenerId: 'screener-current' })
-      });
-      console.log('✅ Call moved to screening room');
-    } catch (error) {
-      console.error('⚠️ Error updating call status:', error);
-      // Continue anyway
+    // Update call status to 'screening' via API 
+    // For SIP calls, skip the stream move (caller is already in LiveKit)
+    if (!isSIPCall) {
+      try {
+        await fetch(`/api/screening/${call.id}/pickup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ screenerId: 'screener-current' })
+        });
+        console.log('✅ Call moved to screening room');
+      } catch (error) {
+        console.error('⚠️ Error updating call status:', error);
+        // Continue anyway
+      }
+    } else {
+      console.log('📞 SIP call - skipping backend stream move (caller already in LiveKit lobby)');
+      // Just update the call status in database
+      try {
+        await fetch(`/api/calls/${call.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'screening' })
+        });
+      } catch (error) {
+        console.error('⚠️ Error updating call status:', error);
+      }
     }
     
     // Set active call first
