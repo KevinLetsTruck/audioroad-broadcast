@@ -63,11 +63,21 @@ router.post('/incoming', async (req: Request, res: Response) => {
       return res.sendStatus(200); // Acknowledge but ignore
     }
     
+    // CRITICAL: Only process SIP participants (identity starts with "sip_")
+    // Screeners/hosts joining lobby will have identities like "screener-123456"
+    const participantIdentity = event.participant?.identity || '';
+    const isSIPParticipant = participantIdentity.startsWith('sip_');
+    
+    if (!isSIPParticipant) {
+      console.log(`ℹ️ [LIVEKIT-SIP-WEBHOOK] Non-SIP participant joined lobby (${participantIdentity}), ignoring`);
+      return res.sendStatus(200);
+    }
+    
     // Check if this is a SIP participant (they have phone number in metadata)
     const phoneNumber = event.participant?.attributes?.phoneNumber || event.participant?.identity;
     
     console.log('📞 [LIVEKIT-SIP-WEBHOOK] SIP participant joined lobby:');
-    console.log(`   Identity: ${event.participant?.identity}`);
+    console.log(`   Identity: ${participantIdentity}`);
     console.log(`   Phone: ${phoneNumber}`);
     
     // Extract phone number (might be in different formats)
