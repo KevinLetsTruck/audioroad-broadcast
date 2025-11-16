@@ -608,6 +608,11 @@ export default function ScreeningRoom() {
           console.log('✅ [SCREENING] LiveKit initialized');
         }
         
+        // CRITICAL: Get local audio stream (microphone) first
+        console.log('🎤 [SCREENING] Getting microphone audio...');
+        await broadcast.webrtcService!.setLocalAudioStream();
+        console.log('✅ [SCREENING] Microphone ready');
+        
         // Join the exact lobby room where the SIP caller is waiting
         // Use new joinRoomByName method to join non-episode-specific rooms
         const roomName = 'lobby';
