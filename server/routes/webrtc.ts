@@ -174,5 +174,22 @@ router.get('/health', (req: Request, res: Response) => {
   });
 });
 
+/**
+ * Debug: Check LiveKit credentials
+ * GET /api/webrtc/debug-credentials
+ */
+router.get('/debug-credentials', (req: Request, res: Response) => {
+  const apiKey = process.env.LIVEKIT_API_KEY || '';
+  const apiSecret = process.env.LIVEKIT_API_SECRET || '';
+  const wsUrl = process.env.LIVEKIT_WS_URL || '';
+  
+  res.json({
+    apiKey: apiKey ? `${apiKey.substring(0, 12)}...` : 'missing',
+    apiSecretLength: apiSecret.length,
+    apiSecretPrefix: apiSecret ? apiSecret.substring(0, 4) + '...' : 'missing',
+    wsUrl
+  });
+});
+
 export default router;
 
