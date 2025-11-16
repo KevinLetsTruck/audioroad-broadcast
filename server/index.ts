@@ -184,6 +184,7 @@ const callFlowService = new CallFlowService({
   io,
   livekit: roomManager,
   mediaBridge,
+  sipService,
 });
 
 app.set('callFlowService', callFlowService);

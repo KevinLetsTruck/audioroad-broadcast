@@ -51,6 +51,7 @@ interface CallFlowServiceDeps {
   io: SocketIOServer;
   livekit?: LiveKitRoomManager | null;
   mediaBridge?: TwilioMediaBridge | null;
+  sipService?: any | null;
 }
 
 export interface TransitionResult {
@@ -69,13 +70,15 @@ export class CallFlowService {
   private readonly io: SocketIOServer;
   private readonly livekit?: LiveKitRoomManager | null;
   private readonly mediaBridge?: TwilioMediaBridge | null;
+  private readonly sipService?: any | null;
 
-  constructor({ prisma, stateMachine, io, livekit, mediaBridge }: CallFlowServiceDeps) {
+  constructor({ prisma, stateMachine, io, livekit, mediaBridge, sipService }: CallFlowServiceDeps) {
     this.prisma = prisma;
     this.stateMachine = stateMachine;
     this.io = io;
     this.livekit = livekit ?? null;
     this.mediaBridge = mediaBridge ?? null;
+    this.sipService = sipService ?? null;
   }
 
   async registerIncomingCall(callId: string): Promise<TransitionResult> {
@@ -189,8 +192,25 @@ export class CallFlowService {
       recvMuted: false,
     });
 
-    // Move the Twilio media stream to the live room
-    if (this.mediaBridge && updatedCall.twilioCallSid) {
+    // Check if this is a SIP call
+    const isSIPCall = updatedCall.twilioCallSid?.startsWith('PA_');
+    
+    if (isSIPCall) {
+      // Move SIP participant from lobby to live room via LiveKit
+      console.log(`📞 [CALL-FLOW] SIP call approved - moving from lobby to ${liveRoom}`);
+      
+      if (this.sipService) {
+        try {
+          await this.sipService.moveParticipantToRoom(updatedCall.twilioCallSid, 'lobby', liveRoom);
+          console.log(`✅ [CALL-FLOW] SIP participant moved to live room: ${liveRoom}`);
+        } catch (error) {
+          console.error(`❌ [CALL-FLOW] Failed to move SIP participant:`, error);
+        }
+      } else {
+        console.warn(`⚠️ [CALL-FLOW] SIP service not available - participant will remain in lobby`);
+      }
+    } else if (this.mediaBridge && updatedCall.twilioCallSid) {
+      // Move the Twilio media stream to the live room (legacy)
       try {
         await this.mediaBridge.moveStreamToRoom(updatedCall.twilioCallSid, liveRoom);
         console.log(`✅ [CALL-FLOW] Moved call ${callId} to live room: ${liveRoom}`);

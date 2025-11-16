@@ -211,8 +211,33 @@ export class ParticipantService {
         include: { episode: true }
       });
 
-      if (!call || !call.twilioConferenceSid) {
-        throw new Error('Call or conference not found');
+      if (!call) {
+        throw new Error('Call not found');
+      }
+      
+      // Check if this is a SIP call
+      const isSIPCall = call.twilioCallSid.startsWith('PA_');
+      
+      if (isSIPCall) {
+        console.log(`📞 [PARTICIPANT] SIP call - updating hold status in database only`);
+        
+        // For SIP calls, just update the database
+        // The SIP participant stays in their current LiveKit room
+        await prisma.call.update({
+          where: { id: callId },
+          data: {
+            participantState: 'hold',
+            isOnHold: true
+          }
+        });
+        
+        console.log(`✅ [PARTICIPANT] SIP call ${callId} marked as ON HOLD`);
+        return;
+      }
+      
+      // Twilio conference mode (legacy)
+      if (!call.twilioConferenceSid) {
+        throw new Error('Call conference not found');
       }
 
       // CRITICAL: Use actual LIVE conference SID (not friendly name!)
