@@ -745,8 +745,14 @@ export default function ScreeningRoom() {
       // Only disconnect screener's local audio connection
       if (screenerConnected) {
         console.log('📴 Screener ending local connection (caller stays in conference)');
-        // Disconnect only the screener's Twilio Device connection
-        if (broadcast.twilioDevice) {
+        
+        // Disconnect based on connection mode
+        if (broadcast.useWebRTC && broadcast.webrtcService) {
+          // WebRTC: Leave the LiveKit lobby room
+          console.log('📴 [WEBRTC] Screener leaving LiveKit lobby room');
+          await broadcast.leaveRoomWebRTC();
+        } else if (broadcast.twilioDevice) {
+          // Twilio Device: Disconnect
           broadcast.twilioDevice.disconnectAll();
         }
       }
