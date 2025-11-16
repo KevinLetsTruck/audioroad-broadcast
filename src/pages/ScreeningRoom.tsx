@@ -520,8 +520,13 @@ export default function ScreeningRoom() {
     console.log(`   Expected screening room: screening-${call.episodeId}-${call.id}`);
     
     // Check if using WebRTC mode
-    const useWebRTC = broadcast.useWebRTC;
+    // IMPORTANT: SIP calls (from LiveKit) MUST use WebRTC mode
+    const isSIPCall = call.twilioCallSid && call.twilioCallSid.startsWith('PA_'); // LiveKit SIP participant IDs start with PA_
+    const useWebRTC = broadcast.useWebRTC || isSIPCall;
     console.log(`🔌 [SCREENING] Connection mode: ${useWebRTC ? 'WebRTC (LiveKit)' : 'Twilio Device'}`);
+    if (isSIPCall) {
+      console.log(`   📞 Detected SIP call - forcing WebRTC mode`);
+    }
     
     // CRITICAL: ALWAYS disconnect any existing calls
     if (useWebRTC) {
