@@ -112,8 +112,22 @@ export class LiveKitClient {
         console.log('📥 [LIVEKIT-CLIENT] Received audio track from:', publication.trackName);
         
         // Attach to audio element for playback
-        const audioElement = track.attach();
-        document.body.appendChild(audioElement); // Auto-play remote audio
+        const audioElement = track.attach() as HTMLAudioElement;
+        audioElement.volume = 1.0; // Full volume
+        audioElement.autoplay = true;
+        audioElement.style.display = 'none'; // Hide the element
+        
+        // CRITICAL: Explicitly play the audio
+        audioElement.play()
+          .then(() => {
+            console.log('✅ [LIVEKIT-CLIENT] Playing audio from:', publication.trackName);
+          })
+          .catch((error) => {
+            console.error('❌ [LIVEKIT-CLIENT] Failed to play audio:', error);
+            console.log('   Try clicking anywhere on the page to enable audio');
+          });
+        
+        document.body.appendChild(audioElement);
         
         this.emit('track', track);
       }
