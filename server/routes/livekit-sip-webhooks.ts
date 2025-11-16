@@ -106,13 +106,32 @@ router.post('/incoming', async (req: Request, res: Response) => {
       return res.sendStatus(200); // Acknowledge but don't create call
     }
     
-    // Check if call record already exists for this participant
+    // Check if call record already exists for this participant SID
     let call = await prisma.call.findFirst({
       where: {
         twilioCallSid: event.participant?.sid,
         status: { in: ['queued', 'screening', 'approved', 'on-hold', 'on-air'] }
       }
     });
+    
+    // Also check for very recent calls from same phone number (within last 10 seconds)
+    // to prevent duplicates from rapid webhook events
+    if (!call) {
+      const tenSecondsAgo = new Date(Date.now() - 10000);
+      call = await prisma.call.findFirst({
+        where: {
+          callerId: caller.id,
+          episodeId: activeEpisode.id,
+          incomingAt: { gte: tenSecondsAgo },
+          status: { in: ['queued', 'screening', 'approved', 'on-hold', 'on-air'] }
+        },
+        orderBy: { incomingAt: 'desc' }
+      });
+      
+      if (call) {
+        console.log(`ℹ️ [LIVEKIT-SIP-WEBHOOK] Found recent call from same caller (${call.id}), reusing instead of creating duplicate`);
+      }
+    }
     
     if (!call) {
       // Create new call record
