@@ -42,8 +42,10 @@ router.patch('/:callId/on-air', async (req: Request, res: Response) => {
     const { callId } = req.params;
 
     const mediaBridge = req.app.get('mediaBridge');
+    const sipService = req.app.get('sipService');
+    
     const { putOnAirSimple } = await import('../services/putOnAirSimple.js');
-    await putOnAirSimple(callId, mediaBridge);
+    await putOnAirSimple(callId, mediaBridge, sipService);
 
     const callFlow = getCallFlowService(req);
     const result = await callFlow.putOnAir(callId);

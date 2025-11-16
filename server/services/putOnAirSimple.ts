@@ -12,7 +12,7 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 
-export async function putOnAirSimple(callId: string, mediaBridge?: any): Promise<void> {
+export async function putOnAirSimple(callId: string, mediaBridge?: any, sipService?: any): Promise<void> {
   try {
     const call = await prisma.call.findUnique({
       where: { id: callId },
@@ -27,9 +27,43 @@ export async function putOnAirSimple(callId: string, mediaBridge?: any): Promise
     console.log(`   CallSid: ${call.twilioCallSid}`);
     console.log(`   Current status: ${call.status}`);
 
+    // Check if this is a SIP call (LiveKit participant ID starts with PA_)
+    const isSIPCall = call.twilioCallSid.startsWith('PA_');
+    
     // Check if using WebRTC (LiveKit)
     const useWebRTC = !!process.env.LIVEKIT_WS_URL && !!mediaBridge;
 
+    if (isSIPCall) {
+      console.log(`📞 [ON-AIR] SIP call detected - moving LiveKit participant to live room`);
+      
+      if (!sipService) {
+        throw new Error('SIP service not available - cannot move SIP participant');
+      }
+      
+      const liveRoom = `live-${call.episodeId}`;
+      
+      // Move SIP participant from lobby to live room
+      console.log(`🔄 [ON-AIR] Moving ${call.twilioCallSid} from lobby to ${liveRoom}`);
+      
+      // Move the participant to the live room
+      await sipService.moveParticipantToRoom(call.twilioCallSid, 'lobby', liveRoom);
+      
+      console.log(`✅ [ON-AIR] SIP caller moved to live room: ${liveRoom}`);
+      
+      // Update database
+      await prisma.call.update({
+        where: { id: callId },
+        data: {
+          participantState: 'on-air',
+          status: 'on-air',
+          onAirAt: call.onAirAt || new Date()
+        }
+      });
+      
+      console.log(`✅ [ON-AIR] ${callId} is now ON AIR (SIP/LiveKit)`);
+      return;
+    }
+    
     if (useWebRTC) {
       console.log(`🔌 [ON-AIR] Using WebRTC - moving Media Stream to live room`);
       
