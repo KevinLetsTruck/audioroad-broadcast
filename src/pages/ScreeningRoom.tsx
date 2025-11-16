@@ -566,19 +566,20 @@ export default function ScreeningRoom() {
         console.error('⚠️ Error updating call status:', error);
         // Continue anyway
       }
-    } else {
-      console.log('📞 SIP call - skipping backend stream move (caller already in LiveKit lobby)');
-      // Just update the call status in database
-      try {
-        await fetch(`/api/calls/${call.id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status: 'screening' })
-        });
-      } catch (error) {
-        console.error('⚠️ Error updating call status:', error);
+      } else {
+        console.log('📞 SIP call - skipping backend stream move (caller already in LiveKit lobby)');
+        // Just update the call status to 'screening' in database
+        try {
+          await fetch(`/api/calls/${call.id}/screen`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ screenerUserId: 'screener-current' })
+          });
+          console.log('✅ Call status updated to screening');
+        } catch (error) {
+          console.error('⚠️ Error updating call status:', error);
+        }
       }
-    }
     
     // Set active call first
     setActiveCall(call);
