@@ -90,8 +90,12 @@ expressWs(app, httpServer);
 const io = new SocketIOServer(httpServer, {
   cors: {
     origin: process.env.APP_URL || 'http://localhost:5173',
-    methods: ['GET', 'POST']
-  }
+    methods: ['GET', 'POST'],
+    credentials: true
+  },
+  transports: ['polling', 'websocket'], // Try polling first, then upgrade to WebSocket
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 // Initialize socket handlers
